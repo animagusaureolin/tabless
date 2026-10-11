@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/sectapunterx/tabless/releases/latest"><b>Download</b></a> ·
-  <a href="https://sectapunterx.github.io/tabless/">The tour on the website</a> ·
+  <a href="https://tabless.dev/">The tour on the website</a> ·
   <a href="#docs">Docs</a>
 </p>
 
