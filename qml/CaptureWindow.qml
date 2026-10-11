@@ -12,6 +12,10 @@ Window {
     // Tool: no taskbar button. StaysOnTop: it is summoned over other apps and
     // must not open behind the one that has focus.
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    // Not the main window's child: declared inside it, it would be its
+    // transient, and on Windows an owned window drags its owner up with it —
+    // the hotkey brought the whole (maximized) main window forward.
+    transientParent: null
     color: "transparent"
     width: 680
     height: 520
