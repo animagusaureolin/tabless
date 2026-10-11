@@ -62,6 +62,19 @@ test('the old names appear only where the page explains the move', () => {
   }
 });
 
+test('every page has a social card picture that loads', async ({ page, request }) => {
+  for (const path of PAGES) {
+    await page.goto(path);
+    const image = await page.locator('meta[property="og:image"]').getAttribute('content');
+    expect(image, `/${path}`).toMatch(/^https:\/\/[^/]+\/og\.png$/);
+    await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image');
+    const local = new URL(image!).pathname;
+    const res = await request.get(`${BASE}${local}`);
+    expect(res.status(), local).toBe(200);
+    expect(res.headers()['content-type']).toContain('image/png');
+  }
+});
+
 test('unknown pages get the 404 page', async ({ page }) => {
   const res = await page.goto('does-not-exist/');
   expect(res?.status()).toBe(404);
