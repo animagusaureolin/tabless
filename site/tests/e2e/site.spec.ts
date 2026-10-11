@@ -154,6 +154,18 @@ test('the copy keeps at most the allowed emotional lines', async ({ page }) => {
 test.describe('home page scenes', () => {
   test.skip(({ isMobile }) => isMobile, 'keyboard and pointer checks are desktop checks');
 
+  test('the git button plays the scene again after it ran on scroll', async ({ page }) => {
+    await page.goto('');
+    await page.locator('[data-git]').scrollIntoViewIfNeeded();
+    const out = page.locator('[data-git-out]');
+    await expect(out).toBeVisible({ timeout: 10_000 });
+    await page.locator('[data-git-run]').click();
+    await expect(out).toBeHidden();
+    await expect(page.locator('[data-git-head]')).toHaveText('main');
+    await expect(out).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-git-bar]')).toContainText('APP-112');
+  });
+
   test('the git scene names the branch’s task', async ({ page }) => {
     await page.goto('');
     await page.locator('[data-git-run]').scrollIntoViewIfNeeded();
@@ -172,7 +184,7 @@ test.describe('home page scenes', () => {
     await input.press('Enter');
     await expect(page.locator('.list .task').first()).toContainText('ревью PR');
     for (let i = 0; i < 4; i++) await page.locator('.list .task:not(.done) .tick').first().click();
-    await expect(page.locator('.empty-h')).toHaveText('Пусто. Можно выдохнуть.');
+    await expect(page.locator('.empty-h')).toHaveText('Пусто. Всё сделано.');
   });
 
   test('Ctrl K searches the page and opens the answer', async ({ page }) => {

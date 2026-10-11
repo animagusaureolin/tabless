@@ -20,7 +20,7 @@ Copy lives in `src/data/i18n.ts`; section names below follow the page.
 | 2 | Tracker tasks and calendar meetings in one feed for the day | Today screen (`TodayView.qml`), .ics subscriptions | built | ☐ |
 | 3 | Capture: date, time, `#label`, priority `p0`–`p3` picked up from the words (ru + en) | `CaptureParse.h`, `ChronoLocale_ru/en.cpp`, `TaskTextUtils.cpp` | built | ☐ |
 | 4 | `d` or a click on the circle closes a task | `AppController.cpp` shortcut list (`d`) | built | ☐ |
-| 5 | Demo empty state «Пусто. Можно выдохнуть.» / "Empty. Breathe out." | site demo only (one of the two emotional lines) | — | — |
+| 5 | Demo empty state «Пусто. Всё сделано.» / "Empty. All done." | site demo only | — | — |
 
 ## A day with Tabless
 
@@ -111,7 +111,7 @@ The site's own keys: Ctrl K and `/` open the search, `g g` goes to the top, Shif
 | 54 | PR state: your `gh` / `glab`, ~once a minute, only for added repositories | `GitWatcher.cpp` | built | ☐ |
 | 55 | Mattermost: reads the people of your channels for @mentions, posts nothing | `MattermostClient.cpp` | built | ☐ |
 | 56 | Pictures from the web in notes only on click | `MdHtml.h:41` | built | ☐ |
-| 57 | No analytics, no crash reports | `RecoveryLog.h:10`; nothing else found | built | ☐ |
+| 57 | No analytics; after a crash the app offers a report the person reviews and sends as a GitHub issue — the app sends nothing itself | `RecoveryLog.h:10`; `SplashScreen.qml` crash card → `ReportIssueDialog.qml` (copy / open a new-issue page) | built | ☐ |
 
 Recheck this list against every `QNetworkRequest` in the 0.8.0 build: the site says it is complete.
 
@@ -151,4 +151,4 @@ winget and Flathub manifests are drafts at 0.5.0 (`docs/DISTRIBUTION.md`), so th
 
 - Makes no third-party requests, sets no cookies, runs no analytics (e2e test `renders cleanly`).
 - The product name is "Tabless" with a capital T; commands and file names are lowercase (`tabless`, `tabless-v…`). The old names appear only where the page explains the move (e2e tests).
-- At most two emotional lines per page: «Восемь вкладок, чтобы понять, что делать сейчас?» and «Пусто. Можно выдохнуть.».
+- At most one emotional line per page: «Восемь вкладок, чтобы понять, что делать сейчас?».
