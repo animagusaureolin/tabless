@@ -1419,17 +1419,16 @@ Item {
                                 // One proxy per column, so only the cards that
                                 // belong here are in the model at all.
                                 model: colFilter
-                                // A card that comes into the column fades in,
-                                // one that leaves fades out, and the cards
-                                // around them close up instead of jumping
-                                // (APP-175). The proxy inserts and removes
-                                // rows one by one, so only the cards that
-                                // changed move.
+                                // A card that comes into the column fades in
+                                // and the cards around a change close up
+                                // instead of jumping (APP-175). The proxy
+                                // inserts and removes rows one by one, so only
+                                // the cards that changed move. A card that
+                                // leaves goes at once: a search empties a
+                                // column in one keystroke, and a filtered-out
+                                // card must not linger on the board.
                                 add: Transition {
                                     NumberAnimation { property: "enterFade"; from: 0; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
-                                }
-                                remove: Transition {
-                                    NumberAnimation { property: "enterFade"; to: 0; duration: Theme.durPopOut; easing.type: Theme.easeExit }
                                 }
                                 displaced: Transition {
                                     NumberAnimation { property: "y"; duration: Theme.durMove; easing.type: Theme.easeEnter }
