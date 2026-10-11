@@ -115,7 +115,7 @@ Popup {
     contentItem: ColumnLayout {
         spacing: Theme.spSm
 
-        // "lowkey  быстрая заметка → «Входящие»   прикрепить к APP-101 ▾"
+        // "Tabless  быстрая заметка → «Входящие»   прикрепить к APP-101 ▾"
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spMd

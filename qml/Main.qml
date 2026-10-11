@@ -1096,7 +1096,7 @@ ApplicationWindow {
             onExportVaultRequested: exportVaultDialog.open()
             onExportIcsRequested: {
                 exportIcsDialog.currentFile = "file:///" + (
-                    (AppController.activeProfileId || "lowkey") + ".ics"
+                    (AppController.activeProfileId || "tabless") + ".ics"
                 );
                 exportIcsDialog.open();
             }
@@ -3297,7 +3297,7 @@ ApplicationWindow {
     FileDialog {
         id: exportJsonDialog
         fileMode: FileDialog.SaveFile
-        nameFilters: ["lowkey profile (*.json)", "All files (*)"]
+        nameFilters: ["Tabless profile (*.json)", "All files (*)"]
         defaultSuffix: "json"
         title: I18n.t("dialog.exportProfile.title")
         onAccepted: {

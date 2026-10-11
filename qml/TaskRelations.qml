@@ -6,7 +6,7 @@ import TodoCpp
 
 // Links drawn by hand (APP-240), in the document's side column: related
 // cards (both ways, any tracker), what this waits on and what waits on it,
-// and the card it is part of. Each with its status, opening in lowkey or in
+// and the card it is part of. Each with its status, opening in Tabless or in
 // the browser in one click. Added by key, URL or id; nothing links itself,
 // and nothing here goes to a tracker.
 ColumnLayout {

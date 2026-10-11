@@ -8,7 +8,7 @@ import "Reschedule.js" as Resched
 // Today (heap 2, APP-260): the start screen. The date and one line of facts;
 // the day by the hours — meetings and tasks with their status, the line of
 // "now"; on the side what is in progress, what is due, whom to write, and how
-// many tasks have no date. It shows; lowkey places nothing by itself.
+// many tasks have no date. It shows; Tabless places nothing by itself.
 //
 // Two drawings of the same day (DG-010…015):
 //   bold  (H2-Today)       the eyebrow, "День", meeting cards with a bar,

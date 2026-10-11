@@ -28,7 +28,9 @@ Entry readSystem(const QString& root) {
 
 bool writeSystem(const QString& root, bool enabled, bool minimized) {
   const QString path = agentPath(root);
-  QFile::remove(agentPath(root, kLegacyMacLabel));  // heap 0.7's agent: one start, never two
+  for(const char* old : kLegacyMacLabels) {
+    QFile::remove(agentPath(root, old));  // an older install's agent: one start, never two
+  }
   if(!enabled) {
     return !QFile::exists(path) || QFile::remove(path);
   }
@@ -43,15 +45,22 @@ bool writeSystem(const QString& root, bool enabled, bool minimized) {
 }
 
 Entry readLegacySystem(const QString& root) {
-  QFile f(agentPath(root, kLegacyMacLabel));
-  if(!f.open(QIODevice::ReadOnly)) {
-    return {};
+  for(const char* old : kLegacyMacLabels) {
+    QFile f(agentPath(root, old));
+    if(f.open(QIODevice::ReadOnly)) {
+      const Entry e = parseMacLaunchAgent(QString::fromUtf8(f.readAll()));
+      if(e.enabled) {
+        return e;
+      }
+    }
   }
-  return parseMacLaunchAgent(QString::fromUtf8(f.readAll()));
+  return {};
 }
 
 void removeLegacySystem(const QString& root) {
-  QFile::remove(agentPath(root, kLegacyMacLabel));
+  for(const char* old : kLegacyMacLabels) {
+    QFile::remove(agentPath(root, old));
+  }
 }
 
 }  // namespace heap::platform::autostart::detail

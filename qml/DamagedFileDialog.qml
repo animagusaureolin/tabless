@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
 
-// At launch the data file did not parse (X/N-Err-Storage, R2-037). lowkey
+// At launch the data file did not parse (X/N-Err-Storage, R2-037). Tabless
 // already set the damaged file aside and opened what it could — the newest
 // backup, or an empty profile — and never deletes anything. This card says
 // so and offers the time machine's newest snapshots: pick one and Restore

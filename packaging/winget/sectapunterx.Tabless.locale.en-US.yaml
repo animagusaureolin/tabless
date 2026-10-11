@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: sectapunterx.Tabless
+PackageVersion: 0.8.0
+PackageLocale: en-US
+Publisher: sectapunterx
+PublisherUrl: https://github.com/sectapunterx
+PublisherSupportUrl: https://github.com/sectapunterx/tabless/issues
+PackageName: Tabless
+PackageUrl: https://github.com/sectapunterx/tabless
+License: MIT
+LicenseUrl: https://github.com/sectapunterx/tabless/blob/master/LICENSE
+Copyright: Copyright (c) sectapunterx
+ShortDescription: A developer's workday in one window.
+Description: |-
+  A native desktop app for a developer's workday — tickets, calendar, notes, docs. Formerly lowkey, and heap before that.
+  Built with Qt 6 / QML / C++20, it ships as a single binary with a
+  per-profile JSON workspace — tasks, calendar, notes and docs in one place.
+Moniker: tabless
+Tags:
+  - kanban
+  - todo
+  - calendar
+  - notes
+  - planner
+  - productivity
+  - qt
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

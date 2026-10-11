@@ -67,7 +67,7 @@ int report(const Response& r) {
 }
 
 int usage(const QString& message) {
-  write(true, QStringLiteral("lowkey: %1\nRun 'lowkey help' for usage.\n").arg(message));
+  write(true, QStringLiteral("tabless: %1\nRun 'tabless help' for usage.\n").arg(message));
   return kExitUsage;
 }
 
@@ -76,7 +76,7 @@ void quietMessages(QtMsgType, const QMessageLogContext&, const QString&) {
 
 void setApplicationIdentity() {
   QCoreApplication::setOrganizationName(QLatin1String(heap::brand::kName));
-  QCoreApplication::setOrganizationDomain(QStringLiteral("lowkey.local"));
+  QCoreApplication::setOrganizationDomain(QStringLiteral("tabless.local"));
   QCoreApplication::setApplicationName(QLatin1String(heap::brand::kName));
   QCoreApplication::setApplicationVersion(QStringLiteral(HEAP_VERSION));
 }

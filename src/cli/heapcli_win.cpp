@@ -71,7 +71,7 @@ std::wstring heapExePath() {
     self.resize(self.size() * 2);
   }
   const std::size_t slash = self.find_last_of(L"\\/");
-  return (slash == std::wstring::npos ? std::wstring() : self.substr(0, slash + 1)) + L"lowkey.exe";
+  return (slash == std::wstring::npos ? std::wstring() : self.substr(0, slash + 1)) + L"tabless.exe";
 }
 
 heap::cli::Invocation classifyArgs() {
@@ -105,8 +105,8 @@ int runHeap(bool command) {
   }
   PROCESS_INFORMATION pi{};
   if(CreateProcessW(exe.c_str(), cmdLine.data(), nullptr, nullptr, command ? TRUE : FALSE, 0, nullptr, nullptr, &si, &pi) == 0) {
-    heap::cli::write(true,
-                     QStringLiteral("lowkey-cli: cannot start %1 (it belongs next to lowkey-cli.exe)\n").arg(QString::fromStdWString(exe)));
+    heap::cli::write(
+        true, QStringLiteral("tabless-cli: cannot start %1 (it belongs next to tabless-cli.exe)\n").arg(QString::fromStdWString(exe)));
     return heap::cli::kExitData;
   }
   CloseHandle(pi.hThread);

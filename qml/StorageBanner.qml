@@ -3,10 +3,10 @@ import QtQuick.Layouts
 import QtQuick.Dialogs
 import TodoCpp
 
-// The storage line (X/N-Err-Storage, R2-037): the one place lowkey insists,
+// The storage line (X/N-Err-Storage, R2-037): the one place Tabless insists,
 // because data is at stake. A full-width line over the content for as long
 // as the last save did not land, state.json cannot be read, or it was
-// written by a newer lowkey — never put away by itself and never by the user
+// written by a newer Tabless — never put away by itself and never by the user
 // while the problem lasts. A write failure keeps retrying every 30 s; the
 // one button saves the whole state elsewhere meanwhile. What startup found
 // in a damaged file is the DamagedFileDialog, not this line.
@@ -97,7 +97,7 @@ Item {
     FileDialog {
         id: copyDialog
         fileMode: FileDialog.SaveFile
-        nameFilters: ["lowkey (*.json)", "All files (*)"]
+        nameFilters: ["Tabless (*.json)", "All files (*)"]
         defaultSuffix: "json"
         title: I18n.t("storage.strip.saveCopy")
         onAccepted: AppController.saveStateCopyTo(selectedFile)

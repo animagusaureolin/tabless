@@ -19,17 +19,53 @@ bool isLockFile(const QString& name) {
   return name.endsWith(QLatin1String(".lock")) || name.endsWith(QLatin1String(".lock.rmlock"));
 }
 
-// True while a heap of 0.7.x holds the old folder's lock: copying then could
-// catch a state.json half-way through a save, and the old heap would go on
+// True while an old install holds the old folder's lock: copying then could
+// catch a state.json half-way through a save, and the old app would go on
 // writing to a folder nobody reads any more.
 bool legacyRunning(const QString& legacyDir) {
-  QLockFile lock(QDir(legacyDir).filePath(QLatin1String(heap::brand::kLegacyLockFile)));
-  lock.setStaleLockTime(0);
-  if(lock.tryLock(0)) {
-    lock.unlock();
-    return false;
+  for(const heap::brand::Legacy& l : heap::brand::kLegacy) {
+    QLockFile lock(QDir(legacyDir).filePath(QLatin1String(l.lockFile)));
+    lock.setStaleLockTime(0);
+    if(lock.tryLock(0)) {
+      lock.unlock();
+    } else if(lock.error() == QLockFile::LockFailedError) {
+      return true;
+    }
   }
-  return lock.error() == QLockFile::LockFailedError;
+  return false;
+}
+
+bool isMarker(const QString& rel) {
+  if(rel == QLatin1String(heap::brand::kMovedMarker)) {
+    return true;
+  }
+  for(const heap::brand::Legacy& l : heap::brand::kLegacy) {
+    if(l.movedMarker != nullptr && rel == QLatin1String(l.movedMarker)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Moved once already — to Tabless, or (a heap folder) to lowkey before. A
+// new folder losing its state.json later (wiped by hand) is not a reason to
+// bring the old one back.
+bool alreadyMoved(const QString& legacyDir) {
+  const QDir dir(legacyDir);
+  if(QFileInfo::exists(dir.filePath(QLatin1String(heap::brand::kMovedMarker)))) {
+    return true;
+  }
+  for(const heap::brand::Legacy& l : heap::brand::kLegacy) {
+    if(l.movedMarker != nullptr && QFileInfo::exists(dir.filePath(QLatin1String(l.movedMarker)))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// "lowkey" for …/lowkey/lowkey: the folder's own name.
+QString nameOf(const QString& legacyDir) {
+  return QFileInfo(QDir::cleanPath(legacyDir)).fileName();
 }
 
 bool copyTree(const QString& from, const QString& to, int* files, QString* error) {
@@ -38,7 +74,7 @@ bool copyTree(const QString& from, const QString& to, int* files, QString* error
   while(it.hasNext()) {
     const QString path = it.next();
     const QString rel = src.relativeFilePath(path);
-    if(isLockFile(QFileInfo(path).fileName()) || rel == QLatin1String(heap::brand::kMovedMarker)) {
+    if(isLockFile(QFileInfo(path).fileName()) || isMarker(rel)) {
       continue;
     }
     const QString target = QDir(to).filePath(rel);
@@ -54,7 +90,7 @@ bool copyTree(const QString& from, const QString& to, int* files, QString* error
 
 }  // namespace
 
-QString legacyDirFor(const QString& newDir) {
+QStringList legacyDirsFor(const QString& newDir) {
   // By the string, not QDir::cdUp(): on a first launch the new folder does
   // not exist yet, and cdUp() refuses to leave a folder that is not there.
   QStringList parts = QDir::cleanPath(QDir(newDir).absolutePath()).split(QLatin1Char('/'));
@@ -62,21 +98,24 @@ QString legacyDirFor(const QString& newDir) {
      parts.at(parts.size() - 2).compare(QLatin1String(heap::brand::kName), Qt::CaseInsensitive) != 0) {
     return {};
   }
-  parts[parts.size() - 1] = QLatin1String(heap::brand::kLegacyName);
-  parts[parts.size() - 2] = QLatin1String(heap::brand::kLegacyName);
-  return parts.join(QLatin1Char('/'));
+  QStringList dirs;
+  for(const heap::brand::Legacy& l : heap::brand::kLegacy) {
+    parts[parts.size() - 1] = QLatin1String(l.name);
+    parts[parts.size() - 2] = QLatin1String(l.name);
+    dirs.append(parts.join(QLatin1Char('/')));
+  }
+  return dirs;
 }
 
 MoveResult moveLegacyData(const QString& newDir, const QString& legacyDir) {
   MoveResult r;
   r.from = legacyDir;
   r.to = newDir;
+  r.legacyName = nameOf(legacyDir);
   if(legacyDir.isEmpty() || QFileInfo::exists(QDir(newDir).filePath(kState)) || !QFileInfo::exists(QDir(legacyDir).filePath(kState))) {
     return r;
   }
-  // Moved once already: the new folder losing its state.json later (wiped by
-  // hand) is not a reason to bring the old one back.
-  if(QFileInfo::exists(QDir(legacyDir).filePath(QLatin1String(heap::brand::kMovedMarker)))) {
+  if(alreadyMoved(legacyDir)) {
     return r;
   }
   if(legacyRunning(legacyDir)) {
@@ -128,15 +167,27 @@ MoveResult moveLegacyData(const QString& newDir, const QString& legacyDir) {
 
   QSaveFile marker(QDir(legacyDir).filePath(QLatin1String(heap::brand::kMovedMarker)));
   if(marker.open(QIODevice::WriteOnly)) {
-    marker.write(QStringLiteral("heap is now lowkey. On %1 everything in this folder was copied to\n%2\n"
-                                "and lowkey works from there. This folder is kept as it was; you can delete it once\n"
-                                "you no longer need to go back to heap 0.7.\n")
-                     .arg(QDateTime::currentDateTime().toString(Qt::ISODate), QDir::toNativeSeparators(newDir))
+    marker.write(QStringLiteral("%1 is now Tabless. On %2 everything in this folder was copied to\n%3\n"
+                                "and Tabless works from there. This folder is kept as it was; you can delete it once\n"
+                                "you no longer need to go back to %1.\n")
+                     .arg(r.legacyName, QDateTime::currentDateTime().toString(Qt::ISODate), QDir::toNativeSeparators(newDir))
                      .toUtf8());
     marker.commit();
   }
   r.kind = MoveKind::Moved;
   return r;
+}
+
+MoveResult moveLegacyData(const QString& newDir) {
+  for(const QString& dir : legacyDirsFor(newDir)) {
+    MoveResult r = moveLegacyData(newDir, dir);
+    if(r.kind != MoveKind::NothingToDo) {
+      return r;
+    }
+  }
+  MoveResult none;
+  none.to = newDir;
+  return none;
 }
 
 }  // namespace heap::platform::legacy

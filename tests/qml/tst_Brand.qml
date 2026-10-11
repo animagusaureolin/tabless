@@ -19,10 +19,11 @@ TestCase {
 
     // ── Identity ──────────────────────────────────────────────
     // The wordmark + taglines callers render verbatim (SplashScreen.qml,
-    // SettingsView.qml bind Brand.tagline). lowkey since 0.8.0, always lowercase.
+    // SettingsView.qml bind Brand.tagline). Tabless since APP-283, capital T;
+    // the tagline is English in every UI language.
     function test_identity_strings() {
-        compare(Brand.name, "lowkey");
-        compare(Brand.tagline, "Quiet by default.");
+        compare(Brand.name, "Tabless");
+        compare(Brand.tagline, "Just makes your day easier.");
         compare(Brand.taglineLong, "A developer’s workday in one window.");
         verify(Brand.name.length > 0);
         verify(Brand.tagline.length > 0);
@@ -31,8 +32,8 @@ TestCase {
 
     // ── Typography ────────────────────────────────────────────
     function test_font_families() {
-        compare(Brand.fontSans, "lowkey Golos Text");
-        compare(Brand.fontMono, "lowkey JetBrains Mono");
+        compare(Brand.fontSans, "Tabless Golos Text");
+        compare(Brand.fontMono, "Tabless JetBrains Mono");
         verify(Brand.fontSans.length > 0);
         verify(Brand.fontMono.length > 0);
     }

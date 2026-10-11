@@ -1,4 +1,4 @@
-// Contract tests for qml/BrandLogo.qml — the lowkey mark and wordmark drawn
+// Contract tests for qml/BrandLogo.qml — the Tabless mark and wordmark drawn
 // with native QML (APP-280): variants, sizing and theme → colour.
 import QtQuick
 import QtQuick.Controls
@@ -35,21 +35,21 @@ TestCase {
         const bl = make('import TodoCpp; BrandLogo { }');
         compare(bl.variant, "wordmark");
         compare(bl.theme, "dark");
-        compare(find(bl, "brand-wordmark").text, "lowkey");
+        compare(find(bl, "brand-wordmark").text, "Tabless");
     }
 
-    // The mark's box follows the glyph's 342 × 380 proportion; the wordmark
+    // The mark's box follows the T's 420 × 420 proportion; the wordmark
     // takes the width its text needs; the lockup is both, with a gap.
     function test_implicit_width_by_variant() {
         const bl = make('import TodoCpp; BrandLogo { height: 40 }');
         bl.variant = "mark";
-        compare(bl.implicitWidth, Math.round(40 * 342 / 380));
+        compare(bl.implicitWidth, 40);
         bl.variant = "wordmark";
         const word = find(bl, "brand-wordmark");
         compare(bl.implicitWidth, Math.ceil(word.contentWidth));
         verify(bl.implicitWidth > 40 * 2, "the wordmark is wide: " + bl.implicitWidth);
         bl.variant = "lockup";
-        verify(bl.implicitWidth > Math.ceil(word.contentWidth) + Math.round(40 * 342 / 380),
+        verify(bl.implicitWidth > Math.ceil(word.contentWidth) + 40,
                "the lockup holds the mark and the wordmark side by side");
     }
 
@@ -76,8 +76,8 @@ TestCase {
         verify(Qt.colorEqual(bl.monoColor, Brand.text), "monoColor should default to Brand.text");
     }
 
-    // The bar sits under "low" only: it starts at the word and ends before "key".
-    function test_bar_underlines_low() {
+    // The bar sits under "Tab" only: it starts at the word and ends before "less".
+    function test_bar_underlines_tab() {
         const bl = make('import TodoCpp; BrandLogo { height: 40 }');
         const word = find(bl, "brand-wordmark");
         let bar = null;

@@ -463,7 +463,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         # --perf-log: the startup timings (perf: lines) land in this log for
         # trend-watching; logged only, never judged (APP-161).
-        run: build/lowkey --smoke --perf-log --data-dir "$RUNNER_TEMP/smoke"
+        run: build/tabless --smoke --perf-log --data-dir "$RUNNER_TEMP/smoke"
 
       # ──────────────────────────────────────────────────────────────────
       # clang-tidy on the changed lines (PR only), on this job's build tree.
@@ -523,11 +523,11 @@ jobs:
         run: |
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           $dataDir = Join-Path $env:RUNNER_TEMP 'smoke'
-          # lowkey.exe is a GUI-subsystem binary with no console of its own: the
+          # tabless.exe is a GUI-subsystem binary with no console of its own: the
           # verdict goes to the redirected stderr, and the run's whole log is
           # kept as <data-dir>\logs\smoke.log (the run itself uses a temp dir).
           $err = Join-Path $env:RUNNER_TEMP 'smoke-stderr.txt'
-          $p = Start-Process -FilePath build\heap-portable\lowkey.exe `
+          $p = Start-Process -FilePath build\heap-portable\tabless.exe `
                  -ArgumentList '--smoke', '--data-dir', $dataDir `
                  -RedirectStandardError $err -Wait -PassThru
           Get-Content $err -ErrorAction SilentlyContinue
@@ -564,31 +564,31 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -eu
-          macdeployqt build/lowkey.app -qmldir="$PWD/qml"
-          test -d build/lowkey.app/Contents/Frameworks/QtCore.framework
-          if otool -L build/lowkey.app/Contents/MacOS/lowkey | grep -Eiq '/Users/runner/work/.*Qt|/aqt'; then
+          macdeployqt build/Tabless.app -qmldir="$PWD/qml"
+          test -d build/Tabless.app/Contents/Frameworks/QtCore.framework
+          if otool -L build/Tabless.app/Contents/MacOS/Tabless | grep -Eiq '/Users/runner/work/.*Qt|/aqt'; then
             echo "::error::macdeployqt left absolute Qt paths — relocation failed"
             exit 1
           fi
           # The re-sign + verify that the original workflow was missing: an
           # invalidated signature (the "damaged" bug) fails this verify.
-          codesign --force --deep --sign - build/lowkey.app
-          codesign --verify --deep --strict --verbose=2 build/lowkey.app
-          bash packaging/macos/make-dmg.sh build/lowkey.app smoke.dmg
+          codesign --force --deep --sign - build/Tabless.app
+          codesign --verify --deep --strict --verbose=2 build/Tabless.app
+          bash packaging/macos/make-dmg.sh build/Tabless.app smoke.dmg
 
       - name: Verify dmg mounts with the app + Applications target (macos)
         if: runner.os == 'macOS'
         run: |
           set -eu
-          hdiutil attach smoke.dmg -nobrowse -mountpoint /Volumes/lowkey
-          test -d /Volumes/lowkey/lowkey.app
-          test -L /Volumes/lowkey/Applications
-          hdiutil detach /Volumes/lowkey
+          hdiutil attach smoke.dmg -nobrowse -mountpoint /Volumes/Tabless
+          test -d /Volumes/Tabless/Tabless.app
+          test -L /Volumes/Tabless/Applications
+          hdiutil detach /Volumes/Tabless
 
       - name: Smoke-test the deployed app (macos)
         timeout-minutes: 5
         if: runner.os == 'macOS'
-        run: build/lowkey.app/Contents/MacOS/lowkey --smoke --data-dir "$RUNNER_TEMP/smoke"
+        run: build/Tabless.app/Contents/MacOS/Tabless --smoke --data-dir "$RUNNER_TEMP/smoke"
 
   # ──────────────────────────────────────────────────────────────────
   # 7. ASan + UBSan run (Linux only).

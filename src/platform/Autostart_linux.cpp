@@ -11,9 +11,12 @@ namespace heap::platform::autostart::detail {
 
 namespace {
 
-// $XDG_CONFIG_HOME/autostart/heap.desktop, or .config/autostart under the
+// lowkey 0.8's and heap 0.7's entries, newest first.
+constexpr const char* kLegacyNames[] = {"lowkey", "heap"};
+
+// $XDG_CONFIG_HOME/autostart/tabless.desktop, or .config/autostart under the
 // test root.
-QString entryPath(const QString& root, const char* name = "lowkey") {
+QString entryPath(const QString& root, const char* name = "tabless") {
   const QString config =
       root.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) : root + QStringLiteral("/.config");
   return config + QStringLiteral("/autostart/") + QLatin1String(name) + QStringLiteral(".desktop");
@@ -31,7 +34,9 @@ Entry readSystem(const QString& root) {
 
 bool writeSystem(const QString& root, bool enabled, bool minimized) {
   const QString path = entryPath(root);
-  QFile::remove(entryPath(root, "heap"));  // heap 0.7's entry: one start, never two
+  for(const char* old : kLegacyNames) {
+    QFile::remove(entryPath(root, old));  // an older install's entry: one start, never two
+  }
   if(!enabled) {
     return !QFile::exists(path) || QFile::remove(path);
   }
@@ -46,15 +51,22 @@ bool writeSystem(const QString& root, bool enabled, bool minimized) {
 }
 
 Entry readLegacySystem(const QString& root) {
-  QFile f(entryPath(root, "heap"));
-  if(!f.open(QIODevice::ReadOnly)) {
-    return {};
+  for(const char* old : kLegacyNames) {
+    QFile f(entryPath(root, old));
+    if(f.open(QIODevice::ReadOnly)) {
+      const Entry e = parseLinuxDesktopEntry(QString::fromUtf8(f.readAll()));
+      if(e.enabled) {
+        return e;
+      }
+    }
   }
-  return parseLinuxDesktopEntry(QString::fromUtf8(f.readAll()));
+  return {};
 }
 
 void removeLegacySystem(const QString& root) {
-  QFile::remove(entryPath(root, "heap"));
+  for(const char* old : kLegacyNames) {
+    QFile::remove(entryPath(root, old));
+  }
 }
 
 }  // namespace heap::platform::autostart::detail
