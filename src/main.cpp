@@ -550,14 +550,14 @@ int main(int argc, char* argv[]) {
     const bool writes = heap::cli::changesData(request->verb);
     if(writes && controller->storageState() != QLatin1String("ok")) {
       return heap::cli::encodeResponse(
-          {heap::cli::kExitData, QString(), QStringLiteral("lowkey: nothing changed: %1\n").arg(controller->storageMessage())});
+          {heap::cli::kExitData, QString(), QStringLiteral("tabless: nothing changed: %1\n").arg(controller->storageMessage())});
     }
     heap::cli::Response response = heap::cli::execute(*controller, *request, QDateTime::currentDateTime());
     if(writes) {
       controller->flushSave();
       if(controller->storageState() != QLatin1String("ok")) {
         response.exitCode = heap::cli::kExitData;
-        response.err += QStringLiteral("lowkey: the change was not saved: %1\n").arg(controller->storageMessage());
+        response.err += QStringLiteral("tabless: the change was not saved: %1\n").arg(controller->storageMessage());
       }
     }
     return heap::cli::encodeResponse(response);
