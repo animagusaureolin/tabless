@@ -109,7 +109,7 @@ folder of `.md` files or an Obsidian vault — you see what comes in before anyt
 | | |
 | --- | --- |
 | **Write to your tracker** | Issues come in read-only. Status on card move is a per-tracker switch, off by default, and the issue is re-checked before anything is sent. Titles, descriptions and comments are never written. |
-| **Phone home** | No analytics, no crash reports. The update check on start can be turned off; updates install only on your click. |
+| **Phone home** | No analytics. After a crash the app offers a report you read first and send yourself as a GitHub issue; it never sends one on its own. The update check on start can be turned off; updates install only on your click. |
 | **Run in the background** | Only while its window or tray icon is open. Start at login is off. |
 | **Lose your work** | Daily backups (newest 20 kept) and a time machine of snapshots you can step back through. |
 
