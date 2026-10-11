@@ -29,12 +29,6 @@ inline QString canonical(const QString& name) {
   if(name == QStringLiteral("timeline") || name == QStringLiteral("archive")) {
     return QStringLiteral("list");
   }
-  // The 0.7 Docs catalogue is part of the Knowledge screen since 0.8.1
-  // (DG-070): "docs" is still accepted (a saved view, --view docs, Ctrl+4)
-  // and lands there.
-  if(name == QStringLiteral("docs")) {
-    return QStringLiteral("notes");
-  }
   return name;
 }
 
@@ -44,7 +38,7 @@ inline bool isKnown(const QString& name) {
 
 // heap 2 (APP-258): the sidebar has four places, and each view belongs to
 // one. Board, list and the calendars are lenses of Tasks;
-// notes and docs are Knowledge.
+// notes and docs are Knowledge, two screens of it (DG-070, revised).
 inline const QStringList& sections() {
   static const QStringList names = {
       QStringLiteral("today"), QStringLiteral("tasks"), QStringLiteral("knowledge"), QStringLiteral("settings")};

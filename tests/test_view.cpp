@@ -143,8 +143,8 @@ TEST_F(ViewFocusTest, SectionsRememberTheirLastView) {
   app_->openSection(QStringLiteral("tasks"));
   EXPECT_EQ(app_->currentView(), QStringLiteral("month"));
   app_->openSection(QStringLiteral("knowledge"));
-  // "docs" is the Knowledge screen since 0.8.1 (DG-070).
-  EXPECT_EQ(app_->currentView(), QStringLiteral("notes"));
+  // Docs is its own screen of Knowledge again (DG-070, revised).
+  EXPECT_EQ(app_->currentView(), QStringLiteral("docs"));
   app_->openSection(QStringLiteral("settings"));
   EXPECT_EQ(app_->currentView(), QStringLiteral("settings"));
   app_->openSection(QStringLiteral("nonsense"));

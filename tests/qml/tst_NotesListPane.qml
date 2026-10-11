@@ -319,21 +319,40 @@ TestCase {
         contacts: [{ name: "Ada probe", role: "eng", mattermost: "@ada" }]
     })
 
-    function test_only_pinned_references_are_listed_at_rest() {
+    // Docs lists the whole catalogue: pinned links first, the rest under
+    // Ссылки, the snippets and the contacts.
+    function test_docs_lists_the_whole_catalogue() {
         withDocs(tc.catalogue, function () {
             const pane = makePane();
+            pane.mode = "docs";
             const refs = kindsOf(pane, "ref");
-            compare(refs.length, 1);
+            compare(refs.length, 2);
             compare(refs[0].name, "HTTP probe");
             compare(headersOf(pane)[0], I18n.t("notes.pinned"));
+            verify(headersOf(pane).indexOf(I18n.t("knowledge.refs")) >= 0);
             compare(kindsOf(pane, "snippet").length, 1);
-            compare(kindsOf(pane, "contact").length, 0, "contacts only come up in a search");
+            compare(kindsOf(pane, "contact").length, 1);
+            compare(kindsOf(pane, "note").length, 0, "notes are in Notes");
+        });
+    }
+
+    // Notes lists the notes alone: no link, snippet or contact, even when
+    // searching.
+    function test_notes_lists_only_notes() {
+        withDocs(tc.catalogue, function () {
+            const pane = makePane();
+            compare(kindsOf(pane, "ref").length, 0);
+            compare(kindsOf(pane, "snippet").length, 0);
+            pane.setFilter("probe");
+            compare(kindsOf(pane, "ref").length, 0);
+            compare(kindsOf(pane, "contact").length, 0);
         });
     }
 
     function test_a_search_reaches_the_whole_catalogue() {
         withDocs(tc.catalogue, function () {
             const pane = makePane();
+            pane.mode = "docs";
             pane.setFilter("probe");
             const refs = kindsOf(pane, "ref");
             compare(refs.length, 2, "an unpinned reference is found");

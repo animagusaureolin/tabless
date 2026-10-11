@@ -82,7 +82,9 @@ TestCase {
     // only My views scroll.
     function test_a_short_sidebar_scrolls_only_my_views() {
         withScale(1.5);
-        const rail = make('import TodoCpp; Sidebar { height: 420; expanded: true }');
+        // Notes and Docs are a row each since Knowledge was split: one row
+        // more than the 420 px this used to fit.
+        const rail = make('import TodoCpp; Sidebar { height: 480; expanded: true }');
         const settings = findChild(rail, "sidebar-section-settings");
         tryVerify(() => settings.height > 0, 1000);
         // macOS font metrics at 150 % run a few px taller; the sidebar is

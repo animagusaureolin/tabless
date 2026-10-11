@@ -412,12 +412,23 @@ Rectangle {
             iconName: "list"
             shortcutId: "section.tasks"
         }
+        // Knowledge is two rows: the notes, and the docs (pages, snippets,
+        // links, contacts).
         NavRow {
             objectName: "sidebar-section-knowledge"
             section: "knowledge"
-            label: I18n.t("sidebar.knowledge")
-            iconName: "doc"
+            view: "notes"
+            label: I18n.t("siderail.notes")
+            iconName: "pen"
             shortcutId: "section.knowledge"
+        }
+        NavRow {
+            objectName: "sidebar-section-docs"
+            section: "knowledge"
+            view: "docs"
+            label: I18n.t("siderail.docs")
+            iconName: "doc"
+            shortcutId: "view.docs"
         }
 
         // ── My views ──
@@ -644,11 +655,15 @@ Rectangle {
     component NavRow: Item {
         id: nav
         property string section: ""
+        // A row for one view of its section (Notes, Docs); "" opens the
+        // section where it was left.
+        property string view: ""
         property string label: ""
         // The sheets' line icon (Icon.qml, DG-003).
         property string iconName: ""
         property string shortcutId: ""
         readonly property bool active: root._section === nav.section
+                                       && (nav.view.length === 0 || AppController.currentView === nav.view)
         readonly property string _keys: nav.shortcutId.length && AppController.shortcuts.length >= 0
             ? root.prettyKeys(AppController.shortcutFor(nav.shortcutId)) : ""
         Layout.fillWidth: true
@@ -719,7 +734,8 @@ Rectangle {
             showTip: !root.expanded
             onActivated: {
                 if (nav.shortcutId.length > 0) AppController.noteMouseAction(nav.shortcutId);
-                AppController.openSection(nav.section);
+                if (nav.view.length > 0) AppController.currentView = nav.view;
+                else AppController.openSection(nav.section);
             }
         }
     }
