@@ -36,6 +36,8 @@ const there = url(prefix(t.otherLang.lang as Lang) + path);
 const homeHref = url(prefix(lang));
 const sec = (id: string) => (home ? `#${id}` : `${homeHref}#${id}`);
 const canonical = new URL(here, Astro.site).href;
+// The social card: the same 1280×640 picture as the repository's social preview.
+const ogImage = new URL(url('og.png'), Astro.site).href;
 ---
 
 <!doctype html>
@@ -53,6 +55,13 @@ const canonical = new URL(here, Astro.site).href;
     <meta property="og:title" content={ogTitle} />
     <meta property="og:description" content={ogDescription} />
     <meta property="og:url" content={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content={lang === 'ru' ? 'ru_RU' : 'en_US'} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
+    <meta property="og:image:alt" content="Tabless — Just makes your day easier. A developer’s workday in one window." />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="color-scheme" content="dark" />
   </head>
   <body data-primary={primary}>
