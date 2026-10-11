@@ -173,7 +173,6 @@ const ru = {
       ['Можно работать командой?', 'Нет, это личное рабочее место. Общая работа остаётся в трекере команды: задачи забираются оттуда, а обратно по умолчанию ничего не пишется. Запись статуса включается для каждого трекера отдельно; она есть для GitHub, GitLab, Gitea, Forgejo и Jira.'],
       ['Подойдут заметки из Obsidian?', 'Да. Заметки загружаются из папки .md-файлов (сначала покажут, что будет загружено) и выгружаются в новую папку. Ссылки [[wiki-links]] остаются как есть, папка .obsidian пропускается.'],
       ['На каких языках интерфейс?', 'Русский и английский, переключается в настройках.'],
-      ['У меня lowkey или heap. Что будет с данными?', 'Теперь приложение называется Tabless. При первом запуске данные из папки lowkey/lowkey (или heap/heap) один раз копируются в Tabless/Tabless, старая папка остаётся нетронутой. Встроенная проверка обновлений в lowkey найдёт новую версию сама.'],
     ],
   },
   get: {
@@ -373,7 +372,6 @@ const en: typeof ru = {
       ['Can my team share a board?', 'No, it’s a personal workspace. Shared work stays in your team’s tracker: issues are pulled in, and by default nothing is written back. Status write-back is turned on per tracker; it exists for GitHub, GitLab, Gitea, Forgejo and Jira.'],
       ['Can I bring my Obsidian notes?', 'Yes. Notes import from a folder of .md files (you see what comes in first) and export to a new folder. [[wiki-links]] stay as they are; the .obsidian folder is skipped.'],
       ['Which languages does the app speak?', 'English and Russian, switchable in Settings.'],
-      ['I use lowkey or heap. What happens to my data?', 'The app is now called Tabless. On the first start the data in the lowkey/lowkey (or heap/heap) folder is copied to Tabless/Tabless once, and the old folder is left untouched. The update check built into lowkey finds the new version by itself.'],
     ],
   },
   get: {
