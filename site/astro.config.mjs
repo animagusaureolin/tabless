@@ -1,10 +1,9 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import { GITHUB_URL } from './src/lib/site.ts';
-import { BASE } from './repo.mjs';
+import { BASE, SITE_ORIGIN } from './repo.mjs';
 
-// Served from GitHub Pages as a project site: https://sectapunterx.github.io/<repository>/.
-// The path follows the repository name (repo.mjs), so a rename moves it on the next build.
+// Served from GitHub Pages on its own domain, at the root (repo.mjs, public/CNAME).
 const base = BASE;
 const repo = GITHUB_URL;
 
@@ -25,8 +24,8 @@ const redirects = {
 };
 
 export default defineConfig({
-  site: 'https://sectapunterx.github.io',
-  base,
+  site: SITE_ORIGIN,
+  base: base || '/',
   trailingSlash: 'always',
   devToolbar: { enabled: false },
   redirects,

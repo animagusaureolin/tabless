@@ -1,7 +1,7 @@
 {
     "version": "0.8.4",
     "description": "A developer's workday in one window: the tasks assigned to you from 13 trackers, today's meetings and your notes, from the keyboard.",
-    "homepage": "https://sectapunterx.github.io/tabless/",
+    "homepage": "https://tabless.dev/",
     "license": "MIT",
     "architecture": {
         "64bit": {

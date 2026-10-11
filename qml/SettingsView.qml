@@ -3790,7 +3790,7 @@ Item {
                     LinkText {
                         objectName: "settings-about-website"
                         text: I18n.t("settings.about.website")
-                        onActivated: Qt.openUrlExternally("https://sectapunterx.github.io/tabless/")
+                        onActivated: Qt.openUrlExternally("https://tabless.dev/")
                     }
                     AboutDot {}
                     LinkText {
