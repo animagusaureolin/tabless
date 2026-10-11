@@ -1,3 +1,4 @@
+#include "platform/Brand.h"
 #include "update/Updater.h"
 
 #include <QCryptographicHash>
@@ -20,7 +21,7 @@ namespace {
 
 // GitHub REST endpoint for the newest *published* (non-draft, non-prerelease)
 // release of the repo.
-constexpr auto kLatestReleaseUrl = "https://api.github.com/repos/sectapunterx/lowkey/releases/latest";
+constexpr auto kLatestReleaseUrl = "https://api.github.com/repos/sectapunterx/tabless/releases/latest";
 // A check that has not answered by then is not going to; without a limit a
 // dead network held "Checking for updates…" on screen for minutes.
 constexpr int kCheckTimeoutMs = 15 * 1000;
@@ -198,13 +199,13 @@ PackageKind detectPackageKind(const PackageEnv& env) {
 QString assetNameFor(PackageKind kind, const QString& tag) {
   switch(kind) {
     case PackageKind::WindowsSetup:
-      return QStringLiteral("lowkey-%1-windows-setup.exe").arg(tag);
+      return QStringLiteral("tabless-%1-windows-setup.exe").arg(tag);
     case PackageKind::WindowsPortable:
-      return QStringLiteral("lowkey-%1-windows-portable.zip").arg(tag);
+      return QStringLiteral("tabless-%1-windows-portable.zip").arg(tag);
     case PackageKind::MacApp:
-      return QStringLiteral("lowkey-%1-macos.dmg").arg(tag);
+      return QStringLiteral("tabless-%1-macos.dmg").arg(tag);
     case PackageKind::LinuxAppImage:
-      return QStringLiteral("lowkey-%1-linux-x86_64.AppImage").arg(tag);
+      return QStringLiteral("tabless-%1-linux-x86_64.AppImage").arg(tag);
     case PackageKind::None:
       break;
   }
@@ -264,7 +265,7 @@ void Updater::checkForUpdates() {
 
   QNetworkRequest req{QUrl(m_latestUrl)};
   req.setRawHeader("Accept", "application/vnd.github+json");
-  req.setRawHeader("User-Agent", "lowkey-updater");
+  req.setRawHeader("User-Agent", "tabless-updater");
   req.setTransferTimeout(kCheckTimeoutMs);
 
   QNetworkReply* reply = m_nam->get(req);
@@ -309,11 +310,18 @@ void Updater::downloadAsset(const QString& assetName, const QString& dir) {
   if(m_downloading) {
     return;
   }
-  // A release published only under heap's names (or a test feed) is still an
-  // update: lowkey-<tag>-… falls back to heap-<tag>-… (APP-280).
+  // A release published only under an older name (or a test feed) is still
+  // an update: tabless-<tag>-… falls back to lowkey-<tag>-…, then heap-<tag>-….
   QString name = assetName;
-  if(!m_assets.contains(name) && name.startsWith(QLatin1String("lowkey-"))) {
-    name = QStringLiteral("heap-") + name.mid(7);
+  const QString ours = QLatin1String(heap::brand::kCommand) + QLatin1Char('-');
+  if(!m_assets.contains(name) && name.startsWith(ours)) {
+    for(const heap::brand::Legacy& l : heap::brand::kLegacy) {
+      const QString old = QLatin1String(l.name) + QLatin1Char('-') + assetName.mid(ours.size());
+      if(m_assets.contains(old)) {
+        name = old;
+        break;
+      }
+    }
   }
   const QString url = m_assets.value(name);
   if(url.isEmpty()) {
@@ -339,7 +347,7 @@ void Updater::downloadAsset(const QString& assetName, const QString& dir) {
 
   QNetworkRequest req{QUrl(url)};
   req.setRawHeader("Accept", "application/octet-stream");
-  req.setRawHeader("User-Agent", "lowkey-updater");
+  req.setRawHeader("User-Agent", "tabless-updater");
   req.setTransferTimeout(kDownloadStallMs);
   QNetworkReply* reply = m_nam->get(req);
   m_download = reply;
@@ -377,7 +385,7 @@ void Updater::downloadAsset(const QString& assetName, const QString& dir) {
 void Updater::fetchSums(const QString& path, const QString& assetName) {
   QNetworkRequest req{QUrl(m_assets.value(QLatin1String(kSumsAsset)))};
   req.setRawHeader("Accept", "application/octet-stream");
-  req.setRawHeader("User-Agent", "lowkey-updater");
+  req.setRawHeader("User-Agent", "tabless-updater");
   req.setTransferTimeout(kCheckTimeoutMs);
   QNetworkReply* reply = m_nam->get(req);
   m_download = reply;

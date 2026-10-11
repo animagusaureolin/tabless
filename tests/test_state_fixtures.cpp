@@ -167,6 +167,29 @@ TEST_P(StateFixtureTest, SurvivesASaveAndTheNextLaunch) {
   expectEverythingFromTheFile(reopened);
 }
 
+// lowkey → Tabless (APP-283): 0.8.0's example profile is "lowkey-example"; it
+// opens as "tabless-example", still active, its events still its own, and
+// the old id is gone from the file after the next save.
+TEST(StateFixtureRename, TheLowkeyExampleProfileGetsTheNewId) {
+  QDir(appDataDir()).removeRecursively();
+  QDir().mkpath(appDataDir());
+  ASSERT_TRUE(QFile::copy(QStringLiteral(HEAP_STATE_FIXTURES_DIR "/v0.8.0.json"), statePath()));
+  {
+    AppController app;
+    EXPECT_EQ(app.activeProfileId(), QStringLiteral("tabless-example"));
+    EXPECT_TRUE(app.hasExample());
+    ASSERT_FALSE(app.events()->items().isEmpty());
+    for(const CalEvent& e : app.events()->items()) {
+      EXPECT_EQ(e.profileId, QStringLiteral("tabless-example")) << e.id.toStdString();
+    }
+    app.flushSave();
+  }
+  QFile f(statePath());
+  ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+  EXPECT_FALSE(f.readAll().contains("lowkey-example"));
+  QDir(appDataDir()).removeRecursively();
+}
+
 INSTANTIATE_TEST_SUITE_P(Releases,
                          StateFixtureTest,
                          ::testing::ValuesIn(fixtureNames()),

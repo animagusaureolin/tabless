@@ -48,7 +48,7 @@ using Microsoft::WRL::ComPtr;
 namespace wun = ABI::Windows::UI::Notifications;
 namespace xdom = ABI::Windows::Data::Xml::Dom;
 
-constexpr wchar_t kAppId[] = L"local.lowkey.app";
+constexpr wchar_t kAppId[] = L"local.tabless.app";
 
 // An HSTRING for the duration of one call.
 class HString {
@@ -89,9 +89,9 @@ bool mayOverwriteRegistration() {
   return !heap::paths::dataDirOverridden();
 }
 
-// lowkey://… → `"lowkey.exe" "%1"`, so toast clicks reach lowkey. Per user,
-// no admin. heap:// is pointed here too: a 0.7.x toast may still sit in the
-// Action Center after the upgrade (APP-280).
+// tabless://… → `"tabless.exe" "%1"`, so toast clicks reach Tabless. Per
+// user, no admin. lowkey:// and heap:// are pointed here too: a toast of an
+// older install may still sit in the Action Center after the upgrade.
 void registerUriScheme(const QString& scheme) {
   QSettings cls(QStringLiteral(R"(HKEY_CURRENT_USER\Software\Classes\)") + scheme, QSettings::NativeFormat);
   const QString command =
@@ -125,7 +125,7 @@ void registerAppId(const QString& iconPath) {
 QString toastIconPath() {
   // Named after the brand, so the heap icon a 0.7 install left in the data
   // folder is not reused after the rename.
-  return QDir(heap::paths::dataDir()).filePath(QStringLiteral("toast-icon-lowkey.png"));
+  return QDir(heap::paths::dataDir()).filePath(QStringLiteral("toast-icon-tabless.png"));
 }
 
 QString ensureToastIcon() {
@@ -133,7 +133,7 @@ QString ensureToastIcon() {
     return toastIconPath();
   }
   QDir().mkpath(heap::paths::dataDir());
-  const QPixmap pm = QIcon(QStringLiteral(":/brand/lowkey/lowkey-icon.svg")).pixmap(QSize(96, 96));
+  const QPixmap pm = QIcon(QStringLiteral(":/brand/tabless/tabless-icon.svg")).pixmap(QSize(96, 96));
   return !pm.isNull() && pm.save(toastIconPath(), "PNG") ? toastIconPath() : QString();
 }
 
@@ -170,7 +170,9 @@ class WinToastBackend : public NotificationCenter {
     m_logo = ensureToastIcon();
     registerAppId(m_logo);
     registerUriScheme(QLatin1String(kUriScheme));
-    registerUriScheme(QLatin1String(kLegacyUriScheme));
+    for(const char* old : kLegacyUriSchemes) {
+      registerUriScheme(QLatin1String(old));
+    }
 
     ComPtr<wun::IToastNotificationManagerStatics> manager;
     if(FAILED(

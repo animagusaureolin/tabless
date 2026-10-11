@@ -18,6 +18,11 @@ Rectangle {
     id: root
 
     property string filter: ""
+    // "notes": the notes alone. "docs": the pages, snippets, links and
+    // contacts (Knowledge is two screens, DG-070 revised).
+    property string mode: "notes"
+    readonly property bool docs: root.mode === "docs"
+    onModeChanged: rebuildNow()
     // The doc page open in the document, so its row reads as the open one.
     property string openPageId: ""
 
@@ -86,6 +91,95 @@ Rectangle {
         AppController.docsState = JSON.stringify(d);
     }
 
+    // Snippets are kept in the same catalogue blob; `idx` is the place in its
+    // `snippets`, -1 for a new one at the end. Undoable, like the old Docs.
+    function _docsForWrite() {
+        const raw = AppController.docsState || "";
+        let d = ({});
+        if (raw.length) {
+            try { d = JSON.parse(raw) || ({}); } catch (e) { return null; }
+        }
+        if (!Array.isArray(d.sections)) d.sections = [];
+        if (!Array.isArray(d.snippets)) d.snippets = [];
+        if (!Array.isArray(d.contacts)) d.contacts = [];
+        return d;
+    }
+    function _writeDocs(d, toastKey, name) {
+        const label = I18n.t(toastKey).arg(name);
+        AppController.setDocsStateUndoable(JSON.stringify(d), label);
+        AppController.showToast(label);
+    }
+    function saveSnippet(idx, title, lang, code) {
+        const d = root._docsForWrite();
+        if (!d) return;
+        const isNew = idx < 0 || idx >= d.snippets.length;
+        const sn = isNew ? ({}) : d.snippets[idx];
+        sn.title = title;
+        sn.lang = lang;
+        sn.code = code;
+        if (isNew) d.snippets.push(sn);
+        root._writeDocs(d, isNew ? "docs.toast.snippet.created" : "docs.toast.snippet.saved", title);
+    }
+    function deleteSnippet(idx) {
+        const d = root._docsForWrite();
+        if (!d || idx < 0 || idx >= d.snippets.length) return;
+        const title = String(d.snippets[idx].title || "");
+        d.snippets.splice(idx, 1);
+        root._writeDocs(d, "docs.toast.snippet.deleted", title);
+    }
+    // A link of the catalogue: `sec`/`item` place it, sec < 0 is a new one,
+    // filed in the first section (made if there is none).
+    function saveRef(sec, item, title, ref, url) {
+        const d = root._docsForWrite();
+        if (!d) return;
+        let it = null;
+        if (sec >= 0 && d.sections[sec] && (d.sections[sec].items || [])[item]) {
+            it = d.sections[sec].items[item];
+        } else {
+            if (d.sections.length === 0)
+                d.sections.push({ id: "links", title: I18n.t("knowledge.refs"), items: [] });
+            if (!Array.isArray(d.sections[0].items)) d.sections[0].items = [];
+            it = ({});
+            d.sections[0].items.push(it);
+        }
+        const isNew = sec < 0;
+        it.title = title;
+        it.ref = ref;
+        it.url = url;
+        root._writeDocs(d, isNew ? "docs.toast.created" : "docs.toast.saved", title || url);
+    }
+    function deleteRef(sec, item) {
+        const d = root._docsForWrite();
+        if (!d || !d.sections[sec] || !(d.sections[sec].items || [])[item]) return;
+        const it = d.sections[sec].items[item];
+        d.sections[sec].items.splice(item, 1);
+        root._writeDocs(d, "docs.toast.deleted", String(it.title || it.url || ""));
+    }
+    function saveContact(idx, name, role, handle) {
+        const d = root._docsForWrite();
+        if (!d) return;
+        const isNew = idx < 0 || idx >= d.contacts.length;
+        const c = isNew ? ({}) : d.contacts[idx];
+        c.name = name;
+        c.role = role;
+        c.mattermost = handle;
+        if (isNew) d.contacts.push(c);
+        root._writeDocs(d, isNew ? "docs.toast.contact.added" : "docs.toast.contact.saved", name);
+    }
+    function deleteContact(idx) {
+        const d = root._docsForWrite();
+        if (!d || idx < 0 || idx >= d.contacts.length) return;
+        const name = String(d.contacts[idx].name || "");
+        d.contacts.splice(idx, 1);
+        root._writeDocs(d, "docs.toast.contact.deleted", name);
+    }
+    // "+" in Docs, Ctrl+N there: a page, opened and named.
+    function newPage() {
+        const id = AppController.newDocPage();
+        root.pageActivated(id);
+        pageRenamePopup.openFor(id, "");
+    }
+
     color: Theme.bg
     implicitWidth: 260
 
@@ -144,8 +238,8 @@ Rectangle {
         const q = needle.toLowerCase();
         const has = (s) => q.length === 0 || String(s || "").toLowerCase().indexOf(q) >= 0;
         const docs = root._docs();
-        // Pinned references stand in Закреплено (DG-073); the others are
-        // listed only while searching, under their own header.
+        // Pinned references stand in Закреплено (DG-073), the others under
+        // Ссылки.
         const refs = [], otherRefs = [];
         const secs = docs.sections || [];
         for (let si = 0; si < secs.length; si++) {
@@ -154,26 +248,26 @@ Rectangle {
                 const it = items[ii];
                 if (!it || !(it.url || "").length) continue;
                 const pinnedRef = it.pinned === true;
-                if (!pinnedRef && q.length === 0) continue;
                 if (!has(it.title) && !has(it.ref) && !has(it.desc) && !has(it.url)) continue;
                 const r = root._splitRef(it.ref);
                 const title = String(it.title || it.ref || it.url);
                 (pinnedRef ? refs : otherRefs).push({
                     kind: "ref", tag: r.tag, rest: r.rest, name: title,
                     title: title + (r.rest.length ? " · " + r.rest : ""),
-                    url: String(it.url), sec: si, item: ii, pinned: pinnedRef
+                    url: String(it.url), sec: si, item: ii, pinned: pinnedRef,
+                    refTitle: String(it.title || ""), ref: String(it.ref || "")
                 });
             }
         }
         const contacts = [];
-        if (q.length > 0) {
-            const cs = docs.contacts || [];
-            for (let ci = 0; ci < cs.length; ci++) {
-                const c = cs[ci];
-                if (!c || (!has(c.name) && !has(c.role) && !has(c.channel) && !has(c.mattermost))) continue;
-                const handle = String(c.mattermost || c.channel || c.name || "");
-                contacts.push({ kind: "contact", tag: "", title: String(c.name || "") + (c.role ? " · " + c.role : ""), handle: handle });
-            }
+        const cs = docs.contacts || [];
+        for (let ci = 0; ci < cs.length; ci++) {
+            const c = cs[ci];
+            if (!c || (!has(c.name) && !has(c.role) && !has(c.channel) && !has(c.mattermost))) continue;
+            const handle = String(c.mattermost || c.channel || c.name || "");
+            contacts.push({ kind: "contact", tag: "", idx: ci, title: String(c.name || "") + (c.role ? " · " + c.role : ""),
+                            handle: handle, name: String(c.name || ""), role: String(c.role || ""),
+                            mm: String(c.mattermost || c.channel || "") });
         }
         const noteTitles = ({});
         for (const n of pinned.concat(loose)) noteTitles[n.title.toLowerCase()] = true;
@@ -192,26 +286,37 @@ Rectangle {
             }
         }
         const snippets = [];
-        for (const sn of docs.snippets || []) {
+        const allSnippets = docs.snippets || [];
+        for (let si = 0; si < allSnippets.length; si++) {
+            const sn = allSnippets[si];
             if (!sn || (!has(sn.title) && !has(sn.code))) continue;
-            snippets.push({ kind: "snippet", tag: String(sn.lang || "txt"), title: String(sn.title || ""), code: String(sn.code || "") });
+            snippets.push({ kind: "snippet", idx: si, tag: String(sn.lang || "txt"), lang: String(sn.lang || ""),
+                            title: String(sn.title || ""), code: String(sn.code || "") });
         }
 
         const rows = [];
-        if (pinned.length > 0 || refs.length > 0) {
+        // mode, not docs: this runs from onModeChanged, before docs is new.
+        if (root.mode !== "docs") {
+            if (pinned.length > 0) {
+                rows.push({ kind: "header", label: I18n.t("notes.pinned") });
+                for (const n of pinned) rows.push({ kind: "note", note: n, inPinnedSection: true });
+            }
+            const folders = Object.keys(byFolder).sort();
+            for (const f of folders) {
+                rows.push({ kind: "header", label: f, folder: f });
+                byFolder[f].sort(newest);
+                for (const n of byFolder[f]) rows.push({ kind: "note", note: n });
+            }
+            if (loose.length > 0) {
+                rows.push({ kind: "header", label: I18n.t("notes.other") });
+                for (const n of loose) rows.push({ kind: "note", note: n });
+            }
+            if (rows.length > 0) rows[0].first = true;
+            return rows;
+        }
+        if (refs.length > 0) {
             rows.push({ kind: "header", label: I18n.t("notes.pinned") });
             for (const r of refs) rows.push(r);
-            for (const n of pinned) rows.push({ kind: "note", note: n, inPinnedSection: true });
-        }
-        const folders = Object.keys(byFolder).sort();
-        for (const f of folders) {
-            rows.push({ kind: "header", label: f, folder: f });
-            byFolder[f].sort(newest);
-            for (const n of byFolder[f]) rows.push({ kind: "note", note: n });
-        }
-        if (loose.length > 0) {
-            rows.push({ kind: "header", label: I18n.t("notes.other") });
-            for (const n of loose) rows.push({ kind: "note", note: n });
         }
         if (pages.length > 0) {
             rows.push({ kind: "header", label: I18n.t("knowledge.pages") });
@@ -376,7 +481,8 @@ Rectangle {
             spacing: Theme.spSm
             Layout.topMargin: Style.quiet ? Theme.px(18) : Theme.spXs
             Text {
-                text: I18n.t("sidebar.knowledge")
+                objectName: "knowledge-title"
+                text: I18n.t(root.docs ? "siderail.docs" : "siderail.notes")
                 color: Theme.text
                 font.pixelSize: Style.quiet ? Theme.fsXl : Theme.px(18)  // sheet H2-Knowledge: 18px (R4-066)
                 font.weight: Theme.fwHeading
@@ -394,15 +500,44 @@ Rectangle {
                     size: Theme.px(9)
                     color: Style.quiet ? Theme.textMuted : Theme.text
                 }
+                // Notes: "+" is a new note. Docs: a page, a snippet, a link
+                // or a contact.
                 ClickArea {
                     id: newMA
                     objectName: "notes-new"
-                    label: I18n.t("notes.newNote")
+                    label: I18n.t(root.docs ? "knowledge.new" : "notes.newNote")
                     shortcutId: "notes.new"
                     onActivated: {
+                        if (root.docs) {
+                            newMenu.popup(newMA, 0, newMA.height);
+                            return;
+                        }
                         const id = AppController.newNote();
                         root.noteActivated(id);
                         root.noteCreated(id);
+                    }
+                }
+                AppMenu {
+                    id: newMenu
+                    AppMenuItem {
+                        objectName: "knowledge-new-page"
+                        text: I18n.t("knowledge.new.page")
+                        onTriggered: root.newPage()
+                    }
+                    AppMenuItem {
+                        objectName: "knowledge-new-snippet"
+                        text: I18n.t("knowledge.new.snippet")
+                        onTriggered: docDialog.openFor("snippet", ({ idx: -1 }))
+                    }
+                    AppMenuItem {
+                        objectName: "knowledge-new-ref"
+                        text: I18n.t("knowledge.new.ref")
+                        onTriggered: docDialog.openFor("ref", ({ sec: -1, item: -1 }))
+                    }
+                    AppMenuItem {
+                        objectName: "knowledge-new-contact"
+                        text: I18n.t("knowledge.new.contact")
+                        onTriggered: docDialog.openFor("contact", ({ idx: -1 }))
                     }
                 }
             }
@@ -413,7 +548,7 @@ Rectangle {
             QQC.ContextMenu.menu: TextEditMenu { editor: filterField }
             objectName: "note-filter"
             Layout.fillWidth: true
-            placeholderText: Style.quiet ? I18n.t("notes.filter.short") : I18n.t("notes.filter")
+            placeholderText: Style.quiet ? I18n.t("notes.filter.short") : I18n.t(root.docs ? "knowledge.docs.filter" : "notes.filter")
             placeholderTextColor: Theme.textDim
             color: Theme.text
             font.pixelSize: Theme.fsSm
@@ -445,12 +580,14 @@ Rectangle {
         EmptyState {
             objectName: "notes-empty"
             // No notes, even with pinned links and snippets listed (R3-134).
-            visible: root.filter.length > 0 ? root.rows.length === 0 : !root.rows.some(r => r.kind === "note")
+            visible: root.rows.length === 0
             Layout.fillWidth: true
             Layout.topMargin: Theme.sp2xl
-            Layout.bottomMargin: root.rows.length > 0 ? Theme.sp2xl : 0
-            title: root.filter.length > 0 ? I18n.t("notes.noMatches") : I18n.t("notes.empty")
-            line: root.filter.length > 0 ? I18n.t("notes.noMatches.hint") : I18n.t("notes.empty.line").arg(AppController.shortcutText("notes.new"))
+            title: root.filter.length > 0 ? I18n.t("notes.noMatches")
+                 : I18n.t(root.docs ? "knowledge.docs.empty" : "notes.empty")
+            line: root.filter.length > 0 ? I18n.t("notes.noMatches.hint")
+                : root.docs ? I18n.t("knowledge.docs.empty.line")
+                : I18n.t("notes.empty.line").arg(AppController.shortcutText("notes.new"))
         }
 
         ListView {
@@ -604,10 +741,11 @@ Rectangle {
                             else if (r.kind === "contact") root.contactActivated(r.handle);
                         }
                     }
-                    // Right-click: pin a reference, rename or delete a page.
+                    // Right-click: pin a reference, rename or delete a page,
+                    // edit or delete a snippet, a link or a contact.
                     MouseArea {
                         anchors.fill: parent
-                        enabled: drow.rowData.kind === "ref" || drow.rowData.kind === "page"
+                        enabled: drow.rowData.kind !== undefined
                         acceptedButtons: Qt.RightButton
                         onClicked: docMenu.popup()
                     }
@@ -632,6 +770,26 @@ Rectangle {
                             text: I18n.t("common.delete")
                             danger: true
                             onTriggered: AppController.deleteDocPage(drow.rowData.id)
+                        }
+                        AppMenuItem {
+                            objectName: "knowledge-item-edit"
+                            visible: drow.rowData.kind !== "page"
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("knowledge.edit")
+                            onTriggered: docDialog.openFor(drow.rowData.kind, drow.rowData)
+                        }
+                        AppMenuItem {
+                            objectName: "knowledge-item-delete"
+                            visible: drow.rowData.kind !== "page"
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("common.delete")
+                            danger: true
+                            onTriggered: {
+                                const r = drow.rowData;
+                                if (r.kind === "snippet") root.deleteSnippet(r.idx);
+                                else if (r.kind === "ref") root.deleteRef(r.sec, r.item);
+                                else if (r.kind === "contact") root.deleteContact(r.idx);
+                            }
                         }
                     }
                 }
@@ -932,6 +1090,134 @@ Rectangle {
             Item { Layout.fillWidth: true }
             PillButton { text: I18n.t("common.cancel"); onClicked: pageRenamePopup.close() }
             PillButton { text: I18n.t("editor.btn.save"); primary: true; onClicked: pageRenamePopup.commit() }
+        }
+    }
+
+    // A snippet (title, language, code), a link (title, ref, URL) or a
+    // contact (name, role, Mattermost handle): new or edited, one dialog.
+    QQC.Dialog {
+        id: docDialog
+        objectName: "knowledge-doc-dialog"
+        property string kind: "snippet"
+        property var at: ({})
+        readonly property bool isNew: docDialog.kind === "ref" ? !(docDialog.at.sec >= 0) : !(docDialog.at.idx >= 0)
+        modal: true
+        QQC.Overlay.modal: ModalScrim {}
+        anchors.centerIn: QQC.Overlay.overlay
+        parent: QQC.Overlay.overlay
+        padding: Theme.inset
+        width: 520
+        title: I18n.t("knowledge." + docDialog.kind + (docDialog.isNew ? ".new" : ".edit"))
+        function openFor(kind, data) {
+            docDialog.kind = kind;
+            docDialog.at = data;
+            const v = (k) => String(data[k] || "");
+            if (kind === "snippet") {
+                f1.text = v("title"); f2.text = v("lang"); f3.text = ""; codeArea.text = v("code");
+            } else if (kind === "ref") {
+                f1.text = v("refTitle"); f2.text = v("ref"); f3.text = v("url"); codeArea.text = "";
+            } else {
+                f1.text = v("name"); f2.text = v("role"); f3.text = v("mm"); codeArea.text = "";
+            }
+            docDialog.open();
+            f1.forceActiveFocus();
+            f1.selectAll();
+        }
+        readonly property bool canSave: docDialog.kind === "snippet"
+                                        ? f1.text.trim().length > 0 || codeArea.text.trim().length > 0
+                                        : docDialog.kind === "ref" ? f3.text.trim().length > 0
+                                        : f1.text.trim().length > 0
+        function commit() {
+            if (!docDialog.canSave) return;
+            const a = docDialog.at;
+            if (docDialog.kind === "snippet") {
+                const title = f1.text.trim().length > 0 ? f1.text.trim()
+                                                        : codeArea.text.trim().split("\n")[0].slice(0, 60);
+                root.saveSnippet(docDialog.isNew ? -1 : a.idx, title, f2.text.trim(), codeArea.text);
+            } else if (docDialog.kind === "ref") {
+                root.saveRef(docDialog.isNew ? -1 : a.sec, docDialog.isNew ? -1 : a.item,
+                             f1.text.trim(), f2.text.trim(), f3.text.trim());
+            } else {
+                root.saveContact(docDialog.isNew ? -1 : a.idx, f1.text.trim(), f2.text.trim(), f3.text.trim());
+            }
+            docDialog.close();
+        }
+        background: ModalSurface {}
+        contentItem: ColumnLayout {
+            spacing: Theme.spMd
+            QQC.TextField {
+                id: f1
+                objectName: "knowledge-doc-f1"
+                QQC.ContextMenu.menu: TextEditMenu { editor: f1 }
+                Layout.fillWidth: true
+                placeholderText: I18n.t(docDialog.kind === "contact" ? "docs.field.name" : "docs.field.title")
+                placeholderTextColor: Theme.textDim
+                color: Theme.text
+                background: FieldFrame {}
+                onAccepted: f2.forceActiveFocus()
+            }
+            QQC.TextField {
+                id: f2
+                objectName: "knowledge-doc-f2"
+                QQC.ContextMenu.menu: TextEditMenu { editor: f2 }
+                Layout.fillWidth: true
+                placeholderText: I18n.t(docDialog.kind === "snippet" ? "docs.field.language"
+                                      : docDialog.kind === "ref" ? "docs.field.ref" : "docs.field.role")
+                placeholderTextColor: Theme.textDim
+                color: Theme.text
+                font.family: docDialog.kind === "contact" ? Theme.fontUi : Theme.fontMono
+                background: FieldFrame {}
+                onAccepted: docDialog.kind === "snippet" ? codeArea.forceActiveFocus() : f3.forceActiveFocus()
+            }
+            QQC.TextField {
+                id: f3
+                objectName: "knowledge-doc-f3"
+                visible: docDialog.kind !== "snippet"
+                QQC.ContextMenu.menu: TextEditMenu { editor: f3 }
+                Layout.fillWidth: true
+                placeholderText: I18n.t(docDialog.kind === "ref" ? "docs.field.url" : "docs.field.mmHandle")
+                placeholderTextColor: Theme.textDim
+                color: Theme.text
+                background: FieldFrame {}
+                onAccepted: docDialog.commit()
+            }
+            QQC.ScrollView {
+                visible: docDialog.kind === "snippet"
+                Layout.fillWidth: true
+                Layout.preferredHeight: Theme.px(200)
+                QQC.TextArea {
+                    id: codeArea
+                    objectName: "knowledge-doc-code"
+                    QQC.ContextMenu.menu: TextEditMenu { editor: codeArea }
+                    placeholderText: I18n.t("docs.field.code")
+                    placeholderTextColor: Theme.textDim
+                    color: Theme.text
+                    font.family: Theme.fontMono
+                    font.pixelSize: Theme.fsSm
+                    wrapMode: TextEdit.NoWrap
+                    background: FieldFrame {}
+                    // Enter is a new line in code; Ctrl+Enter saves.
+                    Keys.onPressed: (e) => {
+                        if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter) && (e.modifiers & Qt.ControlModifier)) {
+                            docDialog.commit();
+                            e.accepted = true;
+                        }
+                    }
+                }
+            }
+        }
+        footer: RowLayout {
+            spacing: Theme.spMd
+            Layout.margins: Theme.sp2xl
+            Item { Layout.fillWidth: true }
+            PillButton { text: I18n.t("common.cancel"); onClicked: docDialog.close() }
+            PillButton {
+                objectName: "knowledge-doc-save"
+                text: I18n.t("editor.btn.save")
+                primary: true
+                enabled: docDialog.canSave
+                onClicked: docDialog.commit()
+            }
         }
     }
 

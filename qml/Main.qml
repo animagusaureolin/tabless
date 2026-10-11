@@ -46,13 +46,12 @@ ApplicationWindow {
     property bool _maximizeOnShow: false
 
     // Builds the current view's loader on its first visit. Board and Notes
-    // are never unloaded again. "docs" (the 0.7 catalogue, a saved
-    // currentView or Ctrl+4) is Knowledge now: one screen (DG-070).
+    // are never unloaded again. Notes and Docs are one NotesView in two
+    // modes: the notes, or the pages, snippets, links and contacts.
     function activateCurrentView() {
         const v = AppController.currentView;
-        if (v === "docs") { AppController.currentView = "notes"; return; }
         if (v === "board") boardLoader.active = true;
-        else if (v === "notes") notesLoader.active = true;
+        else if (v === "notes" || v === "docs") notesLoader.active = true;
     }
 
     // Whichever view is on screen. Four loaders now hold them — three kept
@@ -60,7 +59,7 @@ ApplicationWindow {
     function activeViewItem() {
         const v = AppController.currentView;
         if (v === "board") return boardLoader.item;
-        if (v === "notes") return notesLoader.item;
+        if (v === "notes" || v === "docs") return notesLoader.item;
         // The calendar lens wraps its grid (APP-264): the keys act on the grid.
         const it = viewLoader.item;
         if (it && it.objectName === "calendar-view") return it["calendarView"];
@@ -834,7 +833,7 @@ ApplicationWindow {
             AppController.currentView = "notes";
         } else if (hit.kind === "docPage") {
             AppController.activeDocPageId = hit.id;
-            AppController.currentView = "notes";
+            AppController.currentView = "docs";
             notesBridge.requestedPage = hit.id;
         }
     }
@@ -1097,7 +1096,7 @@ ApplicationWindow {
             onExportVaultRequested: exportVaultDialog.open()
             onExportIcsRequested: {
                 exportIcsDialog.currentFile = "file:///" + (
-                    (AppController.activeProfileId || "lowkey") + ".ics"
+                    (AppController.activeProfileId || "tabless") + ".ics"
                 );
                 exportIcsDialog.open();
             }
@@ -1105,7 +1104,7 @@ ApplicationWindow {
             onOpenHotkeys: (anchor) => win._togglePopover(hotkeys, anchor)
             activeSavedViewId: savedViewsHost.activeView ? savedViewsHost.activeId : ""
             savedViewModified: savedViewsHost.modified
-            onSavedViewActivated: (id) => savedViewsHost.apply(id)
+            onSavedViewActivated: (id) => savedViewsHost.toggle(id)
             onSavedViewRenameRequested: (id) => savedViewsHost.openRename(id)
             onSavedViewUpdateRequested: (id) => savedViewsHost.updateFromCurrent(id)
             onSavedViewEditRequested: (id) => savedViewsHost.openEdit(id)
@@ -1207,6 +1206,7 @@ ApplicationWindow {
                     visible: (!_lensView || !!savedViewsHost.activeView)
                           && AppController.currentView !== "today"
                           && AppController.currentView !== "notes"
+                          && AppController.currentView !== "docs"
                           && AppController.currentView !== "settings"
                     viewLabel: AppController.currentView === "day" ? I18n.t("calzoom.day")
                              : AppController.currentView === "week" ? I18n.t("siderail.week")
@@ -1245,7 +1245,7 @@ ApplicationWindow {
                     onSaveViewRequested: savedViewsHost.openSave()
                     onSaveAsNewRequested: savedViewsHost.openSave()
                     onUpdateViewRequested: savedViewsHost.updateActive()
-                    onLeaveViewRequested: savedViewsHost.leave()
+                    onLeaveViewRequested: savedViewsHost.clear()
                 }
                 Item {
                     id: viewArea
@@ -1274,7 +1274,7 @@ ApplicationWindow {
                     Loader {
                         id: notesLoader
                         anchors.fill: parent
-                        visible: AppController.currentView === "notes"
+                        visible: AppController.currentView === "notes" || AppController.currentView === "docs"
                         active: false
                         sourceComponent: notesComp
                     }
@@ -1320,6 +1320,7 @@ ApplicationWindow {
                         function onExampleRequested() { win.openExample(); }
                         function onPeopleRequested(id) { peopleDialog.showFor(id); }
                         function onPersonEditRequested(id) { personEditor.showFor(AppController.personById(id)); }
+                        function onPersonAddRequested() { personEditor.showFor(AppController.newPersonDraft()); }
                     }
 
                     // First visit to one of the kept-alive views builds it.
@@ -1456,6 +1457,7 @@ ApplicationWindow {
                 Component {
                     id: notesComp
                     NotesView {
+                        mode: AppController.currentView === "docs" ? "docs" : "notes"
                         // A palette hit in a note asks for the line its
                         // section starts on; clearing it afterwards lets the
                         // same line be requested twice.
@@ -1613,9 +1615,9 @@ ApplicationWindow {
             win.openSeenBefore(hit);
         }
         // The zoom keys stand down while it has the keyboard (APP-168).
-        // Window.active cannot tell: the capture window is this one's
-        // transient child, and an active child counts as this one active.
-        // Hiding it does not always say it went inactive, hence both.
+        // Window.active cannot tell for sure, so the capture window's own
+        // state is read. Hiding it does not always say it went inactive,
+        // hence both.
         function onActiveChanged() {
             const cw = captureLoader.item as CaptureWindow;
             win._captureActive = !!cw && cw.visible && cw.active;
@@ -1833,7 +1835,9 @@ ApplicationWindow {
         }
         if (id.indexOf("section.") === 0) {
             if (id === "section.tasks") win.leaveSavedView();
-            AppController.openSection(id.slice(8));
+            // Knowledge's key is the Notes row's (Docs has its own row).
+            if (id === "section.knowledge") AppController.currentView = "notes";
+            else AppController.openSection(id.slice(8));
             return;
         }
         if (id.indexOf("settings:") === 0) {
@@ -1883,9 +1887,10 @@ ApplicationWindow {
             savedViewsHost.applyAt(Number(id.slice(10)));
             return;
         }
-        // Notes actions run in the Notes view, so go there first (SHELL-1).
+        // Notes actions run in the Notes view, so go there first (SHELL-1);
+        // Docs is the same view and keeps them.
         if (id.indexOf("notes.") === 0) {
-            AppController.currentView = "notes";
+            if (AppController.currentView !== "docs") AppController.currentView = "notes";
             Qt.callLater(function () {
                 const v = win.activeViewItem();
                 if (v && v.runNotesCommand) v.runNotesCommand(id.slice(6));
@@ -1958,7 +1963,7 @@ ApplicationWindow {
         }
         // Notes has no box of its own; the palette searches every note's
         // text, which is what Ctrl+F in a note is reaching for.
-        if (AppController.currentView === "notes") {
+        if (AppController.currentView === "notes" || AppController.currentView === "docs") {
             cmdPalette.open();
             return;
         }
@@ -2106,7 +2111,7 @@ ApplicationWindow {
         // s on an empty day of the calendar: go to a date (keymap.md).
         if (base === "task.schedule" && win._keyTaskIds().length === 0)
             return ["day", "week", "month"].indexOf(v) >= 0 && !!b && b.cursorVisible === true;
-        if (base.indexOf("notes.") === 0) return v === "notes" && !win._panelOpen;
+        if (base.indexOf("notes.") === 0) return (v === "notes" || v === "docs") && !win._panelOpen;
         // "/" on Today: the header search does not filter the day, so the
         // key does nothing rather than look like it does (IDIOT-KNOW-15).
         if (routed && base === "search.focus" && v === "today") return false;
@@ -2473,7 +2478,7 @@ ApplicationWindow {
         sequence: win._kbd("section.knowledge")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.openSection("knowledge")
+        onActivated: AppController.currentView = "notes"
     }
     Shortcut {
         sequence: _kbd("view.board")
@@ -2503,7 +2508,7 @@ ApplicationWindow {
         sequence: _kbd("view.docs")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: AppController.currentView = "notes"
+        onActivated: AppController.currentView = "docs"
     }
     Shortcut {
         sequence: _kbd("view.notes")
@@ -3292,7 +3297,7 @@ ApplicationWindow {
     FileDialog {
         id: exportJsonDialog
         fileMode: FileDialog.SaveFile
-        nameFilters: ["lowkey profile (*.json)", "All files (*)"]
+        nameFilters: ["Tabless profile (*.json)", "All files (*)"]
         defaultSuffix: "json"
         title: I18n.t("dialog.exportProfile.title")
         onAccepted: {

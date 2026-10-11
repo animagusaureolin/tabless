@@ -1,4 +1,4 @@
-# Contributing to lowkey
+# Contributing to Tabless
 
 Thanks for taking a look. This page covers building, testing, what CI checks, and where things live.
 
@@ -7,7 +7,7 @@ Thanks for taking a look. This page covers building, testing, what CI checks, an
 Toolchain setup per platform is in [docs/BUILDING.md](docs/BUILDING.md). Once Qt 6.9+ is in place:
 
 ```sh
-git clone https://github.com/sectapunterx/lowkey && cd lowkey
+git clone https://github.com/sectapunterx/tabless && cd tabless
 cmake -S . -B build && cmake --build build -j        # app
 cmake --build build --target heap_all_tests          # tests
 ctest --test-dir build/tests --output-on-failure
@@ -73,7 +73,7 @@ When a budget fails, find what got slower first. Change a budget only on purpose
 deliberately larger fixture): re-measure locally in a Release build, take the middle of three runs, update `localMs`
 and `budgetMs` together, and say why in the commit.
 
-For the UI, `lowkey --perf-log` (or `HEAP_PERF_LOG=1`) writes `perf:` lines to the log: time from `main()` to the QML
+For the UI, `tabless --perf-log` (or `HEAP_PERF_LOG=1`) writes `perf:` lines to the log: time from `main()` to the QML
 being loaded and to the main window's first frame, and from the capture hotkey (or `open()`) to the first frame
 showing the capture popup. It only logs.
 
@@ -89,7 +89,7 @@ trust under `QT_QPA_PLATFORM=offscreen`; frame gaps are only meaningful on a dis
 
 ```
 .
-├─ CMakeLists.txt          ← heap_core (qt_add_library + qt_add_qml_module) + thin lowkey exe (target `heap`)
+├─ CMakeLists.txt          ← heap_core (qt_add_library + qt_add_qml_module) + thin tabless exe (target `heap`)
 ├─ src/
 │  ├─ main.cpp             ← QApplication entry, window icon, signal handlers
 │  ├─ AppController.{h,cpp}← QML_SINGLETON exposing models, profiles, automation, undo

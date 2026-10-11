@@ -174,7 +174,7 @@ Item {
         }
         AppMenuSeparator {}
         // A tracker's task: "Мой приоритет ›, Мой срок…, Запланировать…"
-        // in that order (X-Menus-Task); a task of lowkey's own starts with
+        // in that order (X-Menus-Task); a task of Tabless's own starts with
         // "Запланировать…". The rows trade places by name, so whichever is
         // shown answers to the one objectName.
         AppMenuItem {
@@ -271,7 +271,7 @@ Item {
             text: I18n.t("taskmenu.refreshFrom").arg(host._badge.name || host._ticket.provider || "")
             onTriggered: AppController.syncProvider(String(host._ticket.provider || ""))
         }
-        // A move that never reached the tracker: send it (after lowkey checks
+        // A move that never reached the tracker: send it (after Tabless checks
         // the issue) or drop it and keep the column here only (APP-243).
         AppMenuItem {
             objectName: "tc-menu-send-push"
@@ -324,7 +324,7 @@ Item {
             shortcutId: taskMenu.archiveKey
             onTriggered: AppController.setArchived(host.taskId, !host._isArchived)
         }
-        // A tracker's task leaves lowkey, not the tracker: "Hide from lowkey".
+        // A tracker's task leaves Tabless, not the tracker: "Hide from Tabless".
         AppMenuItem {
             objectName: "tc-menu-delete"
             danger: true
@@ -332,7 +332,7 @@ Item {
             shortcutId: host._isTicket ? "" : "selection.deleteSel"
             onTriggered: AppController.deleteTask(host.taskId)
         }
-        // Says why a tracker's task has no delete: lowkey never deletes in
+        // Says why a tracker's task has no delete: Tabless never deletes in
         // the tracker (X-Menus-Task, R3-046).
         AppMenuItem {
             objectName: "tc-menu-delete-off"

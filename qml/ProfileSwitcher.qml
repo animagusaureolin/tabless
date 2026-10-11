@@ -324,7 +324,7 @@ Item {
             AppMenuItem {
                 objectName: "sidebar-profile-remove-example"
                 Layout.fillWidth: true
-                visible: AppController.activeProfileId === "lowkey-example"
+                visible: AppController.activeProfileId === "tabless-example"
                 text: I18n.t("example.remove")
                 danger: true
                 onTriggered: { picker.close(); root.removeExampleRequested(); }
@@ -332,7 +332,7 @@ Item {
             AppMenuItem {
                 objectName: "sidebar-profile-delete"
                 Layout.fillWidth: true
-                visible: AppController.activeProfileId !== "lowkey-example"
+                visible: AppController.activeProfileId !== "tabless-example"
                 text: I18n.t("sidebar.profile.delete")
                 danger: true
                 enabled: AppController.profiles.length > 1

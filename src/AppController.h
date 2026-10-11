@@ -670,7 +670,10 @@ class AppController : public QObject {
   Q_INVOKABLE void removeExample();
   Q_INVOKABLE bool hasExample() const;
   Q_INVOKABLE int exampleChanges() const;
-  static constexpr const char* kExampleProfileId = "lowkey-example";
+  // The id named the product until APP-283; an old one is renamed on load,
+  // with everything that points at it (migrateExampleProfileId).
+  static constexpr const char* kExampleProfileId = "tabless-example";
+  static constexpr const char* kLegacyExampleProfileIds[] = {"lowkey-example"};
   // Settings -> Data -> "Reset all settings" (UX-5): preferences go back to a
   // new install's (heap. ink + soft contrast included). Kept: the profile
   // card, tracker connections, watched repositories, your own themes, window
@@ -1054,6 +1057,10 @@ class AppController : public QObject {
     if(m_updateStatus == QLatin1String("update.verified")) {
       return text.arg(m_updateStatusArg, m_updateSha256);  // version, checksum
     }
+    // "Version %1 is ready": the tag without its "v".
+    if(m_updateStatus == QLatin1String("update.available") && m_updateStatusArg.startsWith(QLatin1Char('v'))) {
+      return text.arg(m_updateStatusArg.mid(1));
+    }
     // The argument is itself a key when it names a reason ("update.offline").
     return text.arg(m_updateStatusArg.startsWith(QLatin1String("update.")) ? tr_(m_updateStatusArg) : m_updateStatusArg);
   }
@@ -1321,6 +1328,12 @@ class AppController : public QObject {
   // once — the dark slot to "heap-ink", the light one to "heap-light". The
   // user's own themes stay in the list. Returns whether `app` changed.
   static bool migrateLowkeyTheme(QJsonObject& app);
+  // lowkey -> Tabless (APP-283): a tracker bound to "lowkey-example" follows
+  // the example profile to its new id. True if anything changed.
+  static bool migrateExampleProfileBindings(QJsonObject& app);
+  // The example profile itself, its events, links into it and the active id.
+  // True if it was renamed (the file is saved again).
+  bool migrateExampleProfileId(QVector<CalEvent>& events);
 
   // The tray menu as the OS shows it (R3-103): [{ id, text, hint, enabled }],
   // an empty id for a separator. For tests and capture harnesses.

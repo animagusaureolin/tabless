@@ -58,8 +58,8 @@ TestCase {
     // UX-31: the title ends with the display name, so Windows does not add it
     // a second time.
     function test_window_title_names_the_app_once() {
-        // lowkey since 0.8.0 (APP-280): the name alone, as the taskbar shows it.
-        compare(tc.win.title, "lowkey");
+        // Tabless since APP-283 (lowkey in 0.8.0): the name alone, as the taskbar shows it.
+        compare(tc.win.title, "Tabless");
     }
 
     // heap 2 (APP-258): every place by its key, from the real window.

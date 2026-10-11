@@ -51,7 +51,7 @@ Popup {
         if (e.kind === "sync" || String(e.route || "").indexOf("settings:integrations") === 0) return I18n.t("eventLog.src.sync");
         if (e.kind === "undo" || (e.taskIds || []).length > 0) return I18n.t("eventLog.src.tasks");
         if (String(e.route || "").indexOf("settings:data") === 0) return I18n.t("eventLog.src.data");
-        return "lowkey";
+        return Brand.name;
     }
 
     // Whether an entry leads anywhere.

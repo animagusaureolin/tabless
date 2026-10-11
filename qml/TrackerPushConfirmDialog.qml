@@ -2,7 +2,7 @@ import QtQuick
 import TodoCpp
 
 // The not-yours write (APP-204, X/N-Dlg-Conflict right, R2-033). The check
-// lowkey makes right before a status write found the issue is not the
+// Tabless makes right before a status write found the issue is not the
 // user's any more — assigned to someone else, or out of the filter — so
 // nothing was sent. The card says whose it is and asks once; there is no
 // "don't ask again" for a ticket that is not yours. "Only here" is the

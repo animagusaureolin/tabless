@@ -345,13 +345,13 @@ Popup {
                     AppController.currentView = "board";
                 root.openTask(entry.taskId);
             } else if (entry.kind === "doc") {
-                AppController.currentView = "notes";
+                AppController.currentView = "docs";
                 root.navigateToDoc(entry.title || entry.label);
             } else if (entry.kind === "snippet") {
-                AppController.currentView = "notes";
+                AppController.currentView = "docs";
                 root.navigateToSnippets(entry.label);
             } else if (entry.kind === "contact") {
-                AppController.currentView = "notes";
+                AppController.currentView = "docs";
                 root.navigateToContacts(entry.label);
             } else if (entry.kind === "person") {
                 root.openPerson(entry.personId);
@@ -362,7 +362,7 @@ Popup {
                 root.navigateToNoteLine(entry.line !== undefined ? entry.line : 0);
             } else if (entry.kind === "docPage") {
                 AppController.activeDocPageId = entry.pageId;
-                AppController.currentView = "notes";
+                AppController.currentView = "docs";
                 root.navigateToDocPage(entry.pageId);
             } else if (entry.kind === "dailyNote") {
                 AppController.currentView = "notes";

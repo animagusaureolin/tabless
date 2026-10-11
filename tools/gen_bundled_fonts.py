@@ -9,14 +9,15 @@ faces instead: Golos Text 400/500/600 and JetBrains Mono 400/500, cut with
 fontTools.varLib.instancer from the upstream files, every glyph kept (full
 Latin + Cyrillic).
 
-Each face is named the legacy way: family "lowkey Golos Text" / "lowkey JetBrains
+Each face is named the legacy way: family "Tabless Golos Text" / "Tabless JetBrains
 Mono" in name ID 1, the weight ("Medium") in name ID 2, no typographic family
 (16/17). GDI reads ID 1 and DirectWrite / fontconfig prefer ID 16, so with 16
 absent every backend sees one family with three (two) weights rather than
 "Golos Text Medium" as a family of its own.
 
-The "lowkey " prefix (in the family, full and PostScript names; "heap " before
-0.8.0) keeps these cuts
+The "Tabless " prefix (in the family, full and PostScript names; "heap " before
+0.8.0, "lowkey " before APP-283; tools/fonts/rename_bundled_fonts.py renames
+existing cuts) keeps these cuts
 apart from a copy of the same font installed on the machine. Under the
 upstream name, Windows with JetBrains Mono installed mixed the two: text was
 shaped against one file's glyph order and drawn from the other's, so every
@@ -43,7 +44,7 @@ prep (no fpgm, cvt or glyph programs), so nothing depends on the old em.
     python tools/fonts/add_return_glyph.py       # then: the ↵ glyph the upstream fonts lack (R4-056)
 
 A download also rewrites each *-OFL.txt from upstream: put back the
-"Modified Version (lowkey)" note under its header.
+"Modified Version (Tabless)" note under its header.
 """
 
 import sys
@@ -86,7 +87,7 @@ def main() -> None:
             var_path = OUT / ("_" + varfile)
             var_path.write_bytes(fetch(f"{UPSTREAM}/{updir}/{varfile.replace('[', '%5B').replace(']', '%5D')}"))
             (OUT / f"{stem}-OFL.txt").write_bytes(fetch(f"{UPSTREAM}/{updir}/OFL.txt"))
-        family = "lowkey " + TTFont(var_path)["name"].getDebugName(1)
+        family = "Tabless " + TTFont(var_path)["name"].getDebugName(1)
         ps_family = family.replace(" ", "")
         for weight, style in weights:
             font = instancer.instantiateVariableFont(TTFont(var_path), {"wght": weight}, updateFontNames=True)
@@ -98,7 +99,7 @@ def main() -> None:
                     names.setName(style, 2, rec.platformID, rec.platEncID, rec.langID)
                 elif rec.nameID == 3:
                     version = rec.toUnicode().split(";")[0]
-                    names.setName(f"{version};lowkey;{ps_family}-{style}", 3, rec.platformID, rec.platEncID, rec.langID)
+                    names.setName(f"{version};Tabless;{ps_family}-{style}", 3, rec.platformID, rec.platEncID, rec.langID)
                 elif rec.nameID == 4:
                     names.setName(f"{family} {style}", 4, rec.platformID, rec.platEncID, rec.langID)
                 elif rec.nameID == 6:

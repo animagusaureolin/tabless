@@ -8,7 +8,7 @@ import "Reschedule.js" as Resched
 // Today (heap 2, APP-260): the start screen. The date and one line of facts;
 // the day by the hours — meetings and tasks with their status, the line of
 // "now"; on the side what is in progress, what is due, whom to write, and how
-// many tasks have no date. It shows; lowkey places nothing by itself.
+// many tasks have no date. It shows; Tabless places nothing by itself.
 //
 // Two drawings of the same day (DG-010…015):
 //   bold  (H2-Today)       the eyebrow, "День", meeting cards with a bar,
@@ -41,6 +41,8 @@ FocusScope {
     signal peopleRequested(string id)
     // The person menu's "Изменить вопрос…" (R2-063).
     signal personEditRequested(string id)
+    // "+ Добавить человека" under the list: a new person to write to.
+    signal personAddRequested()
 
     property bool allProfiles: false
     function focusView() {
@@ -680,8 +682,9 @@ FocusScope {
                         }
                     }
 
-                    // Whom to write; hidden when nobody. Folded in the quiet
-                    // style (DG-013, DG-015).
+                    // Whom to write. Folded in the quiet style (DG-013,
+                    // DG-015) while anyone is on it; with nobody, the heading
+                    // and the add link stay, so there is a way in from Today.
                     ColumnLayout {
                         id: peopleBox
                         objectName: "today-people"
@@ -689,10 +692,10 @@ FocusScope {
                         // Stacked: packed at natural width, like flex-wrap (R3-014).
                         Layout.preferredWidth: root.stacked ? Theme.px(220) : -1
                         Layout.fillWidth: !root.stacked
-                        visible: root.people.length > 0
+                        visible: Style.todayExtras !== "hidden"
                         spacing: root.cards ? 0 : Theme.spSm
                         property bool open: Style.todayExtras === "open" && !root.stacked
-                        readonly property bool folding: !root.cards
+                        readonly property bool folding: !root.cards && root.people.length > 0
                         readonly property bool shown: peopleBox.open || !peopleBox.folding
                         // Bold: a heading. Quiet: "▸ Кому написать · 2".
                         SideHead {
@@ -730,7 +733,7 @@ FocusScope {
                             }
                         }
                         Text {
-                            visible: root.stacked && !peopleBox.open
+                            visible: root.stacked && !peopleBox.open && root.people.length > 0
                             text: I18n.t("today.collapsed")
                             color: Theme.textDim
                             font.family: Theme.fontUi
@@ -799,6 +802,16 @@ FocusScope {
                                     ClickArea { id: wroteCA; label: I18n.t("today.wrote"); onActivated: AppController.setPersonState(pr.modelData.id, "pinged") }
                                 }
                             }
+                        }
+                        Text {
+                            objectName: "today-person-add"
+                            visible: peopleBox.shown
+                            Layout.topMargin: root.cards && root.people.length > 0 ? Theme.spSm : 0
+                            text: I18n.t("people.add")
+                            color: addCA.hovered ? Theme.text : Theme.textDim
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            ClickArea { id: addCA; label: I18n.t("people.add"); onActivated: root.personAddRequested() }
                         }
                     }
 

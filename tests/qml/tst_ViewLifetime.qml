@@ -72,12 +72,17 @@ TestCase {
         verify(board !== notes);
     }
 
-    // The 0.7 Docs catalogue is the Knowledge screen now (DG-070).
-    function test_docs_lands_in_knowledge() {
+    // Docs is its own screen of Knowledge again, the same NotesView in its
+    // docs mode (DG-070, revised).
+    function test_docs_is_the_notes_view_in_docs_mode() {
         const notes = show("notes");
+        compare(notes.mode, "notes");
         show("board");
         compare(show("docs"), notes);
-        compare(AppController.currentView, "notes");
+        compare(AppController.currentView, "docs");
+        compare(notes.mode, "docs");
+        show("notes");
+        compare(notes.mode, "notes");
     }
 
     // Exactly one view is on screen at a time — keeping three alive must not

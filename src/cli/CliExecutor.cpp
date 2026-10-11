@@ -19,7 +19,7 @@ Snapshot snapshotOf(const AppController& c) {
 Response failure(int code, const QString& message) {
   Response r;
   r.exitCode = code;
-  r.err = QStringLiteral("lowkey: ") + message + QChar('\n');
+  r.err = QStringLiteral("tabless: ") + message + QChar('\n');
   return r;
 }
 
@@ -356,14 +356,14 @@ Response applyHeadless(const Request& request, const QDateTime& now) {
   AppController controller;
   if(controller.storageState() != QLatin1String("ok")) {
     r.exitCode = kExitData;
-    r.err = QStringLiteral("lowkey: nothing changed: %1\n").arg(controller.storageMessage());
+    r.err = QStringLiteral("tabless: nothing changed: %1\n").arg(controller.storageMessage());
     return r;
   }
   r = execute(controller, request, now);
   controller.flushSave();
   if(controller.storageState() != QLatin1String("ok")) {
     r.exitCode = kExitData;
-    r.err += QStringLiteral("lowkey: the change was not saved: %1\n").arg(controller.storageMessage());
+    r.err += QStringLiteral("tabless: the change was not saved: %1\n").arg(controller.storageMessage());
   }
   return r;
 }

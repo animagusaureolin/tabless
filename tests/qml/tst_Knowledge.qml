@@ -31,14 +31,19 @@ TestCase {
         verify(nv !== null);
         return nv;
     }
+    function docsOf() {
+        const nv = make();
+        nv.mode = "docs";
+        return nv;
+    }
     function rowsOf(nv, kind) {
         const list = findChild(nv, "notes-list-pane");
         list.rebuildNow();
         return list.rows.filter((r) => r.kind === kind);
     }
 
-    function test_docs_sit_in_the_list_beside_the_notes() {
-        const nv = make();
+    function test_docs_list_the_catalogue() {
+        const nv = docsOf();
         const refs = rowsOf(nv, "ref");
         compare(refs.length, 1);
         compare(refs[0].tag, "RFC");
@@ -78,5 +83,90 @@ TestCase {
         compare(AppController.noteTaskRefs("about " + draft.id)[0].id, draft.id);
         AppController.deleteTask(draft.id);
         AppController.deleteNote(noteId);
+    }
+
+    // "+" in Docs offers a page, a snippet, a link and a contact.
+    function test_docs_plus_offers_page_snippet_link_contact() {
+        const nv = docsOf();
+        for (const k of ["page", "snippet", "ref", "contact"])
+            verify(findChild(nv, "knowledge-new-" + k) !== null, k);
+        compare(findChild(nv, "knowledge-title").text, I18n.t("siderail.docs"));
+        nv.mode = "notes";
+        compare(findChild(nv, "knowledge-title").text, I18n.t("siderail.notes"));
+    }
+
+    // Docs with no page open says so; Notes draws the note.
+    function test_docs_without_a_page_shows_the_empty_line() {
+        const nv = docsOf();
+        verify(findChild(nv, "docs-no-page").visible);
+        verify(!findChild(nv, "notes-live").visible);
+        nv.mode = "notes";
+        verify(!findChild(nv, "docs-no-page").visible);
+        verify(findChild(nv, "notes-live").visible);
+    }
+
+    // Each screen keeps what it had open.
+    function test_docs_keeps_its_page_across_notes() {
+        const nv = docsOf();
+        const id = AppController.newDocPage("Probe page keep");
+        nv.openPage(id);
+        nv.mode = "notes";
+        compare(nv.pageId, "");
+        nv.mode = "docs";
+        compare(nv.pageId, id);
+        AppController.deleteDocPage(id);
+    }
+
+    function test_links_and_contacts_are_added_edited_and_deleted() {
+        const nv = docsOf();
+        const pane = findChild(nv, "notes-list-pane");
+        pane.saveRef(-1, -1, "Probe link", "RFC 1", "https://example.org/probe");
+        let r = rowsOf(nv, "ref").filter((x) => x.name === "Probe link");
+        compare(r.length, 1);
+        pane.saveRef(r[0].sec, r[0].item, "Probe link", "RFC 2", "https://example.org/probe2");
+        r = rowsOf(nv, "ref").filter((x) => x.name === "Probe link");
+        compare(r[0].url, "https://example.org/probe2");
+        pane.deleteRef(r[0].sec, r[0].item);
+        compare(rowsOf(nv, "ref").filter((x) => x.name === "Probe link").length, 0);
+        compare(rowsOf(nv, "ref").length, 1, "the seeded link stays");
+
+        pane.saveContact(-1, "Probe person", "qa", "@probe");
+        let c = rowsOf(nv, "contact").filter((x) => x.name === "Probe person");
+        compare(c.length, 1);
+        compare(c[0].handle, "@probe");
+        pane.saveContact(c[0].idx, "Probe person", "lead", "@probe2");
+        c = rowsOf(nv, "contact").filter((x) => x.name === "Probe person");
+        compare(c[0].handle, "@probe2");
+        pane.deleteContact(c[0].idx);
+        compare(rowsOf(nv, "contact").filter((x) => x.name === "Probe person").length, 0);
+    }
+
+    function test_a_snippet_is_added_edited_and_deleted() {
+        const nv = docsOf();
+        const pane = findChild(nv, "notes-list-pane");
+        pane.saveSnippet(-1, "Probe snippet", "sql", "select 1");
+        let sn = rowsOf(nv, "snippet").filter((r) => r.title === "Probe snippet");
+        compare(sn.length, 1);
+        compare(sn[0].code, "select 1");
+        pane.saveSnippet(sn[0].idx, "Probe snippet", "sql", "select 2");
+        sn = rowsOf(nv, "snippet").filter((r) => r.title === "Probe snippet");
+        compare(sn.length, 1);
+        compare(sn[0].code, "select 2");
+        // The seeded snippet and the reference are left as they were.
+        compare(rowsOf(nv, "snippet").filter((r) => r.title === "Run the stand").length, 1);
+        compare(rowsOf(nv, "ref").length, 1);
+        pane.deleteSnippet(sn[0].idx);
+        compare(rowsOf(nv, "snippet").filter((r) => r.title === "Probe snippet").length, 0);
+        compare(rowsOf(nv, "snippet").length, 1);
+    }
+
+    // With no catalogue yet, the first snippet makes one.
+    function test_first_snippet_into_an_empty_catalogue() {
+        const keep = AppController.docsState;
+        AppController.docsState = "";
+        const nv = docsOf();
+        findChild(nv, "notes-list-pane").saveSnippet(-1, "First", "", "echo hi");
+        compare(rowsOf(nv, "snippet").length, 1);
+        AppController.docsState = keep;
     }
 }

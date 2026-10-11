@@ -1,4 +1,5 @@
-// lowkey — brand singleton for Qt 6 / QML (heap until 0.8.0, APP-280)
+// Tabless — brand singleton for Qt 6 / QML (heap until 0.8.0, lowkey until
+// APP-283)
 // Drop this in qml/ and register as a singleton in qt_add_qml_module().
 // Then use Brand.accent, Brand.bg, Brand.fontMono, Brand.tagline, etc.
 
@@ -9,9 +10,10 @@ QtObject {
     id: brand
 
     // ── Identity ──────────────────────────────────────────────
-    // Always lowercase, also at the start of a sentence (owner, 2026-10-08).
-    readonly property string name:    "lowkey"
-    readonly property string tagline: "Quiet by default."
+    // A proper noun with a capital T (owner, 2026-10-11). The tagline is
+    // English in every UI language, word for word.
+    readonly property string name:    "Tabless"
+    readonly property string tagline: "Just makes your day easier."
     readonly property string taglineLong: "A developer’s workday in one window."
     // Version is single-sourced from CMake PROJECT_VERSION via
     // AppController.appVersion — do not hardcode it here.
@@ -60,9 +62,9 @@ QtObject {
 
     // ── Typography ────────────────────────────────────────────
     // The bundled cuts (platform/BundledFonts.h): Golos Text and JetBrains
-    // Mono under a "lowkey " name, so an installed copy can never stand in.
-    readonly property string fontSans: "lowkey Golos Text"
-    readonly property string fontMono: "lowkey JetBrains Mono"
+    // Mono under a "Tabless " name, so an installed copy can never stand in.
+    readonly property string fontSans: "Tabless Golos Text"
+    readonly property string fontMono: "Tabless JetBrains Mono"
 
     // Type scale (px)
     readonly property int sizeDisplay:  56
@@ -87,8 +89,8 @@ QtObject {
 
     // ── Logo asset paths (resolved against the qrc you set up) ─
     // The in-app logo is BrandLogo.qml (native QML); these are the files.
-    readonly property string logoWordmark: "qrc:/brand/lowkey/lowkey-wordmark-on-dark.svg"
-    readonly property string logoWordmarkLight: "qrc:/brand/lowkey/lowkey-wordmark-on-light.svg"
-    readonly property string appIcon: "qrc:/brand/lowkey/lowkey-icon.svg"
-    readonly property string favicon: "qrc:/brand/lowkey/favicon.svg"
+    readonly property string logoWordmark: "qrc:/brand/tabless/tabless-wordmark-on-dark.svg"
+    readonly property string logoWordmarkLight: "qrc:/brand/tabless/tabless-wordmark-on-light.svg"
+    readonly property string appIcon: "qrc:/brand/tabless/tabless-icon.svg"
+    readonly property string favicon: "qrc:/brand/tabless/favicon.svg"
 }

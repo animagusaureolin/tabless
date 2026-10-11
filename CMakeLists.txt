@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 project(heap VERSION 0.8.4 LANGUAGES C CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
-# design/brand-export/lowkey/lowkey-icon.rc is actually compiled into lowkey.exe —
+# design/brand-export/tabless/tabless-icon.rc is actually compiled into tabless.exe —
 # without this, CMake silently skips .rc inputs and the PE icon resource is
 # missing, leaving Explorer/taskbar with the default Qt icon in release.
 if (WIN32)
@@ -672,7 +672,7 @@ target_compile_options(heap_provider_registry PRIVATE "${HEAP_WARNING_OPTIONS}")
 # operate on. Each keyword applies only to its own platform. (HEAP-28)
 qt_add_executable(heap WIN32 MACOSX_BUNDLE
     src/main.cpp
-    $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/lowkey/lowkey-icon.rc>
+    $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/tabless/tabless-icon.rc>
 )
 # Link the QML module plugin too: for a statically-linked qml module the plugin
 # carries the type-registration + qmlcache resource init. Linking only the
@@ -680,9 +680,14 @@ qt_add_executable(heap WIN32 MACOSX_BUNDLE
 # Main.qml) fail to load at runtime. Linking the plugin force-references them.
 target_link_libraries(heap PRIVATE heap_core heap_coreplugin heap_provider_registry)
 target_compile_options(heap PRIVATE "${HEAP_WARNING_OPTIONS}")
-# The product is lowkey since 0.8.0 (APP-280); the CMake targets keep their
-# names, the files they make carry the new one.
-set_target_properties(heap PROPERTIES OUTPUT_NAME lowkey)
+# The product is Tabless (APP-283; lowkey 0.8, heap before); the CMake targets
+# keep their names, the files they make carry the new one: tabless(.exe), and
+# Tabless.app on macOS, where the bundle's name is what Finder and the Dock show.
+if(APPLE)
+    set_target_properties(heap PROPERTIES OUTPUT_NAME Tabless)
+else()
+    set_target_properties(heap PROPERTIES OUTPUT_NAME tabless)
+endif()
 
 # ── heap-updater (APP-125) — puts a downloaded update in place on Windows ──
 # A running exe and its DLLs cannot be overwritten there, so heap starts this
@@ -701,8 +706,22 @@ if(WIN32)
     if(MINGW)
         target_link_options(heap-updater PRIVATE -municode -static)
     endif()
-    set_target_properties(heap-updater PROPERTIES OUTPUT_NAME lowkey-updater)
+    set_target_properties(heap-updater PROPERTIES OUTPUT_NAME tabless-updater)
     add_dependencies(heap heap-updater)
+
+    # ── lowkey.exe, kept as a launcher (APP-283) ──
+    # What lowkey 0.8 left pointing at lowkey.exe — its updater's restart,
+    # shortcuts, a login entry — starts tabless.exe through this. No Qt,
+    # static runtime.
+    add_executable(heap-legacy-launcher WIN32 src/updater/legacy_launcher_win.cpp)
+    set_target_properties(heap-legacy-launcher PROPERTIES OUTPUT_NAME lowkey)
+    target_compile_definitions(heap-legacy-launcher PRIVATE UNICODE _UNICODE)
+    target_link_libraries(heap-legacy-launcher PRIVATE user32)
+    target_compile_options(heap-legacy-launcher PRIVATE "${HEAP_WARNING_OPTIONS}")
+    if(MINGW)
+        target_link_options(heap-legacy-launcher PRIVATE -municode -static)
+    endif()
+    add_dependencies(heap heap-legacy-launcher)
 
     # ── heap-cli (APP-173) — the console front door to heap.exe ──
     # heap.exe is a GUI-subsystem binary, so cmd and PowerShell neither wait
@@ -734,7 +753,7 @@ if(WIN32)
     target_compile_definitions(heap-cli PRIVATE HEAP_VERSION="${PROJECT_VERSION}")
     target_link_libraries(heap-cli PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Network heap_markdown shell32)
     target_compile_options(heap-cli PRIVATE "${HEAP_WARNING_OPTIONS}")
-    set_target_properties(heap-cli PROPERTIES OUTPUT_NAME lowkey-cli)
+    set_target_properties(heap-cli PROPERTIES OUTPUT_NAME tabless-cli)
     add_dependencies(heap heap-cli)
 endif()
 
@@ -768,21 +787,21 @@ qt_add_resources(heap_core "fonts"
         resources/fonts/JetBrainsMono-Medium.ttf
 )
 
-# ── Brand assets (lowkey logo + app icon, design/brand-export/lowkey — APP-280) ──
+# ── Brand assets (Tabless logo + app icon, design/brand-export/tabless — APP-283) ──
 # On heap_core, not the app, so every binary that loads the QML — the test
 # runner included — has the icons the QML asks for.
 qt_add_resources(heap_core "brand"
     PREFIX "/brand"
     BASE "design/brand-export"
     FILES
-        design/brand-export/lowkey/lowkey-icon.svg
-        design/brand-export/lowkey/lowkey-icon-light.svg
-        design/brand-export/lowkey/lowkey-wordmark-on-dark.svg
-        design/brand-export/lowkey/lowkey-wordmark-on-light.svg
-        design/brand-export/lowkey/lowkey-tray-light.svg
-        design/brand-export/lowkey/lowkey-tray-dark.svg
-        design/brand-export/lowkey/lowkey-tray-template.svg
-        design/brand-export/lowkey/favicon.svg
+        design/brand-export/tabless/tabless-icon.svg
+        design/brand-export/tabless/tabless-icon-light.svg
+        design/brand-export/tabless/tabless-wordmark-on-dark.svg
+        design/brand-export/tabless/tabless-wordmark-on-light.svg
+        design/brand-export/tabless/tabless-tray-light.svg
+        design/brand-export/tabless/tabless-tray-dark.svg
+        design/brand-export/tabless/tabless-tray-template.svg
+        design/brand-export/tabless/favicon.svg
         design/brand-export/icons/heap-01-board.svg
         design/brand-export/icons/heap-02-timeline.svg
         design/brand-export/icons/heap-03-week.svg
@@ -833,16 +852,16 @@ qt_add_resources(heap_core "brand"
 # macOS build (local dev, CI, release) carries the icon rather than only the
 # release pipeline. If the tools are missing it falls back to Qt's default.
 if(APPLE)
-    set(MACOSX_BUNDLE_EXECUTABLE_NAME "lowkey")
-    set(MACOSX_BUNDLE_BUNDLE_NAME "lowkey")
-    set(MACOSX_BUNDLE_GUI_IDENTIFIER "local.lowkey.app")
+    set(MACOSX_BUNDLE_EXECUTABLE_NAME "Tabless")
+    set(MACOSX_BUNDLE_BUNDLE_NAME "Tabless")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "local.tabless.app")
     set(MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
     set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
     set_target_properties(heap PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in")
 
-    set(_heap_icns "${CMAKE_SOURCE_DIR}/design/brand-export/lowkey/lowkey.icns")
-    set(_heap_icon_svg "${CMAKE_SOURCE_DIR}/design/brand-export/lowkey/lowkey-icon.svg")
+    set(_heap_icns "${CMAKE_SOURCE_DIR}/design/brand-export/tabless/tabless.icns")
+    set(_heap_icon_svg "${CMAKE_SOURCE_DIR}/design/brand-export/tabless/tabless-icon.svg")
     if(NOT EXISTS "${_heap_icns}")
         find_program(RSVG_CONVERT rsvg-convert)
         find_program(ICONUTIL iconutil)
@@ -938,12 +957,13 @@ if(WIN32)
         endif()
 
         add_custom_target(portable
-                DEPENDS heap heap-updater heap-cli
+                DEPENDS heap heap-updater heap-cli heap-legacy-launcher
                 COMMAND ${CMAKE_COMMAND} -E rm -rf          "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory  "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-updater>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-cli>" "${PORTABLE_DIR}/"
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-legacy-launcher>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E env "PATH=${_windeploy_path}"
                         ${WINDEPLOYQT_EXECUTABLE}
                         --no-translations
@@ -972,7 +992,7 @@ if(WIN32)
                 # Tells an in-app update this folder is a release's portable
                 # bundle (APP-125). The installer packs it too, but there
                 # unins000.exe beside heap.exe decides first.
-                COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/packaging/windows/lowkey-portable.txt" "${PORTABLE_DIR}/"
+                COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/packaging/windows/tabless-portable.txt" "${PORTABLE_DIR}/"
                 COMMENT "Assembling portable bundle → ${PORTABLE_DIR}"
         )
     else()

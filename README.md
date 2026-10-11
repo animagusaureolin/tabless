@@ -1,19 +1,17 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/lowkey/lowkey-wordmark-on-dark.svg">
-    <img src="design/brand-export/lowkey/lowkey-wordmark-on-light.svg" width="320" alt="lowkey">
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/tabless/tabless-wordmark-on-dark.svg">
+    <img src="design/brand-export/tabless/tabless-wordmark-on-light.svg" width="320" alt="Tabless">
   </picture>
 </p>
 
-<h3 align="center">Quiet by default.</h3>
+<h3 align="center">Just makes your day easier.</h3>
+
+<p align="center">A developer’s workday in one window</p>
 
 <p align="center">
-  Your tracker tasks, today's meetings and your notes — in one native window, driven from the keyboard.
-</p>
-
-<p align="center">
-  <a href="https://github.com/sectapunterx/lowkey/releases/latest"><b>Download</b></a> ·
-  <a href="https://sectapunterx.github.io/lowkey/">Website</a> ·
+  <a href="https://github.com/sectapunterx/tabless/releases/latest"><b>Download</b></a> ·
+  <a href="https://sectapunterx.github.io/tabless/">The tour on the website</a> ·
   <a href="#docs">Docs</a>
 </p>
 
@@ -22,35 +20,57 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sectapunterx/lowkey/releases"><img src="https://img.shields.io/github/v/release/sectapunterx/lowkey?sort=semver" alt="Release"></a>
+  <a href="https://github.com/sectapunterx/tabless/releases"><img src="https://img.shields.io/github/v/release/sectapunterx/tabless?sort=semver" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Windows%20·%20macOS%20·%20Linux-grey" alt="Windows, macOS, Linux">
 </p>
 
-- **12 trackers, one list** — GitHub, GitLab, Jira, Trello, Gitea, Forgejo, Redmine, Todoist, Asana,
-  ClickUp, Sentry, Bitbucket. Read-only unless you switch writes on.
-- **Capture from any app** — `Ctrl+Shift+Space`, type `review PR tomorrow 11:00 p1 #api`, done.
+- **Your tracker tasks, one list** — GitHub, GitLab, Jira, Trello, Gitea, Forgejo, Redmine, Todoist, Asana,
+  ClickUp, Sentry, Bitbucket, plus Mattermost for @mentions. Read-only unless you switch writes on.
+- **Capture from any app** — `Ctrl+Shift+Space`, type `fix login 15:00 p1 #auth`, done.
 - **Knows your branch** — check out `APP-112-…` and APP-112 is at the top of the window.
 - **Vim-style keys** — `j` `k`, `g b`, `d`, `/`; any layout, every key rebindable.
 - **Yours, on disk** — one readable `state.json`. No account, no analytics, works offline. Free, MIT.
 
 <p align="center">
-  <img src="docs/assets/img/readme/board.png" width="100%" alt="Tasks as a board">
-  <br><sub>Board — your tasks by status, one keypress per move</sub>
+  <img src="docs/assets/img/readme/capture.gif" width="100%" alt="Quick capture: typing 'fix login 15:00 p1 #auth' over the Today screen puts the task into today's plan at 15:00">
+  <br><sub>One line, and the task is in today's plan at 15:00</sub>
 </p>
 
 ## Up and running in two minutes
 
-1. **Install** — from [the latest release](https://github.com/sectapunterx/lowkey/releases/latest): Windows
+1. **Install** — from [the latest release](https://github.com/sectapunterx/tabless/releases/latest): Windows
    `setup.exe` or portable `.zip`, macOS `.dmg`, Linux `.AppImage` (Qt inside, nothing else to install).
-   Or `scoop bucket add lowkey https://github.com/sectapunterx/lowkey` then `scoop install lowkey`.
+   Or `scoop bucket add tabless https://github.com/sectapunterx/tabless` then `scoop install tabless`.
 2. **Connect a tracker** — Settings → Integrations → **Connect with browser**. A token works everywhere too.
 3. **Add your calendar** — paste an `.ics` link from Outlook, Google or iCloud. Read-only.
 4. **Press `?`** — every key on one screen.
 
+**Coming from lowkey or heap?** Same app, new name. On the first start your data folder is copied over
+once — tasks, notes, settings, backups, snapshots and tracker tokens, so nothing needs signing in again.
+The old folder stays where it was, with a `MOVED-TO-TABLESS.txt` note inside.
+
+<details>
+<summary><b>Windows or macOS warns you on first launch?</b></summary>
+<br>
+
+The builds are not signed with a paid certificate yet: a free signing service for open-source projects
+turned the application down, and the Apple developer fee is not covered yet. The warning has nothing to do
+with the code itself.
+
+- **Windows** — SmartScreen says "Windows protected your PC": click **More info → Run anyway**. Installing
+  with Scoop skips the download prompt in the browser.
+- **macOS** — the app is ad-hoc signed but not notarized: right-click it in Applications → **Open**. On
+  macOS 15 and later, open it once, then go to **System Settings → Privacy & Security → Open Anyway**.
+
+Every release ships `SHA256SUMS` and an SBOM next to the files, the in-app updater refuses a file whose
+checksum does not match, and you can [build it yourself](docs/BUILDING.md).
+</details>
+
 ## A day with it
 
 **Morning.** Today shows the meetings and tasks of the day by the hour, plus what is in progress and due.
+The week puts the meetings and the planned work side by side.
 
 <p align="center">
   <img src="docs/assets/img/readme/calendar.png" width="100%" alt="Tasks as a week calendar">
@@ -62,6 +82,11 @@ words, in English or Russian. `Ctrl+Shift+N` does the same for a note.
 
 **Starting work.** Check out the ticket's branch — the task shows up top with its PR state from your own
 `gh` or `glab`, and moves to In Progress (one switch turns that off).
+
+<p align="center">
+  <img src="docs/assets/img/readme/board.png" width="100%" alt="Tasks as a board">
+  <br><sub>Board — your tasks by status, one keypress per move</sub>
+</p>
 
 **Your own layer on every ticket.** Private notes, checklist, tags and dates on any tracker task. A sync
 never overwrites them, and none of it goes back to the tracker.
@@ -75,8 +100,8 @@ never overwrites them, and none of it goes back to the tracker.
 folder of `.md` files or an Obsidian vault — you see what comes in before anything is copied.
 
 <p align="center">
-  <img src="docs/assets/img/readme/knowledge.png" width="100%" alt="Knowledge with a note open">
-  <br><sub>Knowledge — Markdown notes linked to tasks</sub>
+  <img src="docs/assets/img/readme/knowledge.png" width="100%" alt="Notes with a note open">
+  <br><sub>Notes — Markdown linked to tasks</sub>
 </p>
 
 ## It never does these without asking
@@ -98,7 +123,7 @@ folder of `.md` files or an Obsidian vault — you see what comes in before anyt
 | Key | Does |
 | --- | --- |
 | `Ctrl+K` | Find anything, run any command |
-| `Ctrl+1` `2` `3` | Today · Tasks · Knowledge |
+| `Ctrl+1` `2` `3` | Today · Tasks · Notes |
 | `g b` · `g l` · `g c` | Board · list · calendar |
 | `j` `k` · `h` `l` | Move the cursor |
 | `d` · `s` | Done · schedule |
@@ -121,12 +146,12 @@ status:blocked  due:week  is:overdue  priority:p0,p1  branch:login  estimate:>2h
 ## And from the terminal
 
 ```sh
-lowkey today                                  # overdue first, then what's on today
-lowkey add "fix login tomorrow 14:00 p1 #backend"
-lowkey now                                    # the current task — fits a shell prompt
+tabless today                                  # overdue first, then what's on today
+tabless add "fix login tomorrow 14:00 p1 #backend"
+tabless now                                    # the current task — fits a shell prompt
 ```
 
-Changes show up in the open window at once. On Windows the command is `lowkey-cli`. Starship snippet and
+Changes show up in the open window at once. On Windows the command is `tabless-cli`. Starship snippet and
 the rest: [docs/CLI.md](docs/CLI.md).
 
 ## Not for you if
@@ -144,7 +169,7 @@ the rest: [docs/CLI.md](docs/CLI.md).
 - [Command line](docs/CLI.md) · [Tutorial](docs/TUTORIAL.md)
 - [Building from source](docs/BUILDING.md) — Qt 6.9+, C++20 · [Contributing](CONTRIBUTING.md)
 
-Bug reports and pull requests are welcome — please attach `logs/lowkey.log`.
+Bug reports and pull requests are welcome — please attach `logs/tabless.log`.
 
 MIT — see [LICENSE](LICENSE). Bundled fonts (Golos Text, JetBrains Mono) are under the SIL OFL 1.1, see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

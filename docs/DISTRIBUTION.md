@@ -1,12 +1,12 @@
 # Distribution channels
 
-Every build of lowkey ships from [GitHub Releases](https://github.com/sectapunterx/lowkey/releases).
+Every build of Tabless ships from [GitHub Releases](https://github.com/sectapunterx/tabless/releases).
 Package-manager manifests reuse those same release assets. This doc tracks each
 free channel, the manifest that feeds it, and the exact steps to submit/update.
 
 | Channel | Manifest | Status | Submission |
 |---------|----------|--------|------------|
-| **Scoop** (Windows) | [`bucket/lowkey.json`](../bucket/lowkey.json) | ✅ live in this repo | none — this repo *is* the bucket |
+| **Scoop** (Windows) | [`bucket/tabless.json`](../bucket/tabless.json) | ✅ live in this repo | none — this repo *is* the bucket |
 | **winget** (Windows) | [`packaging/winget/`](../packaging/winget/) | 📝 ready to PR | PR to `microsoft/winget-pkgs` |
 | **Flathub** (Linux) | [`packaging/flatpak/`](../packaging/flatpak/) | 📝 draft, test then PR | PR to `flathub/flathub` |
 
@@ -17,28 +17,34 @@ external accounts. See "Not yet done" below.
 
 ## Scoop — works now
 
-This repository is a Scoop bucket (`bucket/lowkey.json`; `bucket/heap.json` is
-the same manifest under the old name, so a bucket added before the rename keeps
-updating). Users install with:
+This repository is a Scoop bucket (`bucket/tabless.json`; `bucket/lowkey.json`
+and `bucket/heap.json` are the same manifest under the old names, so an app
+installed as `lowkey` or `heap` before a rename keeps updating). Users install with:
 
 ```powershell
-scoop bucket add lowkey https://github.com/sectapunterx/lowkey
-scoop install lowkey
+scoop bucket add tabless https://github.com/sectapunterx/tabless
+scoop install tabless
 ```
 
+Until the first release under the new name, the manifest installs lowkey 0.8.4
+(`lowkey-v0.8.4-windows-portable.zip`, `bin: lowkey.exe`). The first Tabless
+release needs a hand bump of all three files, as the 0.8.0 rename did: `version`,
+`url`, `hash`, and `bin`/`shortcuts` → `tabless.exe` — `autoupdate` rewrites the
+URL and hash but never `bin`.
+
 `checkver: github` + `autoupdate` mean the manifest tracks the latest GitHub
-release automatically; on a new release update `version`/`url`/`hash` in both files (or run
+release automatically; on a new release update `version`/`url`/`hash` in all three files (or run
 `scoop update`/`checkver -u` from a Scoop clone).
 
 To also get into the shared **Extras** bucket (more discoverable), open a PR to
 [`ScoopInstaller/Extras`](https://github.com/ScoopInstaller/Extras) with a copy
-of `bucket/lowkey.json`.
+of `bucket/tabless.json`.
 
 ## winget — ready to PR
 
 Manifests live in `packaging/winget/` (schema 1.6.0):
-`sectapunterx.heap.yaml`, `.installer.yaml`, `.locale.en-US.yaml` (the package
-identifier `sectapunterx.heap` keeps the old name).
+`sectapunterx.Tabless.yaml`, `.installer.yaml`, `.locale.en-US.yaml` (package
+identifier `sectapunterx.Tabless`, moniker `tabless`).
 
 1. Validate + test locally (Windows):
    ```powershell
@@ -52,9 +58,9 @@ identifier `sectapunterx.heap` keeps the old name).
    ```
    or manually fork [`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs),
    copy the three files to
-   `manifests/s/sectapunterx/heap/0.8.0/`, and open a PR.
+   `manifests/s/sectapunterx/Tabless/<version>/`, and open a PR.
 3. On each release, bump `PackageVersion` + `InstallerUrl` + `InstallerSha256`
-   (`sha256sum lowkey-<ver>-windows-setup.exe`) and repeat. `wingetcreate update`
+   (`sha256sum tabless-<ver>-windows-setup.exe`) and repeat. `wingetcreate update`
    automates this.
 
 > The installer is currently **unsigned**; winget's automated validation still
@@ -62,27 +68,27 @@ identifier `sectapunterx.heap` keeps the old name).
 
 ## Flathub — draft, test before PR
 
-Files in `packaging/flatpak/`: manifest `io.github.sectapunterx.heap.yaml`,
-`io.github.sectapunterx.heap.metainfo.xml`, `io.github.sectapunterx.heap.desktop`
-(the app id `io.github.sectapunterx.heap` keeps the old name).
+Files in `packaging/flatpak/`: manifest `io.github.sectapunterx.tabless.yaml`,
+`io.github.sectapunterx.tabless.metainfo.xml`, `io.github.sectapunterx.tabless.desktop`
+(app id `io.github.sectapunterx.tabless`).
 The manifest builds from the `v0.4.2` git tag against the KDE 6 runtime.
 
 1. Build + run locally:
    ```bash
    flatpak install flathub org.kde.Platform//6.8 org.kde.Sdk//6.8
    flatpak-builder --user --install --force-clean build-dir \
-     packaging/flatpak/io.github.sectapunterx.heap.yaml
-   flatpak run io.github.sectapunterx.heap
+     packaging/flatpak/io.github.sectapunterx.tabless.yaml
+   flatpak run io.github.sectapunterx.tabless
    ```
 2. Validate metadata:
    ```bash
    flatpak run org.freedesktop.appstream.cli validate \
-     packaging/flatpak/io.github.sectapunterx.heap.metainfo.xml
+     packaging/flatpak/io.github.sectapunterx.tabless.metainfo.xml
    ```
    (If `post-install` install paths fail, adjust them relative to the build cwd.)
 3. Submit: fork [`flathub/flathub`](https://github.com/flathub/flathub), create a
    branch off `new-pr`, add the manifest, open a PR. A reviewer runs the build and
-   may request tweaks. On approval you get a dedicated `flathub/io.github.sectapunterx.heap`
+   may request tweaks. On approval you get a dedicated `flathub/io.github.sectapunterx.tabless`
    repo; bump the `tag`/`commit` there for each release.
 
 ---
@@ -91,7 +97,7 @@ The manifest builds from the `v0.4.2` git tag against the KDE 6 runtime.
 
 | Channel | What's needed |
 |---------|---------------|
-| **Homebrew Cask** (macOS) | own tap repo `homebrew-lowkey` with a cask pointing at the `.dmg`, or PR to `homebrew/homebrew-cask` (has a notability bar) |
+| **Homebrew Cask** (macOS) | own tap repo `homebrew-tabless` with a cask pointing at the `.dmg`, or PR to `homebrew/homebrew-cask` (has a notability bar) |
 | **AUR** (Arch) | AUR account + SSH key; push a `PKGBUILD` |
 | **Snap Store** | Snapcraft account; `snapcraft.yaml` + `snapcraft upload` |
 | **Chocolatey** | community account + API key; `.nuspec` + `choco push` |

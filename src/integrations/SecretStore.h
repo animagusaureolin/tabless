@@ -8,6 +8,7 @@
 #include <QStringList>
 #include <QVector>
 
+#include <cstddef>
 #include <functional>
 
 namespace heap::integrations {
@@ -79,6 +80,7 @@ class SecretStore : public QObject {
   // Reads one value (all its parts, if it was split) from `service`; `done`
   // gets the text, empty when there is none.
   void readKeychainValue(const QString& service, const QString& cache, const std::function<void(const QString&)>& done);
+  void readLegacyKeychainValue(std::size_t index, const QString& cache, const std::function<void(const QString&)>& done);
   void deleteKeychain(const QString& key);
 
   QHash<QString, QString> m_cache;

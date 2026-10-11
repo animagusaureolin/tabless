@@ -8,7 +8,7 @@ import TodoCpp
 // goes in is chosen with two boxes and shown before anything leaves — the
 // version, OS and today's log (on), the titles of the tasks in progress
 // (off by default). Copy puts exactly the preview in the clipboard; "Open an
-// issue on GitHub" opens a new-issue page with it. Nothing is sent by lowkey.
+// issue on GitHub" opens a new-issue page with it. Nothing is sent by Tabless.
 Popup {
     id: root
     objectName: "report-issue"

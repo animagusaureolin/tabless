@@ -75,7 +75,7 @@ SingleInstance::Result SingleInstance::acquire(const QByteArray& message) {
       m_lock.reset();
       return Result::Forwarded;
     }
-    // A headless `lowkey-cli` command holds the lock for a moment and never
+    // A headless `tabless-cli` command holds the lock for a moment and never
     // listens: once it lets go, this is the window (DATA-10).
     if(m_lock->tryLock(0)) {
       listen();

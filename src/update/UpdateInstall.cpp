@@ -65,16 +65,16 @@ bool startAfterQuit(const QString& then, const QString& a, const QString& b) {
 
 bool installWindows(PackageKind kind, const QString& package, QString& error) {
   const QString appDir = QCoreApplication::applicationDirPath();
-  const QString helper = QDir(appDir).filePath(QStringLiteral("lowkey-updater.exe"));
+  const QString helper = QDir(appDir).filePath(QStringLiteral("tabless-updater.exe"));
   if(!QFileInfo::exists(helper)) {
-    error = QStringLiteral("lowkey-updater.exe is missing next to lowkey.exe");
+    error = QStringLiteral("tabless-updater.exe is missing next to tabless.exe");
     return false;
   }
   // It must not run from the folder it is about to replace.
-  const QString copy = QDir(updateWorkDir()).filePath(QStringLiteral("lowkey-updater.exe"));
+  const QString copy = QDir(updateWorkDir()).filePath(QStringLiteral("tabless-updater.exe"));
   QFile::remove(copy);
   if(!QFile::copy(helper, copy)) {
-    error = QStringLiteral("could not copy lowkey-updater.exe to %1").arg(updateWorkDir());
+    error = QStringLiteral("could not copy tabless-updater.exe to %1").arg(updateWorkDir());
     return false;
   }
   QFile::remove(outcomePath());
@@ -93,7 +93,7 @@ bool installWindows(PackageKind kind, const QString& package, QString& error) {
       QDir::toNativeSeparators(outcomePath()),
   };
   if(!QProcess::startDetached(copy, args, updateWorkDir())) {
-    error = QStringLiteral("could not start lowkey-updater.exe");
+    error = QStringLiteral("could not start tabless-updater.exe");
     return false;
   }
   return true;
@@ -140,14 +140,21 @@ bool installMac(const QString& package, QString& error) {
     QDir(fresh).removeRecursively();
     return false;
   }
-  if(!QDir().rename(fresh, bundle)) {
-    error = QStringLiteral("could not put the new lowkey.app in place");
+  // The bundle takes the image's name when the product was renamed
+  // (lowkey.app → Tabless.app), unless something else already has it.
+  QString target = bundle;
+  const QString renamed = QDir(parent).filePath(apps.first());
+  if(renamed.compare(bundle, Qt::CaseInsensitive) != 0 && !QFileInfo::exists(renamed)) {
+    target = renamed;
+  }
+  if(!QDir().rename(fresh, target)) {
+    error = QStringLiteral("could not put the new Tabless.app in place");
     QDir().rename(aside, bundle);
     QDir(fresh).removeRecursively();
     return false;
   }
   writeOutcome("ok\n");
-  if(!startAfterQuit(QStringLiteral("rm -rf \"$1\"; open \"$2\""), aside, bundle)) {
+  if(!startAfterQuit(QStringLiteral("rm -rf \"$1\"; open \"$2\""), aside, target)) {
     error = QStringLiteral("could not schedule the restart");
     return false;
   }
@@ -195,7 +202,8 @@ PackageEnv currentPackageEnv() {
   env.os = QStringLiteral("windows");
   env.hasUninstaller = QFileInfo::exists(QDir(env.appDir).filePath(QStringLiteral("unins000.exe")));
   // heap-portable.txt is what a 0.7.x zip unpacked; an update keeps it.
-  env.hasPortableMarker = QFileInfo::exists(QDir(env.appDir).filePath(QStringLiteral("lowkey-portable.txt"))) ||
+  env.hasPortableMarker = QFileInfo::exists(QDir(env.appDir).filePath(QStringLiteral("tabless-portable.txt"))) ||
+                          QFileInfo::exists(QDir(env.appDir).filePath(QStringLiteral("lowkey-portable.txt"))) ||
                           QFileInfo::exists(QDir(env.appDir).filePath(QStringLiteral("heap-portable.txt")));
   env.writable = canWriteInto(env.appDir);
 #elif defined(Q_OS_MACOS)
@@ -222,7 +230,7 @@ bool startInstall(PackageKind kind, const QString& package, QString& error) {
     case PackageKind::None:
       break;
   }
-  error = QStringLiteral("this copy of lowkey is not updated from inside the app");
+  error = QStringLiteral("this copy of Tabless is not updated from inside the app");
   return false;
 }
 

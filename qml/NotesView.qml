@@ -101,7 +101,7 @@ Item {
     property bool showBacklinks: root.width > Theme.px(1000)
     property var  _incoming: []
     // APP-269: the tasks the note names, the tasks that link here, the
-    // note's links out of lowkey.
+    // note's links out of Tabless.
     property var  _taskRefs: []
     property var  _taskLinks: []
     property var  _external: []
@@ -279,11 +279,34 @@ Item {
     }
     Connections {
         target: AppController
-        function onActiveNoteChanged() { root.pageId = ""; root._refreshTitle(); }
+        function onActiveNoteChanged() {
+            if (!root.docs) root.pageId = "";
+            root._refreshTitle();
+        }
     }
 
-    // ── A page of the former Docs catalogue, open in the document ────
-    // Empty: the active note is shown. Set from the list or from Ctrl+K.
+    // "notes" or "docs" (Main binds it to the view): the same screen shows
+    // the notes, or the pages, snippets, links and contacts. Each keeps what
+    // it had open: back in Docs, the page left there is open again.
+    property string mode: "notes"
+    readonly property bool docs: root.mode === "docs"
+    property string _docsPage: ""
+    onModeChanged: {
+        root._flushPending();
+        // mode, not docs: the binding may not have caught up yet.
+        if (root.mode === "docs") {
+            root.pageId = root._docsPage;
+        } else {
+            root._docsPage = root.pageId;
+            root.pageId = "";
+        }
+    }
+    // The note on screen: in Notes, while no page is open.
+    readonly property bool _noteShown: !root.docs && root.pageId.length === 0
+
+    // ── A page of the Docs catalogue, open in the document ───────────
+    // Empty: the active note is shown (Notes) or the empty line (Docs).
+    // Set from the list or from Ctrl+K.
     property string pageId: ""
     // The keyboard goes with the page: it stayed on the hidden note, and
     // Return then typing wrote into that note (IDIOT-KNOW-2).
@@ -327,6 +350,7 @@ Item {
     Timer { interval: 30000; running: root.visible; repeat: true; onTriggered: root._now = new Date() }
     readonly property string _metaLine: {
         const page = root.pageId.length > 0;
+        if (root.docs && !page) return "";
         const ago = root.agoText(page ? root._pageUpdated : root._activeUpdated, root._now);
         const edited = ago.length > 0 ? I18n.t("know.edited").arg(ago) : "";
         if (Style.quiet) return edited;
@@ -389,14 +413,20 @@ Item {
         return true;
     }
 
-    // F2: the document on screen, a page or the note (IDIOT-KNOW-4).
+    // F2: the document on screen, a page or the note (IDIOT-KNOW-4). A page
+    // can be open on either screen.
     function renameShown() {
         if (root.pageId.length > 0) notesList.renamePage(root.pageId);
         else if (AppController.activeNoteId.length > 0) notesList.renameActive();
     }
 
+    // Ctrl+N: a note in Notes, a page in Docs.
     function newNoteAndEdit() {
         root._flushPending();
+        if (root.docs) {
+            notesList.newPage();
+            return;
+        }
         AppController.newNote();
         root._focusNewNote();
     }
@@ -843,6 +873,7 @@ Item {
             visible: root._listShown
             Layout.preferredWidth: visible ? Math.min(Theme.px(260), root.width * 0.35) : 0
             Layout.fillHeight: true
+            mode: root.mode
             openPageId: root.pageId
             onNoteActivated: (id) => {
                 // Flush first: the editor debounces its saves, so the last
@@ -860,8 +891,14 @@ Item {
             // the document, a snippet is copied, a contact's handle too.
             onRefActivated: (url) => preview.openExternal(url)
             onPageActivated: (id) => root.openPage(id)
-            onSnippetActivated: (title, code) => AppController.copyToClipboard(code)
-            onContactActivated: (handle) => AppController.copyToClipboard(handle)
+            onSnippetActivated: (title, code) => {
+                AppController.copyToClipboard(code);
+                AppController.showToast(I18n.t("docs.toast.copied").arg(title));
+            }
+            onContactActivated: (handle) => {
+                AppController.copyToClipboard(handle);
+                AppController.showToast(I18n.t("docs.toast.copied").arg(handle));
+            }
         }
 
         // ── The document (DG-071) ─────────────────────────────────
@@ -890,7 +927,7 @@ Item {
             // ── The note's files ──────────────────────────────────────
             Rectangle {
                 objectName: "notes-attachments"
-                visible: root._noteAttachments.length > 0 && root.pageId.length === 0
+                visible: root._noteAttachments.length > 0 && root._noteShown
                 Layout.fillWidth: true
                 Layout.preferredHeight: noteChips.implicitHeight + 2 * Theme.spSm
                 color: Theme.panel
@@ -917,7 +954,7 @@ Item {
                 // Editor pane — visible in edit + split modes.
                 Flickable {
                     id: notesScroll
-                    visible: root.viewMode === "edit" && root.pageId.length === 0
+                    visible: root.viewMode === "edit" && root._noteShown
                     // Scroll sync: the editor leads while the reader scrolls it.
                     onContentYChanged: if (root.viewMode === "split") root._syncFrom("editor")
                     Layout.fillWidth: true
@@ -1103,7 +1140,7 @@ Item {
                 MdBlockEditor {
                     id: liveEditor
                     objectName: "notes-live"
-                    visible: root.viewMode === "live" && root.pageId.length === 0
+                    visible: root.viewMode === "live" && root._noteShown
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     text: editor.text
@@ -1130,6 +1167,16 @@ Item {
                 // A page from the former Docs catalogue, drawn and edited in
                 // place like a note (DG-070): pages stay where the list shows
                 // them instead of in a second screen.
+                // Docs with no page open: what to do, in one line.
+                EmptyState {
+                    objectName: "docs-no-page"
+                    visible: root.docs && root.pageId.length === 0
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignTop
+                    Layout.topMargin: Theme.px(80)
+                    title: I18n.t("knowledge.docs.noPage")
+                    line: I18n.t("knowledge.docs.noPage.line")
+                }
                 MdEditorPane {
                     id: pageEditor
                     objectName: "knowledge-page"
@@ -1146,11 +1193,11 @@ Item {
 
         // ── The note's links (DG-072) ─────────────────────────────
         // Beside the note when there is room: the tasks it names, what links
-        // here, its links out of lowkey. Sheet order: bold leads with the
+        // here, its links out of Tabless. Sheet order: bold leads with the
         // tasks, quiet with the backlinks; an empty group is not drawn.
         Item {
             objectName: "notes-links-pane"
-            visible: root.showBacklinks && root.pageId.length === 0
+            visible: root.showBacklinks && root._noteShown
             Layout.preferredWidth: Theme.px(220)
             Layout.fillHeight: true
             Flickable {
@@ -1288,7 +1335,7 @@ Item {
         }
     }
 
-    // Links out of lowkey, opened under the usual rules.
+    // Links out of Tabless, opened under the usual rules.
     Component {
         id: externalGroup
         ColumnLayout {

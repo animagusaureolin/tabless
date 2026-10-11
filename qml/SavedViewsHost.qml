@@ -106,11 +106,18 @@ Item {
         return true;
     }
 
-    // Alt+N: the Nth view in the sidebar, 1-based.
+    // A click on the view being followed takes it off: the filters go back
+    // to none, as they were before it was picked.
+    function toggle(id) {
+        if (id !== "" && id === root.activeId) { root.clear(); return true; }
+        return root.apply(id);
+    }
+
+    // Alt+N: the Nth view in the sidebar, 1-based; pressed again, off.
     function applyAt(n) {
         const list = AppController.savedViews;
         if (n < 1 || n > list.length) return false;
-        return root.apply(list[n - 1].id);
+        return root.toggle(list[n - 1].id);
     }
 
     // What a view would capture, one line: the dialog shows it under the name.
@@ -178,6 +185,14 @@ Item {
         if (AppController.updateSavedView(id, root.currentState())) root.activeId = id;
     }
     function leave() { root.activeId = ""; }
+    // Off the view and its filters: the "×" on the chip and a second click.
+    function clear() {
+        root.activeId = "";
+        if (!root.host) return;
+        root.host.resetTaskFilter();
+        root.host.showArchived = false;
+        root.host.showDoneTimeline = false;
+    }
 
     SavedViewNameDialog {
         id: nameDialog

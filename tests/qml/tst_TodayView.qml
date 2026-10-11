@@ -100,6 +100,20 @@ TestCase {
         compare(findChild(v, "today-load"), null);
     }
 
+    // "Кому написать" stays with nobody on it, and its "+" asks for a
+    // new person: Today was a dead end for adding someone.
+    function test_people_block_offers_add_even_when_empty() {
+        AppController.selectedDate = tc.probeDay();
+        const v = createTemporaryQmlObject('import TodoCpp; TodayView { width: 1300; height: 800 }', host);
+        const add = findChild(v, "today-person-add");
+        verify(add !== null);
+        if (v.people.length === 0) verify(findChild(v, "today-people").visible, "the block hides when nobody is on it");
+        const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "personAddRequested" }', host);
+        spy.target = v;
+        v.personAddRequested();
+        compare(spy.count, 1);
+    }
+
     function probeMeeting(day) {
         const ev = AppController.newEventDraft(10, day);
         ev.title = "today probe sync";

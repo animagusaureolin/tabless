@@ -9,6 +9,9 @@
 var notes = {
     "0.8": {
         sections: [
+            { title: { en: "New name", ru: "Новое имя" },
+              body: { en: "lowkey is now called Tabless; your data and settings are where you left them",
+                      ru: "lowkey теперь называется Tabless; данные и настройки на месте" } },
             { title: { en: "Today", ru: "Сегодня" },
               body: { en: "the home screen: the day by the hour, in progress, deadlines",
                       ru: "главный экран: день по часам, в работе, сроки" } },

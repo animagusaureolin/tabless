@@ -209,8 +209,7 @@ Item {
 
     Component.onCompleted: {
         _loadFromController();
-        _loadedOnce = true;
-    }
+        _loadedOnce = true;    }
     Connections {
         target: AppController
         function onAppSettingsJsonChanged() {
@@ -2144,7 +2143,7 @@ Item {
         }
     }
 
-    // Подстраховка (sheet X·N-Set-CalNotif): how lowkey keeps the data.
+    // Подстраховка (sheet X·N-Set-CalNotif): how Tabless keeps the data.
     Component {
         id: sectionSafety
         ColumnLayout {
@@ -2544,13 +2543,13 @@ Item {
                 }
             }
             MoreBlock {
-                // Where lowkey cannot listen for the capture hotkey system-wide
+                // Where Tabless cannot listen for the capture hotkey system-wide
                 // (Wayland without the shortcuts portal), the desktop can run
-                // `lowkey --capture` instead (APP-171).
+                // `tabless --capture` instead (APP-171).
                 NoteRow {
                     objectName: "settings-capture-command-hint"
                     visible: Qt.platform.os === "linux" && AppController.globalHotkeyBackend() === "none"
-                    text: I18n.t("settings.shortcuts.captureCommand").arg("lowkey --capture")
+                    text: I18n.t("settings.shortcuts.captureCommand").arg("tabless --capture")
                 }
                 SwitchRow {
                     objectName: "settings-shortcut-hints"
@@ -3739,6 +3738,80 @@ Item {
                 target: AppController
                 function onUpdateAvailable(version, url) { aboutRoot.updateReady = true }
             }
+            readonly property string licensesUrl: "https://github.com/sectapunterx/tabless/blob/master/THIRD_PARTY_NOTICES.md"
+            function reportIssue() {
+                // The form first: what goes in, shown before it leaves (R2-040).
+                if (typeof settingsBus !== "undefined" && settingsBus.openReportIssue) settingsBus.openReportIssue();
+                else AppController.reportAnIssue();
+            }
+            // Who made this and where it lives (copy deck §7): the wordmark,
+            // the tagline (English in every language), one paragraph of
+            // facts, and the four places to go from here.
+            ColumnLayout {
+                objectName: "settings-about-header"
+                Layout.fillWidth: true
+                Layout.topMargin: Theme.spXl
+                Layout.bottomMargin: Theme.sp2xl
+                spacing: 0
+                BrandLogo {
+                    objectName: "settings-about-logo"
+                    variant: "wordmark"
+                    theme: Theme.dark ? "dark" : "light"
+                    height: Theme.fsXl
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: "Tabless"
+                }
+                Text {
+                    objectName: "settings-about-tagline"
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.spMd
+                    text: I18n.t("settings.about.tagline")
+                    color: Theme.text
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsMd
+                    wrapMode: Text.WordWrap
+                }
+                Text {
+                    objectName: "settings-about-body"
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.spXs
+                    text: I18n.t("settings.about.body")
+                    color: Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    lineHeight: 1.15
+                    wrapMode: Text.WordWrap
+                }
+                Flow {
+                    objectName: "settings-about-links"
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.spMd
+                    spacing: Theme.spSm
+                    LinkText {
+                        objectName: "settings-about-website"
+                        text: I18n.t("settings.about.website")
+                        onActivated: Qt.openUrlExternally("https://sectapunterx.github.io/tabless/")
+                    }
+                    AboutDot {}
+                    LinkText {
+                        objectName: "settings-about-source"
+                        text: I18n.t("settings.about.source")
+                        onActivated: Qt.openUrlExternally("https://github.com/sectapunterx/tabless")
+                    }
+                    AboutDot {}
+                    LinkText {
+                        objectName: "settings-about-report"
+                        text: I18n.t("settings.about.report")
+                        onActivated: aboutRoot.reportIssue()
+                    }
+                    AboutDot {}
+                    LinkText {
+                        objectName: "settings-about-licences"
+                        text: I18n.t("settings.about.licences")
+                        onActivated: Qt.openUrlExternally(aboutRoot.licensesUrl)
+                    }
+                }
+            }
             SettingsGroup {
                 // Check by itself or only by hand; check now, and what an
                 // update in flight needs, on the same row.
@@ -3802,7 +3875,7 @@ Item {
                     // history stays on GitHub.
                     onTriggered: {
                         if (typeof settingsBus !== "undefined" && settingsBus.openWhatsNew && settingsBus.openWhatsNew()) return;
-                        Qt.openUrlExternally("https://github.com/sectapunterx/lowkey/releases");
+                        Qt.openUrlExternally("https://github.com/sectapunterx/tabless/releases");
                     }
                 }
                 ActRow {
@@ -3810,7 +3883,7 @@ Item {
                     label: I18n.t("settings.about.licenses")
                     hint: I18n.t("settings.about.licenses.hint")
                     actions: [ ({ value: "open", label: I18n.t("settings.help.open") }) ]
-                    onTriggered: Qt.openUrlExternally("https://github.com/sectapunterx/lowkey/blob/master/THIRD_PARTY_NOTICES.md")
+                    onTriggered: Qt.openUrlExternally(aboutRoot.licensesUrl)
                 }
             }
             MoreBlock {
@@ -3828,6 +3901,13 @@ Item {
                 }
             }
         }
+    }
+
+    component AboutDot: Text {
+        text: "·"
+        color: Theme.textDim
+        font.pixelSize: Theme.fsSm
+        Accessible.ignored: true
     }
 
     component AboutRow: SettingsRow {
