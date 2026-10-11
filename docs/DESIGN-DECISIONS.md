@@ -19,6 +19,13 @@ progressive disclosure, content priority, state preservation). One entry each.
   drawn and edited like a note, with "Страница · изменена …" above. The page
   tree, new pages and moving pages are gone with DocsView; rename and delete
   stay on the row's right-click menu. Notes replace new pages.
+  **Revised 2026-10-11 (owner):** Knowledge is two screens again, a sidebar
+  row each: **Заметки** (the notes alone, Ctrl+3 / G N) and **Доки** (pages,
+  snippets, links, contacts; `view.docs`, unbound by default). One NotesView
+  in two modes, each keeping what it had open. Docs' "+" makes a page (opened
+  and named), a snippet, a link or a contact; right-click edits or deletes
+  them; a snippet or contact click copies with a "Скопировано" toast. Notes'
+  "+" and Ctrl+N make a note; Ctrl+N in Docs makes a page.
 - **DG-071 · What left the toolbar.** Attach (Ctrl+Shift+A in the editor), the
   list toggle (Ctrl+Alt+L, Ctrl K "notes.toggleList"), the whole source
   (Ctrl+Shift+M) stay on their keys. The links column shows itself when the

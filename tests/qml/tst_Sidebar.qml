@@ -62,7 +62,7 @@ TestCase {
         Style.apply("bold");
         const sb = bar(true);
         tryCompare(sb, "width", sb.expandedWidth, 1000);
-        for (const s of ["today", "tasks", "knowledge", "settings"]) {
+        for (const s of ["today", "tasks", "knowledge", "docs", "settings"]) {
             const r = findChild(sb, "sidebar-section-" + s);
             verify(r !== null, s);
             verify(findChild(r, "sidebar-label").visible);
@@ -78,10 +78,12 @@ TestCase {
     function test_exactly_one_row_is_active() {
         const sb = bar(true);
         AppController.currentView = "month";
-        const lit = () => ["today", "tasks", "knowledge", "settings"].filter(s => findChild(sb, "sidebar-section-" + s).active);
+        const lit = () => ["today", "tasks", "knowledge", "docs", "settings"].filter(s => findChild(sb, "sidebar-section-" + s).active);
         compare(lit(), ["tasks"], "month is a lens of Tasks");
         AppController.currentView = "docs";
-        compare(lit(), ["knowledge"]);
+        compare(lit(), ["docs"]);
+        AppController.currentView = "notes";
+        compare(lit(), ["knowledge"], "the Notes row");
         // A saved view applied: it is lit, Tasks is not.
         const id = mkView("sb-probe", "sbprobe");
         sb.activeSavedViewId = id;
@@ -100,6 +102,11 @@ TestCase {
         compare(AppController.currentView, "week");
         mouseClick(findChild(sb, "sidebar-section-today"));
         compare(AppController.currentView, "today");
+        mouseClick(findChild(sb, "sidebar-section-knowledge"));
+        compare(AppController.currentView, "notes");
+        // Notes and Docs are a row each: each opens its own screen.
+        mouseClick(findChild(sb, "sidebar-section-docs"));
+        compare(AppController.currentView, "docs");
         mouseClick(findChild(sb, "sidebar-section-knowledge"));
         compare(AppController.currentView, "notes");
     }

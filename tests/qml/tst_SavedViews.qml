@@ -226,12 +226,32 @@ TestCase {
         verify(!tc.host.modified);
     }
 
-    function test_leaving_a_view_keeps_the_filters() {
+    // The chip's "×" takes the view off with its filters: leaving them on
+    // with no view to name them was a filter nobody could see to clear.
+    function test_leaving_a_view_clears_the_filters() {
         const id = mkView("Probe", "svprobe");
         tc.host.apply(id);
         clickLaidOut("saved-view-chip");
         compare(tc.host.activeId, "");
+        compare(tc.win.searchText, "");
+    }
+
+    // A second click on the active view in the sidebar turns it off.
+    function test_second_click_on_a_view_turns_it_off() {
+        const id = mkView("Probe", "svprobe");
+        tc.host.toggle(id);
+        compare(tc.host.activeId, id);
         compare(tc.win.searchText, "svprobe");
+        tc.host.toggle(id);
+        compare(tc.host.activeId, "");
+        compare(tc.win.searchText, "");
+        // A different view while one is on switches to it.
+        const other = mkView("Other", "svprobe other");
+        tc.host.toggle(id);
+        tc.host.toggle(other);
+        compare(tc.host.activeId, other);
+        compare(tc.win.searchText, "svprobe other");
+        tc.host.toggle(other);
     }
 
     // ── Keys: Alt+N and the palette ──
@@ -246,6 +266,10 @@ TestCase {
         // A number with no view behind it does nothing.
         keyClick(Qt.Key_9, Qt.ControlModifier);
         compare(tc.host.activeId, two);
+        // The same key again turns it off.
+        keyClick(Qt.Key_5, Qt.ControlModifier);
+        compare(tc.host.activeId, "");
+        compare(tc.win.searchText, "");
         AppController.currentView = "board";
     }
 
