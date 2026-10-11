@@ -136,6 +136,7 @@ TestCase {
     // IDIOT-DOC-10: the "Done d" hint is true as the document opens.
     function test_d_is_done_in_the_document() {
         openDoc("PANEL-1");
+        wait(600);  // past the "dd" guard of a d pressed in the test before
         keyClick(Qt.Key_D);
         tryCompare(AppController.taskById("PANEL-1"), "status", "done");
         compare(AppController.taskById("PANEL-0").status, "todo", "d acted on a card behind");
@@ -172,6 +173,42 @@ TestCase {
         compare(body.source.text, "", "the last task's text is in this one");
         d.close();
         compare(String(AppController.taskById("PANEL-1").desc || ""), "");
+    }
+
+    // VERIFY-A-1: Tab comes round inside the document; it went to the
+    // sidebar behind the scrim, and Esc was dead there.
+    function test_tab_stays_in_the_document() {
+        const d = openDoc("PANEL-0");
+        for (let i = 0; i < 12; i++) {
+            keyClick(Qt.Key_Tab);
+            verify(tc.win._focusInPanel, "Tab " + (i + 1) + " left the document: " + focusName());
+        }
+        keyClick(Qt.Key_Escape);
+        keyClick(Qt.Key_Escape);
+        tryVerify(function () { return !d.opened; }, 1000, "Esc did not close the document");
+    }
+
+    // PERSONA-23: a task picked in Ctrl+K opens with the keyboard in it.
+    function test_a_task_opened_from_the_palette_has_the_keyboard() {
+        const pal = popups().filter(function (p) { return String(p).indexOf("CommandPalette") === 0; })[0];
+        keyClick(Qt.Key_K, Qt.ControlModifier);
+        tryCompare(pal, "opened", true);
+        tc.win.openTask("PANEL-2");
+        pal.close();
+        tryCompare(pal, "opened", false);
+        tryVerify(function () { return tc.win._focusInPanel; }, 1000, "the keyboard stayed on the board: " + focusName());
+        keyClick(Qt.Key_D);
+        tryCompare(AppController.taskById("PANEL-2"), "status", "done");
+    }
+
+    // VERIFY-A-2: ? opens the cheat sheet from the document too.
+    function test_question_mark_opens_the_cheat_sheet_from_the_document() {
+        openDoc("PANEL-0");
+        const sheet = popups().filter(function (p) { return String(p).indexOf("KeyCheatSheet") === 0; })[0];
+        verify(sheet);
+        keyClick(Qt.Key_Question, Qt.ShiftModifier);
+        tryCompare(sheet, "opened", true);
+        sheet.close();
     }
 
     // IDIOT-DOC-6: Esc in a chip's field gives the keyboard back.

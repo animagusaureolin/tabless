@@ -805,7 +805,9 @@ Item {
         // breaking the heading (KNOW-3).
         if (root.viewMode === "live") {
             root.pageId = "";
-            liveEditor.editLine(editor.text.substring(0, off).split("\n").length - 1, true);
+            // At the end of the line, past a heading's "## ": at its start the
+            // first letter typed broke the heading (KNOW-3).
+            liveEditor.editLine(editor.text.substring(0, off).split("\n").length - 1, false);
             return;
         }
         if (root.viewMode === "preview") root.viewMode = "split";

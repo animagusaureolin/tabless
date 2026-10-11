@@ -27,6 +27,10 @@ Item {
     implicitHeight: col.implicitHeight
 
     function focusInput() { input.forceActiveFocus(); }
+    // Hidden (the example opened, the first task made), the input lets go of
+    // the keyboard: its FocusScope handed it straight back, and what was typed
+    // went into an invisible field, Return making a hidden task (VERIFY-B-1).
+    onVisibleChanged: if (!visible) input.focus = false
 
     // "Ctrl+K" as keymap.md writes it: "Ctrl K".
     function _keys(id, fallback) {

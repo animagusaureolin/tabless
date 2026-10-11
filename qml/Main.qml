@@ -633,6 +633,12 @@ ApplicationWindow {
         // over the view after every dialog, and the next click only cleared
         // it (PERO-1). The view gets it instead.
         const idleSearch = h && h.objectName === "topbar-search" && (h.text || "").length === 0;
+        // A panel opened from a popup (a task picked in Ctrl+K) is where the
+        // keyboard goes, not the board it was opened over (PERSONA-23).
+        let inPanel = false;
+        for (let p = h; p; p = p.parent)
+            if (p === taskDoc || p === eventEditor) { inPanel = true; break; }
+        if (win._panelOpen && !inPanel) { win.focusActiveView(); return; }
         if (h && !idleSearch && h.visible && h.enabled && h.Window.window === win) h.forceActiveFocus();
         else win.focusActiveView();
     }
@@ -715,7 +721,7 @@ ApplicationWindow {
     readonly property var _docTaskKeys: ["task.done", "task.timer", "task.priority0", "task.priority1", "task.priority2",
                                          "task.priority3", "task.schedule", "task.due", "task.copyId", "task.copyBranch",
                                          "task.copyLink", "task.openExternal", "task.rename", "task.createBranch",
-                                         "search.focus"]
+                                         "search.focus", "hotkeys.open"]
     // Global shortcuts (switch view, new task, palette, undo…) stand down
     // behind a modal: Ctrl+3 used to switch the view under an open task
     // editor, Ctrl+K opened the palette over a dialog. The side-rail
@@ -1670,6 +1676,8 @@ ApplicationWindow {
     function openExample() {
         AppController.openExample();
         AppController.openSection("today");
+        // Into the day, not the first-run input it replaced (VERIFY-B-1).
+        Qt.callLater(win.focusActiveView);
     }
     // "Remove the example?" only when it was worked in; untouched, it goes.
     function removeExample() {
@@ -2738,7 +2746,9 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         context: Qt.ApplicationShortcut
-        enabled: win._focusOnControl && !win._typing && !win._focusInPopup && !win._overlayOpen
+        // Not with a panel open: the panel's own Esc below takes it, and two
+        // enabled Escape shortcuts are ambiguous to Qt — neither ran (VERIFY-A-1).
+        enabled: win._focusOnControl && !win._typing && !win._focusInPopup && !win._overlayOpen && !win._panelOpen
                  && !hotkeys.isCapturing
         onActivated: win.focusActiveView()
     }

@@ -358,6 +358,24 @@ FocusScope {
     readonly property var _draft: root._tail ? (root._tail as DocTail).draft : null
 
     Keys.onEscapePressed: root.close()
+    // Tab walks the document and comes round inside it: it left for the
+    // sidebar behind the scrim, where Esc no longer closed it (VERIFY-A-1).
+    Keys.onTabPressed: (e) => { root._tabWithin(true); e.accepted = true; }
+    Keys.onBacktabPressed: (e) => { root._tabWithin(false); e.accepted = true; }
+    function _tabWithin(forward) {
+        let next = (root.Window.activeFocusItem || root).nextItemInFocusChain(forward);
+        for (let n = 0; n < 200 && next; n++) {
+            let inside = false;
+            for (let p = next; p; p = p.parent)
+                if (p === root) { inside = true; break; }
+            if (inside && next !== docFocus && next.visible) {
+                next.forceActiveFocus(forward ? Qt.TabFocusReason : Qt.BacktabFocusReason);
+                return;
+            }
+            next = next.nextItemInFocusChain(forward);
+        }
+        root.focusTitle();
+    }
     Keys.onReturnPressed: (e) => {
         if (titleField.activeFocus || body.editing) { e.accepted = false; return; }
         root.full = !root.full;
@@ -520,8 +538,8 @@ FocusScope {
                 Keys.onEnterPressed: (e) => { body.focusEditor(); e.accepted = true; }
                 // Tab moves on, as in any form; it typed a tab into the
                 // title (IDIOT-DOC-13).
-                Keys.onTabPressed: (e) => { titleField.nextItemInFocusChain(true).forceActiveFocus(Qt.TabFocusReason); e.accepted = true; }
-                Keys.onBacktabPressed: (e) => { titleField.nextItemInFocusChain(false).forceActiveFocus(Qt.BacktabFocusReason); e.accepted = true; }
+                Keys.onTabPressed: (e) => { root._tabWithin(true); e.accepted = true; }
+                Keys.onBacktabPressed: (e) => { root._tabWithin(false); e.accepted = true; }
                 Keys.onEscapePressed: root.close()
                 Keys.onDownPressed: (e) => {
                     if (titleField.text.indexOf("\n", titleField.cursorPosition) < 0
@@ -1148,6 +1166,10 @@ FocusScope {
 
     // Готово d: filled neutral in bold (H2-Task), a small outline in quiet.
     component DoneButton: PillButton {
+        // A control takes Tab itself: without these it left the document for
+        // the sidebar (VERIFY-A-1).
+        Keys.onTabPressed: (e) => { root._tabWithin(true); e.accepted = true; }
+        Keys.onBacktabPressed: (e) => { root._tabWithin(false); e.accepted = true; }
         text: root._done ? I18n.t("taskmenu.reopen") : I18n.t("taskmenu.done")
         shortcutId: "task.done"
         keyHint: root._quiet ? "" : root._keyOf("task.done")

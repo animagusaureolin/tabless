@@ -8817,6 +8817,19 @@ int AppController::exampleChanges() const {
       ++n;
     }
   }
+  // And notes: a note written in the example went without the question.
+  QSet<QString> sampleNotes;
+  for(const SampleData::Lang lang : {SampleData::Lang::En, SampleData::Lang::Ru}) {
+    for(const Note& s : SampleData::notes(lang)) {
+      sampleNotes.insert(s.title + QChar(0x1f) + s.body.trimmed());
+    }
+  }
+  const QVector<Note>& notes = p.id == m_activeProfileId ? m_notes.items() : p.notes;
+  for(const Note& note : notes) {
+    if(!sampleNotes.contains(note.title + QChar(0x1f) + note.body.trimmed())) {
+      ++n;
+    }
+  }
   return n;
 }
 
