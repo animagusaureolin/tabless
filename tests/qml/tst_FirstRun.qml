@@ -39,6 +39,18 @@ TestCase {
         verify(findChild(hero, "first-run-example") !== null);
     }
 
+    // Copy deck §7: the first line names the capture key the keymap really
+    // has, not a fixed "Ctrl+Shift+Space".
+    function test_first_line_names_the_capture_key() {
+        const hero = createTemporaryQmlObject('import TodoCpp; FirstRunHero { width: 800 }', host);
+        const sub = findChild(hero, "first-run-sub");
+        verify(sub !== null);
+        verify(sub.visible);
+        const key = AppController.shortcutText("quick-capture");
+        verify(key.length > 0, "quick capture has no key");
+        verify(sub.text.indexOf(key) >= 0, "the line does not name " + key);
+    }
+
     // DG-110 / DG-111: bold has three equal key cards, the third "?"; quiet
     // has no cards, only hint lines and text links.
     function test_bold_cards_and_quiet_links() {
@@ -70,7 +82,7 @@ TestCase {
         const own = AppController.activeProfileId;
         const ownTasks = AppController.tasks.rowCount();
         AppController.openExample();
-        compare(AppController.activeProfileId, "lowkey-example");
+        compare(AppController.activeProfileId, "tabless-example");
         verify(AppController.tasks.rowCount() > 0);
         const profiles = AppController.profiles.length;
         AppController.activeProfileId = own;
@@ -78,7 +90,7 @@ TestCase {
         compare(AppController.profiles.length, profiles, "a second example was made");
         AppController.removeExample();
         verify(!AppController.hasExample());
-        compare(AppController.activeProfileId === "lowkey-example", false);
+        compare(AppController.activeProfileId === "tabless-example", false);
         AppController.activeProfileId = own;
         compare(AppController.tasks.rowCount(), ownTasks, "the person's tasks changed");
     }

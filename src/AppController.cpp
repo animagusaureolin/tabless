@@ -244,7 +244,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"undo.deleteSeries", {"Series restored", "Серия восстановлена"}},
       {"undo.deleteFollowing", {"Following events restored", "Последующие события восстановлены"}},
       {"undo.deleteOccurrence", {"Event restored", "Событие восстановлено"}},
-      {"update.available", {"Update available: %1", "Доступно обновление: %1"}},
+      {"update.available", {"Version %1 is ready. Update when it suits you.", "Версия %1 готова. Обновите, когда будет удобно."}},
       {"update.ready", {"%1 downloaded, SHA-256 checksum verified", "%1 скачано, контрольная сумма SHA-256 проверена"}},
       {"update.upToDate", {"You're up to date", "У вас последняя версия"}},
       {"update.failed", {"Update check failed", "Не удалось проверить обновления"}},
@@ -564,6 +564,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"tray.dnd", {"Do not disturb for 1 h", "Не беспокоить 1 ч"}},
       {"tray.dndUntil", {"Do not disturb until %1 — turn off", "Не беспокоить до %1 — выключить"}},
       {"tray.quit", {"Quit", "Выход"}},
+      {"tray.tooltip", {"Tabless — %1 to capture", "Tabless — %1, чтобы записать"}},
       {"notify.dueToday", {"Due today", "Срок сегодня"}},
       {"notify.dueTomorrow", {"Due tomorrow", "Срок завтра"}},
       {"notify.waitingOn", {"waiting on %1", "ждёт ответа: %1"}},
@@ -1029,7 +1030,9 @@ AppController::AppController(QObject* parent) :
     logEvent(QStringLiteral("reminder"), message);
   });
   connect(this, &AppController::updateAvailable, this, [this](const QString& version, const QString&) {
-    logEvent(QStringLiteral("info"), tr_("update.available").arg(version), {}, QStringLiteral("settings:about"));
+    // The tag is "v0.9.0"; the sentence reads "Version 0.9.0 is ready".
+    const QString bare = version.startsWith(QLatin1Char('v')) ? version.mid(1) : version;
+    logEvent(QStringLiteral("info"), tr_("update.available").arg(bare), {}, QStringLiteral("settings:about"));
   });
   connect(this, &AppController::updateReadyToInstall, this, [this](const QString& version, const QString&) {
     logEvent(QStringLiteral("info"), tr_("update.ready").arg(version), {}, QStringLiteral("settings:about"));
@@ -1087,6 +1090,8 @@ AppController::AppController(QObject* parent) :
     connect(m_notifier.get(), &heap::notify::NotificationCenter::trayMenuAboutToShow, this, &AppController::refreshTray);
     connect(m_notifier.get(), &heap::notify::NotificationCenter::trayItemTriggered, this, &AppController::onTrayItem);
     connect(this, &AppController::languageChanged, this, &AppController::refreshTray);
+    // The tooltip names the capture key; a rebind shows at once.
+    connect(this, &AppController::shortcutsChanged, this, &AppController::refreshTray);
   }
 
   // Route notification(...) → native toast + in-app toast bar, respecting
@@ -4113,6 +4118,58 @@ bool AppController::migrateGitWorkingLine(QJsonObject& app) {
   git.insert(QStringLiteral("workingOnLine"), true);
   app.insert(QStringLiteral("git"), git);
   return true;
+}
+
+bool AppController::migrateExampleProfileBindings(QJsonObject& app) {
+  QJsonObject integrations = app.value(QStringLiteral("integrations")).toObject();
+  bool changed = false;
+  for(auto it = integrations.begin(); it != integrations.end(); ++it) {
+    QJsonObject cfg = it.value().toObject();
+    const QString bound = cfg.value(QStringLiteral("profileId")).toString();
+    for(const char* old : kLegacyExampleProfileIds) {
+      if(bound == QLatin1String(old)) {
+        cfg.insert(QStringLiteral("profileId"), QLatin1String(kExampleProfileId));
+        it.value() = cfg;
+        changed = true;
+      }
+    }
+  }
+  if(changed) {
+    app.insert(QStringLiteral("integrations"), integrations);
+  }
+  return changed;
+}
+
+bool AppController::migrateExampleProfileId(QVector<CalEvent>& events) {
+  bool renamed = false;
+  const QString id = QString::fromLatin1(kExampleProfileId);
+  for(const char* oldName : kLegacyExampleProfileIds) {
+    const QString old = QString::fromLatin1(oldName);
+    const int i = profileIndexOf(old);
+    if(i < 0 || profileIndexOf(id) >= 0) {
+      continue;
+    }
+    m_profiles[i].id = id;
+    renamed = true;
+    for(CalEvent& e : events) {
+      if(e.profileId == old) {
+        e.profileId = id;
+      }
+    }
+    for(Profile& p : m_profiles) {
+      for(Task& t : p.tasks) {
+        for(LocalLink& l : t.local.related) {
+          if(l.profileId == old) {
+            l.profileId = id;
+          }
+        }
+      }
+    }
+    if(m_activeProfileId == old) {
+      m_activeProfileId = id;
+    }
+  }
+  return renamed;
 }
 
 bool AppController::migrateLowkeyTheme(QJsonObject& app) {
@@ -12948,6 +13005,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     // APP-167's completion-sound switch is the Sound switch now (APP-177).
     bool appChanged = s.contains("app") && s["app"].isObject();
     heap::platform::migrateLegacySoundSetting(app);
+    if(migrateExampleProfileBindings(app)) {
+      appChanged = true;
+    }
     if(!viewOnly) {
       m_gitLineDefaultDone = s.value(QStringLiteral("gitLineDefault")).toBool();
       if(!m_gitLineDefaultDone && migrateGitWorkingLine(app)) {
@@ -12982,6 +13042,7 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
   // Structural decisions below key off what was on disk, not the migrated value.
   const int schema = onDiskSchema;
   QVector<CalEvent> globalEvents;
+  bool exampleRenamed = false;
 
   if(schema >= 2 && root.value("profiles").isArray()) {
     // ----- schema v2 / v3: profiles array -----
@@ -13023,6 +13084,7 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(schema < heap::state::kPassThroughSince) {
       heap::state::dropPassThrough(globalEvents);
     }
+    exampleRenamed = migrateExampleProfileId(globalEvents);
   } else {
     // ----- schema v1: flat fields → wrap into one "Example" profile -----
     Profile p;
@@ -13073,8 +13135,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
   emit profilesChanged();
   emit activeProfileChanged();
 
-  // Force a rewrite so the on-disk file lands at the current schema version.
-  if(schema < heap::state::kSchemaVersion) {
+  // Force a rewrite so the on-disk file lands at the current schema version
+  // (or drops an id an older version wrote).
+  if(schema < heap::state::kSchemaVersion || exampleRenamed) {
     scheduleSave();
   }
 }

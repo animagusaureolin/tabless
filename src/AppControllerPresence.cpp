@@ -133,7 +133,16 @@ QVariantList AppController::trayItemsAt(const QDateTime& now, QString* tooltip) 
   items.append(Item{});
   items.append({QStringLiteral("quit"), tr_(QStringLiteral("tray.quit")), {}, true});
   if(tooltip) {
-    *tooltip = timer.isEmpty() ? QStringLiteral("Tabless") : QStringLiteral("Tabless · ") + timerText;
+    // Idle: the name and the capture key it answers to, as Settings →
+    // Hotkeys has it; just the name when that key is cleared.
+    const QString captureKey = shortcutText(QStringLiteral("quick-capture"));
+    if(!timer.isEmpty()) {
+      *tooltip = QStringLiteral("Tabless · ") + timerText;
+    } else if(!captureKey.isEmpty()) {
+      *tooltip = tr_(QStringLiteral("tray.tooltip")).arg(captureKey);
+    } else {
+      *tooltip = QStringLiteral("Tabless");
+    }
   }
   QVariantList out;
   for(const Item& it : items) {

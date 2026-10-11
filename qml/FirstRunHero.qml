@@ -66,12 +66,19 @@ Item {
             Accessible.role: Accessible.Heading
             Accessible.name: text
         }
+        // The one thing to start with: the global capture key, read from
+        // the keymap (Settings → Hotkeys can rebind or clear it).
         Text {
-            visible: !root.quiet
+            objectName: "first-run-sub"
+            readonly property string captureKey: AppController.shortcuts.length >= 0
+                                                 ? AppController.shortcutText("quick-capture") : ""
             Layout.fillWidth: true
             Layout.topMargin: Theme.spSm
-            text: I18n.t("first.sub")
-            color: Theme.textMuted
+            text: captureKey.length > 0
+                  ? I18n.t("first.sub").arg("<font face=\"" + Theme.fontMono + "\" color=\"" + Theme.text + "\">" + captureKey + "</font>")
+                  : I18n.t("first.subNoKey")
+            textFormat: Text.StyledText
+            color: root.quiet ? Theme.textDim : Theme.textMuted
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             wrapMode: Text.WordWrap
@@ -229,9 +236,19 @@ Item {
 
         // Tasks that already live somewhere else: buttons in bold, words in
         // quiet.
+        Text {
+            visible: root.quiet
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.px(60)
+            text: I18n.t("first.elsewhere")
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsMd
+            wrapMode: Text.WordWrap
+        }
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: root.quiet ? Theme.px(60) : Theme.spXl
+            Layout.topMargin: root.quiet ? Theme.spMd : Theme.spXl
             spacing: root.quiet ? Theme.spXl : Theme.spMd
             Text {
                 visible: !root.quiet
