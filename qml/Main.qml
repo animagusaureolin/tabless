@@ -614,15 +614,27 @@ ApplicationWindow {
             if (it !== win._focusHome || win._isIdleSearch(it)) {
                 const landed = it;
                 // Qt may pass through the window's root on its way back to
-                // the empty search; either place is handed on.
+                // the empty search; either place is handed on. On Linux and
+                // macOS it goes on from the root, in the same key press, to
+                // the root's own focus child, the view: with a document open
+                // the keyboard stayed on the board behind it after Ctrl+K and
+                // Esc (0.8.4 full CI). With a panel open the view is not
+                // where anyone was, so that is handed on too.
                 Qt.callLater(function () {
                     const f = win.activeFocusItem;
-                    if ((f === landed || win._isIdleSearch(f)) && !win._focusInPopup) win.returnFocusHome();
+                    const fellToView = win._panelOpen && win._insideActiveView(f);
+                    if ((f === landed || win._isIdleSearch(f) || fellToView) && !win._focusInPopup) win.returnFocusHome();
                 });
             }
             return;
         }
         win._focusHome = it;
+    }
+    function _insideActiveView(it) {
+        const v = win.activeViewItem();
+        for (let p = it; p && v; p = p.parent)
+            if (p === v) return true;
+        return false;
     }
     function _isIdleSearch(it) { return !!it && it.objectName === "topbar-search" && (it.text || "").length === 0; }
     function returnFocusHome() {

@@ -173,6 +173,10 @@ TestCase {
 
         tc.win.focusActiveView();
         tryVerify(function () { return !tc.win._viewKeysBlocked; }, 2000);
+        // Day keys wait 400 ms after a popup let the keyboard go
+        // (IDIOT-KNOW-12). On Windows the dimmer's fade outlasted that; on
+        // macOS the key came inside it and was dropped, as designed.
+        tryVerify(function () { return !tc.win._popupJustClosed; }, 2000);
         keyClick(Qt.Key_Left, Qt.AltModifier);
         compare(Qt.formatDate(AppController.selectedDate, "yyyy-MM-dd"), "2031-05-13", "Alt+Left from the view");
     }
