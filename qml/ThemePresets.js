@@ -133,7 +133,7 @@ var HEAP_DARK = {
 };
 
 var HEAP_LIGHT = {
-    id: "heap-light", name: "lowkey light", base: "light", contrast: "high", builtin: true,
+    id: "heap-light", name: "Tabless light", base: "light", contrast: "high", builtin: true,
     // heap 2 on light (APP-259, sheet X-Oth-Light): the same roles, the
     // brand's darker lavender, signals darkened to read at AA on white.
     colors: {
@@ -295,7 +295,8 @@ var MINIMAL_DARK = {
     }
 };
 
-// lowkey (heap. ink until 0.8.0; the id stays, saved settings name it) — the
+// Tabless (heap. ink until 0.8.0, lowkey until APP-283; the id stays,
+// saved settings name it) — the
 // heap 2 palette (APP-259, mockups in "New heap design"): near-black ground,
 // one lavender accent for cursor, focus and selection, hierarchy from type
 // and spacing rather than boxes. Status is shape (StatusRing), so the st*
@@ -303,7 +304,7 @@ var MINIMAL_DARK = {
 // errors, blue meetings, green done. `card`, `nav` and `meetingBg` are heap 2
 // surfaces the theme editor does not list; a theme without them derives them.
 var HEAP_INK = {
-    id: "heap-ink", name: "lowkey", base: "dark", contrast: "high", builtin: true,
+    id: "heap-ink", name: "Tabless", base: "dark", contrast: "high", builtin: true,
     colors: {
         bg: "#0c0e11", bg2: "#0f1216", panel: "#14181d", panel2: "#1a1f26", panel3: "#1f252d",
         border: "#1f252d", borderStrong: "#2a313b",

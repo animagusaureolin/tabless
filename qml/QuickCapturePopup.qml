@@ -495,7 +495,7 @@ Popup {
             Layout.preferredHeight: 6
         }
 
-        // "lowkey · new task", the profile it goes to on the right.
+        // "Tabless · new task", the profile it goes to on the right.
         RowLayout {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             spacing: Theme.spMd

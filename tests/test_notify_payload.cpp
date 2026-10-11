@@ -45,7 +45,7 @@ Notification reminder() {
 
 TEST(NotifyUri, RoundTrip) {
   const QString uri = notifyUri(QStringLiteral("deadline:TASK-7"), QStringLiteral("snoozeShort"));
-  EXPECT_EQ(uri, QStringLiteral("lowkey://notify?id=deadline%3ATASK-7&action=snoozeShort"));
+  EXPECT_EQ(uri, QStringLiteral("tabless://notify?id=deadline%3ATASK-7&action=snoozeShort"));
   const NotifyUri parsed = parseNotifyUri(uri);
   ASSERT_TRUE(parsed.ok);
   EXPECT_EQ(parsed.notificationId, QStringLiteral("deadline:TASK-7"));
@@ -114,13 +114,13 @@ TEST(NotifyUri, BaseClassEmitsTheRightSignal) {
 TEST(ToastXml, EscapesTextAndCarriesOneProtocolButtonPerAction) {
   const QString xml = toastXml(reminder(), QString());
   EXPECT_TRUE(
-      xml.startsWith(QStringLiteral("<toast launch=\"lowkey://notify?id=deadline%3ATASK-7&amp;action=default\" "
+      xml.startsWith(QStringLiteral("<toast launch=\"tabless://notify?id=deadline%3ATASK-7&amp;action=default\" "
                                     "activationType=\"protocol\">")));
   EXPECT_TRUE(xml.contains(QStringLiteral("<text>Due in 1 h</text>")));
   EXPECT_TRUE(xml.contains(QStringLiteral("<text>Fix &lt;login&gt; &amp; &quot;logout&quot; (P1)</text>")));
   EXPECT_TRUE(
       xml.contains(QStringLiteral("<action content=\"Snooze 10 min\" "
-                                  "arguments=\"lowkey://notify?id=deadline%3ATASK-7&amp;action=snoozeShort\" "
+                                  "arguments=\"tabless://notify?id=deadline%3ATASK-7&amp;action=snoozeShort\" "
                                   "activationType=\"protocol\"/>")));
   EXPECT_EQ(xml.count(QStringLiteral("<action ")), 3);
   EXPECT_FALSE(xml.contains(QStringLiteral("<image")));

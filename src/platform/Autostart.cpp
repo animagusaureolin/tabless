@@ -107,10 +107,10 @@ QString linuxDesktopEntry(const QString& execPath, bool minimized) {
   return QStringLiteral(
              "[Desktop Entry]\n"
              "Type=Application\n"
-             "Name=lowkey\n"
+             "Name=Tabless\n"
              "Comment=Tickets, planning and notes for engineers\n"
              "Exec=%1\n"
-             "Icon=lowkey\n"
+             "Icon=tabless\n"
              "Terminal=false\n"
              "X-GNOME-Autostart-enabled=true\n")
       .arg(exec);

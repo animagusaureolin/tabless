@@ -7,7 +7,7 @@ import TodoCpp
 
 // A field changed both here and in the tracker since the last sync (APP-163),
 // drawn as X/N-Dlg-Conflict (R2-032): one table, a row per field, "Yours" and
-// "In <tracker>" side by side, the picked version outlined. lowkey never picks
+// "In <tracker>" side by side, the picked version outlined. Tabless never picks
 // a side on its own: every row starts on the local value, and nothing happens
 // until "Apply choice" (or "All mine" / "All from <tracker>"). "Later" leaves
 // the card flagged. Keeping my status sends it only where writes are on
@@ -90,7 +90,7 @@ Popup {
         return I18n.t("conflict.unchanged").arg(parts.join(", "));
     }
 
-    // One row per conflicting field: what lowkey has, what the tracker has.
+    // One row per conflicting field: what Tabless has, what the tracker has.
     readonly property var rows: {
         const t = root.task || ({});
         const k = root._ticket;

@@ -416,7 +416,7 @@ QtObject {
     readonly property color buttonText:        textMuted
     readonly property color buttonTextPrimary: text
     // The keyboard cursor and the active item: a short lavender bar under the
-    // start of the text (the lowkey underline motif, APP-280).
+    // start of the text (the Tabless underline motif, APP-280).
     readonly property int cursorBarW: px(18)
     readonly property int cursorBarH: 2
     // Links: a thin grey underline, never the lavender bar (2026-10-09).
@@ -542,10 +542,10 @@ QtObject {
     // Earlier seeded defaults sit in existing profiles and read as "the
     // default": "IBM Plex Sans" from before the fonts were bundled, and the
     // upstream "Golos Text" / "JetBrains Mono" that 0.6.0 seeded. The bundled
-    // faces are "lowkey ..." now ("heap ..." until 0.8.0, which a pick in
-    // Appearance may still name), and the upstream name may be an installed copy.
-    readonly property var legacyDefaultFontsUi: ["IBM Plex Sans", "Golos Text", "heap Golos Text"]
-    readonly property var legacyDefaultFontsMono: ["JetBrains Mono", "heap JetBrains Mono"]
+    // faces are "Tabless ..." now ("heap ..." until 0.8.0, "lowkey ..." until
+    // APP-283, which a pick in Appearance may still name), and the upstream name may be an installed copy.
+    readonly property var legacyDefaultFontsUi: ["IBM Plex Sans", "Golos Text", "heap Golos Text", "lowkey Golos Text"]
+    readonly property var legacyDefaultFontsMono: ["JetBrains Mono", "heap JetBrains Mono", "lowkey JetBrains Mono"]
     function _installedFont(family, fallback) {
         return family && Qt.fontFamilies().indexOf(family) >= 0 ? family : fallback;
     }

@@ -5,7 +5,7 @@ import QtQuick.Controls.Basic as QQC
 import TodoCpp
 
 // A comment being written for the ticket (APP-241). Saved here as it is
-// typed — through a close, a restart, a pull, "out of the filter". lowkey
+// typed — through a close, a restart, a pull, "out of the filter". Tabless
 // never sends it: "Copy and open the ticket" puts it on the clipboard and
 // opens the ticket in the browser, and the person pastes and sends it there.
 // Copying does not clear it; "Clear" is its own action, with undo.

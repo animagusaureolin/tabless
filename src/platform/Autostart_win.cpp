@@ -11,8 +11,9 @@ namespace heap::platform::autostart::detail {
 namespace {
 
 constexpr char kRunKey[] = R"(HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run)";
-constexpr char kValueName[] = "lowkey";
-constexpr char kLegacyValueName[] = "heap";
+constexpr char kValueName[] = "tabless";
+// lowkey 0.8's and heap 0.7's values, newest first.
+constexpr const char* kLegacyValueNames[] = {"lowkey", "heap"};
 
 // The Run key, or an .ini stand-in under the test root.
 std::unique_ptr<QSettings> openRunKey(const QString& root) {
@@ -37,19 +38,29 @@ bool writeSystem(const QString& root, bool enabled, bool minimized) {
   } else {
     key->remove(QLatin1String(kValueName));
   }
-  key->remove(QLatin1String(kLegacyValueName));  // one entry, never two starts
+  for(const char* old : kLegacyValueNames) {
+    key->remove(QLatin1String(old));  // one entry, never two starts
+  }
   key->sync();
   return key->status() == QSettings::NoError;
 }
 
 Entry readLegacySystem(const QString& root) {
   const std::unique_ptr<QSettings> key = openRunKey(root);
-  return parseWindowsRunCommand(key->value(QLatin1String(kLegacyValueName)).toString());
+  for(const char* old : kLegacyValueNames) {
+    const Entry e = parseWindowsRunCommand(key->value(QLatin1String(old)).toString());
+    if(e.enabled) {
+      return e;
+    }
+  }
+  return {};
 }
 
 void removeLegacySystem(const QString& root) {
   const std::unique_ptr<QSettings> key = openRunKey(root);
-  key->remove(QLatin1String(kLegacyValueName));
+  for(const char* old : kLegacyValueNames) {
+    key->remove(QLatin1String(old));
+  }
   key->sync();
 }
 

@@ -76,11 +76,11 @@ QString verbName(Verb v) {
 
 QString helpText() {
   return QStringLiteral(
-             "lowkey - a developer's workday in one window: tickets, planning and notes.\n"
+             "Tabless - a developer's workday in one window: tickets, planning and notes.\n"
              "\n"
              "Usage:\n"
-             "  lowkey [--view <name>] [--data-dir <dir>] open the window (or bring it forward)\n"
-             "  lowkey <command> [options]                answer on the command line\n"
+             "  tabless [--view <name>] [--data-dir <dir>] open the window (or bring it forward)\n"
+             "  tabless <command> [options]                answer on the command line\n"
              "\n"
              "Commands:\n"
              "  add \"<text>\" [--profile <p>] [--json]   capture a task, read like quick capture:\n"
@@ -117,7 +117,7 @@ QString helpText() {
              "  -h, --help         this text\n"
              "  -v, --version      the version\n"
              "\n"
-             "With lowkey open on the same data directory, commands go to the window, so\n"
+             "With Tabless open on the same data directory, commands go to the window, so\n"
              "a change shows up there at once and can be undone there.\n"
              "\n"
              "Exit codes: 0 ok, 1 usage, 2 not found, 3 data error.\n")
@@ -208,7 +208,7 @@ ParsedArgs parseArgs(const QStringList& args) {
       }
       r.text = positional.join(QChar(' ')).trimmed();
       if(r.text.isEmpty()) {
-        return fail(QStringLiteral("add needs the text of the task, e.g. lowkey add \"fix login tomorrow p1\""));
+        return fail(QStringLiteral("add needs the text of the task, e.g. tabless add \"fix login tomorrow p1\""));
       }
       break;
     case Verb::Now:
@@ -243,7 +243,7 @@ ParsedArgs parseArgs(const QStringList& args) {
         return notFor(QStringLiteral("format"));
       }
       if(positional.size() != 1 || positional.constFirst().trimmed().isEmpty()) {
-        return fail(positional.isEmpty() ? QStringLiteral("%1 needs a task id, e.g. lowkey %1 APP-12").arg(name)
+        return fail(positional.isEmpty() ? QStringLiteral("%1 needs a task id, e.g. tabless %1 APP-12").arg(name)
                                          : QStringLiteral("unexpected argument '%1'").arg(positional.at(1)));
       }
       r.taskId = positional.constFirst().trimmed();
@@ -266,7 +266,7 @@ ParsedArgs parseArgs(const QStringList& args) {
                             : r.verb == Verb::Est ? "est APP-12 2h"
                                                   : "someday APP-12";
       if(positional.isEmpty() || positional.constFirst().trimmed().isEmpty()) {
-        return fail(QStringLiteral("%1 needs a task id, e.g. lowkey %2").arg(name, QLatin1String(example)));
+        return fail(QStringLiteral("%1 needs a task id, e.g. tabless %2").arg(name, QLatin1String(example)));
       }
       r.taskId = positional.takeFirst().trimmed();
       r.value = positional.join(QChar(' ')).trimmed();
@@ -276,7 +276,7 @@ ParsedArgs parseArgs(const QStringList& args) {
         }
         r.value = r.value.toLower();
       } else if(r.value.isEmpty()) {
-        return fail(QStringLiteral("%1 needs a value after the id, e.g. lowkey %2").arg(name, QLatin1String(example)));
+        return fail(QStringLiteral("%1 needs a value after the id, e.g. tabless %2").arg(name, QLatin1String(example)));
       } else if(r.verb == Verb::Est && parseEstimate(r.value) < 0) {
         return fail(QStringLiteral("'%1' is not an estimate; e.g. 2h, 90m, 1h30m or none").arg(r.value));
       }
@@ -383,7 +383,7 @@ std::optional<Snapshot> snapshotFromState(QJsonObject root, QString* error) {
   const int schema = root.value(QStringLiteral("schemaVersion")).toInt(1);
   if(schema < 2 || !root.value(QStringLiteral("profiles")).isArray()) {
     if(error != nullptr) {
-      *error = QStringLiteral("state.json has no profiles (an old format): open lowkey once to upgrade it");
+      *error = QStringLiteral("state.json has no profiles (an old format): open Tabless once to upgrade it");
     }
     return std::nullopt;
   }
@@ -852,7 +852,7 @@ Response answer(const Snapshot& s, const Request& r, const QDateTime& now) {
     const int pi = findProfile(s, r.profile);
     if(pi < 0) {
       resp.exitCode = kExitNotFound;
-      resp.err = QStringLiteral("lowkey: no profile '%1'\n").arg(r.profile);
+      resp.err = QStringLiteral("tabless: no profile '%1'\n").arg(r.profile);
       return resp;
     }
     const ProfileData& p = s.profiles.at(pi);
@@ -861,7 +861,7 @@ Response answer(const Snapshot& s, const Request& r, const QDateTime& now) {
       statusId = findStatus(p.statuses, r.status);
       if(statusId.isEmpty()) {
         resp.exitCode = kExitNotFound;
-        resp.err = QStringLiteral("lowkey: no column '%1' in profile '%2'\n").arg(r.status, p.name);
+        resp.err = QStringLiteral("tabless: no column '%1' in profile '%2'\n").arg(r.status, p.name);
         return resp;
       }
     }
@@ -905,7 +905,7 @@ Response answer(const Snapshot& s, const Request& r, const QDateTime& now) {
   }
 
   resp.exitCode = kExitUsage;
-  resp.err = QStringLiteral("lowkey: '%1' changes data and cannot be answered from a snapshot\n").arg(verbName(r.verb));
+  resp.err = QStringLiteral("tabless: '%1' changes data and cannot be answered from a snapshot\n").arg(verbName(r.verb));
   return resp;
 }
 

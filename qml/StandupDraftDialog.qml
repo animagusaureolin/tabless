@@ -6,7 +6,7 @@ import QtQuick.Controls
 import TodoCpp
 
 // The standup draft (APP-170, X-Dlg-Recap): "Yesterday / Today / Blockers",
-// built by AppController.standupDraft() from what lowkey already knows, in a
+// built by AppController.standupDraft() from what Tabless already knows, in a
 // field the person edits before copying it. Nothing is sent anywhere, and the
 // text is not kept: closing drops it, opening builds a fresh one.
 Popup {

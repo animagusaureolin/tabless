@@ -35,9 +35,6 @@ namespace heap::integrations {
 
 namespace {
 const QString kService = QLatin1String(heap::brand::kKeychainService);
-// heap 0.7's entries: read when the new service has nothing, then copied over
-// (never deleted, so a downgrade still signs in).
-const QString kLegacyService = QLatin1String(heap::brand::kLegacyKeychainService);
 
 // Values in secrets.json carrying this prefix are DPAPI blobs (Windows): only
 // the same Windows user on the same machine can read them back.
@@ -222,9 +219,9 @@ void SecretStore::load(const QVector<QPair<QString, QString>>& keys, const std::
           finishOne();
           return;
         }
-        // Nothing under lowkey's name yet: a heap 0.7 token is read once and
-        // copied over, so an upgrade does not sign anyone out (APP-280).
-        readKeychainValue(kLegacyService, cache, [this, providerId, field, finishOne](const QString& old) {
+        // Nothing under Tabless's name yet: a lowkey 0.8 or heap 0.7 token is
+        // read once and copied over, so an upgrade does not sign anyone out.
+        readLegacyKeychainValue(0, cache, [this, providerId, field, finishOne](const QString& old) {
           if(!old.isEmpty()) {
             setValue(providerId, field, old);
           }
@@ -243,6 +240,23 @@ void SecretStore::load(const QVector<QPair<QString, QString>>& keys, const std::
 }
 
 #ifdef HEAP_USE_KEYCHAIN
+// lowkey 0.8's and heap 0.7's entries, newest first: read when the new
+// service has nothing, then copied over (never deleted, so a downgrade still
+// signs in).
+void SecretStore::readLegacyKeychainValue(std::size_t index, const QString& cache, const std::function<void(const QString&)>& done) {
+  if(index >= heap::brand::kLegacy.size()) {
+    done(QString());
+    return;
+  }
+  readKeychainValue(QLatin1String(heap::brand::kLegacy[index].keychainService), cache, [this, index, cache, done](const QString& old) {
+    if(!old.isEmpty()) {
+      done(old);
+      return;
+    }
+    readLegacyKeychainValue(index + 1, cache, done);
+  });
+}
+
 void SecretStore::readKeychainValue(const QString& service, const QString& cache, const std::function<void(const QString&)>& done) {
   auto* job = new QKeychain::ReadPasswordJob(service, this);
   job->setAutoDelete(true);

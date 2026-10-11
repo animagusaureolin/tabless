@@ -18,7 +18,7 @@ namespace {
 // dark taskbar or panel and near-black on a light one.
 QIcon trayIcon() {
 #ifdef Q_OS_MACOS
-  QIcon icon(QStringLiteral(":/brand/lowkey/lowkey-tray-template.svg"));
+  QIcon icon(QStringLiteral(":/brand/tabless/tabless-tray-template.svg"));
   icon.setIsMask(true);
 #else
   // colorScheme() is Qt 6.5+; the clang-tidy job builds against the distro's
@@ -28,7 +28,7 @@ QIcon trayIcon() {
 #else
   const bool dark = true;
 #endif
-  QIcon icon(dark ? QStringLiteral(":/brand/lowkey/lowkey-tray-light.svg") : QStringLiteral(":/brand/lowkey/lowkey-tray-dark.svg"));
+  QIcon icon(dark ? QStringLiteral(":/brand/tabless/tabless-tray-light.svg") : QStringLiteral(":/brand/tabless/tabless-tray-dark.svg"));
 #endif
   return icon.isNull() ? QGuiApplication::windowIcon() : icon;
 }
@@ -44,7 +44,7 @@ class TrayBackend : public NotificationCenter {
       return;
     }
     m_tray = new QSystemTrayIcon(trayIcon(), this);
-    m_tray->setToolTip(QStringLiteral("lowkey"));
+    m_tray->setToolTip(QStringLiteral("Tabless"));
 
     // Context menu so the app is controllable while running windowless (the
     // window hides to the tray on close). QMenu needs QtWidgets, which the app
@@ -55,8 +55,8 @@ class TrayBackend : public NotificationCenter {
     connect(menu, &QMenu::aboutToShow, this, &NotificationCenter::trayMenuAboutToShow, Qt::DirectConnection);
     m_tray->setContextMenu(menu);
     m_menu = menu;
-    setTrayMenu(QStringLiteral("lowkey"),
-                {{QStringLiteral("open"), QStringLiteral("Open lowkey"), {}, true},
+    setTrayMenu(QStringLiteral("Tabless"),
+                {{QStringLiteral("open"), QStringLiteral("Open Tabless"), {}, true},
                  {},
                  {QStringLiteral("quit"), QStringLiteral("Quit"), {}, true}});
 

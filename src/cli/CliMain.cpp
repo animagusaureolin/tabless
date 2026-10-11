@@ -57,12 +57,12 @@ Response launchOnTask(const Request& request, bool dataDirSet) {
   QString error;
   const std::optional<Snapshot> s = readSnapshot(&error);
   if(!s) {
-    return {kExitData, QString(), QStringLiteral("lowkey: %1\n").arg(error)};
+    return {kExitData, QString(), QStringLiteral("tabless: %1\n").arg(error)};
   }
   QString why;
   const TaskRef ref = resolveTaskArg(*s, request.taskId, request.branch, &why);
   if(!ref.found()) {
-    return {kExitNotFound, QString(), QStringLiteral("lowkey: %1\n").arg(why)};
+    return {kExitNotFound, QString(), QStringLiteral("tabless: %1\n").arg(why)};
   }
   const QString id = s->profiles.at(ref.profile).tasks.at(ref.task).id;
   QStringList args;
@@ -90,7 +90,7 @@ Response launchOnTask(const Request& request, bool dataDirSet) {
   window.setStandardOutputFile(QProcess::nullDevice());
   window.setStandardErrorFile(QProcess::nullDevice());
   if(!window.startDetached()) {
-    return {kExitData, QString(), QStringLiteral("lowkey: could not start lowkey\n")};
+    return {kExitData, QString(), QStringLiteral("tabless: could not start Tabless\n")};
   }
   Response r;
   r.out = request.json
@@ -122,17 +122,18 @@ int run(int argc, char** argv) {
   }
   Request request = parsed.request;
   heap::paths::setDataDir(parsed.dataDirSet ? parsed.dataDir : qEnvironmentVariable("HEAP_DATA_DIR"));
-  // The first lowkey command after an upgrade may come before the window ever
-  // opened: it moves heap 0.7's data over the same way (APP-280).
+  // The first tabless command after an upgrade may come before the window
+  // ever opened: it moves lowkey's or heap's data over the same way.
   if(!heap::paths::dataDirOverridden()) {
     using heap::platform::legacy::MoveKind;
-    const auto moved =
-        heap::platform::legacy::moveLegacyData(heap::paths::dataDir(), heap::platform::legacy::legacyDirFor(heap::paths::dataDir()));
+    const auto moved = heap::platform::legacy::moveLegacyData(heap::paths::dataDir());
     if(moved.kind == MoveKind::Busy) {
-      return report({kExitData, QString(), QStringLiteral("lowkey: heap 0.7 is still running; close it so its data can move to lowkey\n")});
+      return report({kExitData,
+                     QString(),
+                     QStringLiteral("tabless: %1 is still running; close it so its data can move to Tabless\n").arg(moved.legacyName)});
     }
     if(moved.kind == MoveKind::Failed) {
-      return report({kExitData, QString(), QStringLiteral("lowkey: could not move heap's data: %1\n").arg(moved.error)});
+      return report({kExitData, QString(), QStringLiteral("tabless: could not move %1's data: %2\n").arg(moved.legacyName, moved.error)});
     }
   }
 
@@ -180,7 +181,8 @@ int run(int argc, char** argv) {
       }
     }
     if(deadline.hasExpired()) {
-      return report({kExitData, QString(), QStringLiteral("lowkey: another lowkey is using this data directory and is not responding\n")});
+      return report(
+          {kExitData, QString(), QStringLiteral("tabless: another Tabless is using this data directory and is not responding\n")});
     }
     QThread::msleep(100);
   }

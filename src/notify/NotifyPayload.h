@@ -15,11 +15,11 @@
 // the URI; that launch hands it to the running heap like any second launch.
 namespace heap::notify {
 
-// The URI scheme heap registers for notification clicks.
-inline constexpr char kUriScheme[] = "lowkey";
-// What 0.7.x wrote into its toasts: a click on one still left in the Action
-// Center arrives this way after the upgrade (APP-280).
-inline constexpr char kLegacyUriScheme[] = "heap";
+// The URI scheme Tabless registers for notification clicks.
+inline constexpr char kUriScheme[] = "tabless";
+// What lowkey 0.8 and heap 0.7 wrote into their toasts: a click on one still
+// left in the Action Center arrives this way after the upgrade.
+inline constexpr const char* kLegacyUriSchemes[] = {"lowkey", "heap"};
 // The action id of a click on the notification itself rather than a button.
 inline constexpr char kDefaultAction[] = "default";
 

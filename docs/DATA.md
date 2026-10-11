@@ -1,6 +1,6 @@
 # Data, backups & moving your work
 
-Everything in lowkey is stored locally — there is no account and no server. This page
+Everything in Tabless is stored locally — there is no account and no server. This page
 covers where your data lives, how backups work, and how to move a profile
 between machines today.
 
@@ -11,19 +11,22 @@ location (`QStandardPaths::AppDataLocation`):
 
 | OS | Typical path |
 |----|--------------|
-| Windows | `%APPDATA%\lowkey\lowkey\state.json` |
-| macOS | `~/Library/Application Support/lowkey/lowkey/state.json` |
-| Linux | `~/.local/share/lowkey/lowkey/state.json` |
+| Windows | `%APPDATA%\Tabless\Tabless\state.json` |
+| macOS | `~/Library/Application Support/Tabless/Tabless/state.json` |
+| Linux | `~/.local/share/Tabless/Tabless/state.json` |
 
 (The folder is named twice — organisation, then application.) **Settings →
 About** shows the exact folder of the running copy.
 
-**Data from earlier versions.** On first start, a data folder left by a 0.7.x
-version (`heap\heap` in the same location) is copied whole — state, backups,
-snapshots, attachments — into `lowkey\lowkey`, and the app works from there.
-The old folder is left as it was, with a `MOVED-TO-LOWKEY.txt` in it; delete it
-once you no longer need to go back to that version. While the old version is
-still running, the app asks you to close it first and copies nothing. A folder
+**Data from earlier versions.** Tabless was called lowkey in 0.8, and heap up
+to 0.7. On first start, a data folder left by either (`lowkey\lowkey`, or
+`heap\heap` when there is no lowkey one, in the same location) is copied whole —
+state, backups, snapshots, attachments — into `Tabless\Tabless`, and the app
+works from there. Tracker tokens move with it, so nothing needs signing in again.
+The old folder is left as it was, with a `MOVED-TO-TABLESS.txt` in it, so the
+copy happens once; delete the old folder when you no longer need to go back to
+that version. While the old version is still running, the app asks you to close
+it first and copies nothing. A folder
 given with `--data-dir` or `HEAP_DATA_DIR` is used as it is, never moved.
 
 `state.json` holds every profile (tasks, people, statuses, docs, notes), the
@@ -146,16 +149,16 @@ it is harmless.
 `secrets.json` fallback somewhere else for that run:
 
 ```bash
-lowkey --data-dir /path/to/throwaway-profile
+tabless --data-dir /path/to/throwaway-profile
 ```
 
 `HEAP_DATA_DIR` does the same for a whole shell; the flag wins when both are
 set. Use it to try a build against a scratch profile, reproduce a bug, or take
 screenshots without touching your real data. `--data-dir ""` is an error, never
 a silent fall-back to the real profile, and an unknown option or `--view` name
-exits with the usage text (code 2). Run `lowkey --help` for the full option list.
+exits with the usage text (code 2). Run `tabless --help` for the full option list.
 
-`lowkey --smoke --data-dir <dir>` checks a build against a *copy* of that
+`tabless --smoke --data-dir <dir>` checks a build against a *copy* of that
 profile's `state.json` in a temporary folder: the real file is never migrated
 or rewritten, and the temporary folder is removed on exit. The verdict
 (`smoke: OK` or `smoke: FAILED (n problem(s))` with one line per problem) is
@@ -163,8 +166,8 @@ printed to stderr, and the run's full log is kept as `<dir>/logs/smoke.log`.
 
 ### One running copy per data folder
 
-A data folder is used by one running copy of lowkey at a time (`lowkey.lock` in the
-folder). Starting lowkey again — from the Start menu, a shortcut, or with
+A data folder is used by one running copy of Tabless at a time (`tabless.lock` in the
+folder). Starting Tabless again — from the Start menu, a shortcut, or with
 `--view <name>` — brings the running window forward (switching view if asked)
 instead of opening a second copy that would save over the first one's edits.
 A copy with a different `--data-dir` is a different workspace and runs
@@ -174,7 +177,7 @@ alongside.
 
 A `state.json` that could not be read is never replaced with anything else:
 
-- **Locked** (an antivirus scan, a backup or sync tool holding the file): lowkey
+- **Locked** (an antivirus scan, a backup or sync tool holding the file): Tabless
   waits about two seconds for the lock to lift. If it doesn't, the window opens
   **read-only** with a red banner, showing the newest backup (or an empty
   workspace) — nothing is saved over the real file. The app reopens it by itself
@@ -184,19 +187,19 @@ A `state.json` that could not be read is never replaced with anything else:
   `state.corrupt-<time>.json` next to it (moved, or copied when a lock forbids
   moving) and the newest usable backup is loaded. A banner that stays up until
   you dismiss it names both files, with **Open data folder**: whatever changed
-  after that backup is not in it. With no backup at all, lowkey opens an empty
+  after that backup is not in it. With no backup at all, Tabless opens an empty
   workspace under the same banner — not the demo and the welcome tour, since
   this is not a new install. If the damaged file cannot be set aside at all,
   the session is read-only.
 - **From a newer version** (a higher `schemaVersion`): opens read-only with a
   banner that stays up; a copy is kept once as
-  `backups/state-premigration-v<N>-<time>.json`. Update lowkey to edit it.
+  `backups/state-premigration-v<N>-<time>.json`. Update Tabless to edit it.
 - **A save fails** (read-only file, full disk, a lock): a red banner says why,
-  your changes stay in memory, and lowkey retries on its own (2 s, 5 s, 15 s, …)
+  your changes stay in memory, and Tabless retries on its own (2 s, 5 s, 15 s, …)
   or when you press **Retry**. An unwritable data folder is reported at start-up
   (banner, and on stderr).
 
-Every one of these leaves a line in `logs/recovery.log`. Keys lowkey does not
+Every one of these leaves a line in `logs/recovery.log`. Keys Tabless does not
 know (from a newer point release or a hand edit) are kept on save at the
 document, settings and profile level, and on every task, event, person and
 column.
@@ -254,7 +257,7 @@ left as written.
 
 ## Multi-device sync (roadmap)
 
-Continuous multi-device sync — pointing lowkey at your own **private git remote**
+Continuous multi-device sync — pointing Tabless at your own **private git remote**
 as canonical storage, with one human-readable file per profile and git history
 for free — is on the roadmap. The serialization layer that produces those
 stable, diff-friendly per-entity files already exists

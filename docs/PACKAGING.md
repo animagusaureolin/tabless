@@ -1,17 +1,18 @@
 # Packaging & release
 
-Every release of lowkey ships from a single GitHub Actions workflow,
+Every release of Tabless ships from a single GitHub Actions workflow,
 [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds
 native artifacts for Windows, Linux and macOS and attaches them to a GitHub
 Release.
 
 
-> **0.7.x file names (0.8.0, APP-280).** Release files are `lowkey-<tag>-…`. The
-> same files are also published as `heap-<tag>-…`, because a 0.7.x install's
-> updater looks for those names; it then installs lowkey in place (same
-> installer AppId) and restarts `heap.exe`, which in a lowkey install is a small
-> launcher that starts `lowkey.exe`. Stop publishing the `heap-` copies once 0.7
-> is no longer worth carrying.
+> **Old file names (APP-280, APP-283).** Release files are `tabless-<tag>-…`. The
+> same files are also published as `lowkey-<tag>-…`, because a lowkey 0.8
+> install's updater looks for those names; it then installs Tabless in place
+> (same installer AppId) and restarts `lowkey.exe`, which in a Tabless install is
+> a small launcher that starts `tabless.exe`. (0.8.0 did the same for heap 0.7
+> with `heap-<tag>-…` copies and a `heap.exe` launcher.) Stop publishing the
+> `lowkey-` copies once 0.8 is no longer worth carrying.
 
 ## Triggering a release
 
@@ -44,42 +45,42 @@ workflow refuses to publish if the two disagree.
 | Platform | Format | How it is built |
 |----------|--------|-----------------|
 | Windows  | `…-windows-portable.zip` | CMake `portable` target (windeployqt bundle) |
-| Windows  | `…-windows-setup.exe`    | Inno Setup ([`installer/lowkey.iss`](../installer/lowkey.iss)) wrapping the portable bundle. Asks for all users (Program Files, admin; the default) or only for me (no elevation), and always lets you pick the folder |
+| Windows  | `…-windows-setup.exe`    | Inno Setup ([`installer/tabless.iss`](../installer/tabless.iss)) wrapping the portable bundle. Asks for all users (Program Files, admin; the default) or only for me (no elevation), and always lets you pick the folder |
 | Linux    | `…-linux-x86_64.AppImage`| `linuxdeploy` + the Qt plugin over a Qt 6.9.1 build (install-qt-action), smoke-tested in a clean `ubuntu:24.04` ([`packaging/linux/smoke-appimage.sh`](../packaging/linux/smoke-appimage.sh)) |
 | macOS    | `…-macos.dmg`            | `macdeployqt` → `hdiutil` drag-to-Applications dmg, **ad-hoc codesigned** (Developer ID + notarized when signing secrets are set) |
 
 Every asset is listed in `SHA256SUMS` and, in the same form, in a collapsed
 "SHA-256 checksums" block of the release notes; each also has a build-provenance
-attestation (`gh attestation verify <file> --repo sectapunterx/lowkey`).
+attestation (`gh attestation verify <file> --repo sectapunterx/tabless`).
 
 ## In-app update (APP-125)
 
 Settings → About → Updates (or the "Update" action of the update toast)
 downloads this copy's package from the latest release, checks it against
 `SHA256SUMS`, and, after the user presses **Restart and update**, puts it in
-place and starts lowkey again. The file is installed only if its SHA-256 matches
+place and starts Tabless again. The file is installed only if its SHA-256 matches
 the published one (and is checked once more right before installing); the
 checksum is shown to the user. A mismatch deletes the file.
 
-| Copy of lowkey | Detected by | Package | How it is replaced |
+| Copy of Tabless | Detected by | Package | How it is replaced |
 |---|---|---|---|
-| Windows installer | `unins000.exe` beside `lowkey.exe` | `…-windows-setup.exe` | `lowkey-updater.exe` runs it `/VERYSILENT` with `/ALLUSERS` or `/CURRENTUSER`, whichever the previous install used (same AppId → in-place upgrade; UAC only for an all-users install) |
-| Windows portable | `lowkey-portable.txt` (or 0.7's `heap-portable.txt`) beside `lowkey.exe` | `…-windows-portable.zip` | `lowkey-updater.exe` unpacks it with Windows' `tar.exe` and swaps the shipped entries, rolling back on any failure; other files in the folder stay |
-| macOS | running from `*.app/Contents/MacOS` | `…-macos.dmg` | The running copy mounts the dmg, `ditto`s `lowkey.app` beside itself and swaps the bundles |
+| Windows installer | `unins000.exe` beside `tabless.exe` | `…-windows-setup.exe` | `tabless-updater.exe` runs it `/VERYSILENT` with `/ALLUSERS` or `/CURRENTUSER`, whichever the previous install used (same AppId → in-place upgrade; UAC only for an all-users install) |
+| Windows portable | `tabless-portable.txt` (or 0.8's `lowkey-portable.txt`, 0.7's `heap-portable.txt`) beside `tabless.exe` | `…-windows-portable.zip` | `tabless-updater.exe` unpacks it with Windows' `tar.exe` and swaps the shipped entries, rolling back on any failure; other files in the folder stay |
+| macOS | running from `*.app/Contents/MacOS` | `…-macos.dmg` | The running copy mounts the dmg, `ditto`s `Tabless.app` beside itself and swaps the bundles |
 | Linux | `$APPIMAGE` set | `…-linux-x86_64.AppImage` | The running copy writes it beside the old one and `rename(2)`s it over |
 
-Anything else (a build folder, Scoop, Flatpak/Snap, a folder lowkey cannot write)
+Anything else (a build folder, Scoop, Flatpak/Snap, a folder Tabless cannot write)
 keeps the old behaviour: "Download" opens the release page.
 
-`lowkey-updater.exe` (CMake target `heap-updater`, [`src/updater/`](../src/updater))
+`tabless-updater.exe` (CMake target `heap-updater`, [`src/updater/`](../src/updater))
 exists because Windows cannot overwrite a running exe or its DLLs. It has no Qt
-and a static runtime; lowkey copies it to `%TEMP%\heap-update` and quits, it waits
-for lowkey's process to end, installs, writes `outcome.txt`, and starts lowkey
+and a static runtime; Tabless copies it to `%TEMP%\heap-update` and quits, it waits
+for Tabless's process to end, installs, writes `outcome.txt`, and starts Tabless
 again, which reports the outcome in a toast. On macOS and Linux the files of a
-running program can be replaced, so lowkey does the swap itself and a detached
+running program can be replaced, so Tabless does the swap itself and a detached
 `/bin/sh` waits for it to exit before starting the new version.
 
-The Windows bundle carries only the Qt Quick Controls style lowkey uses (Basic;
+The Windows bundle carries only the Qt Quick Controls style Tabless uses (Basic;
 `main.cpp` forces it). [`packaging/windows/prune-bundle.sh`](../packaging/windows/prune-bundle.sh)
 drops the other styles and the unused Particles / LocalStorage (Qt6Sql) modules
 before `copy-deps.sh` walks and verifies the DLL closure, and fails the build if
@@ -91,7 +92,7 @@ By default the `.app` inside the `.dmg` is **ad-hoc codesigned** (no paid Apple
 Developer ID required). This gives it a *valid* signature — without it, the
 `install_name_tool` rpath rewrites `macdeployqt` performs on the arm64 binary
 and Qt frameworks leave broken signatures, and a downloaded (quarantined) copy
-fails to launch with the fatal *"lowkey is damaged and can't be opened"*.
+fails to launch with the fatal *"Tabless is damaged and can't be opened"*.
 
 Because the ad-hoc build is not notarized, first launch still shows the
 bypassable *"unidentified developer"* prompt. Open it either way:
@@ -99,7 +100,7 @@ bypassable *"unidentified developer"* prompt. Open it either way:
 - **Right-click → *Open*** (then *Open* again in the dialog), or
 - strip the download quarantine flag:
   ```bash
-  xattr -dr com.apple.quarantine /Applications/lowkey.app
+  xattr -dr com.apple.quarantine /Applications/Tabless.app
   ```
 
 To codesign with a *Developer ID Application* certificate, notarize and staple
@@ -131,7 +132,7 @@ the SmartScreen warning instantly** ([Microsoft
 Learn](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation);
 EV lost its instant bypass). Signing (1) replaces *"Unknown publisher"* with the
 verified publisher **"SignPath Foundation"** (the certificate is issued to the
-Foundation, not to lowkey), and (2) lets SmartScreen reputation accumulate on that
+Foundation, not to Tabless), and (2) lets SmartScreen reputation accumulate on that
 certificate so the warning fades over downloads. The Foundation cert is shared by
 many OSS projects, so it already carries some reputation — a head start over a
 fresh cert. The only way to a zero-warning first launch is Microsoft Store (MSIX)
@@ -144,7 +145,7 @@ flow: CI uploads the unsigned artifact as a GitHub workflow artifact,
 [`signpath/github-action-submit-signing-request`](https://docs.signpath.io/trusted-build-systems/github)
 submits a signing request, SignPath verifies the build origin, signs the
 configured PE files (with an RFC-3161 timestamp, so signatures outlive the cert),
-and returns the signed files. `lowkey.exe` + the bundled Qt DLLs are signed before
+and returns the signed files. `tabless.exe` + the bundled Qt DLLs are signed before
 packaging, then the setup `.exe` is signed after Inno builds it.
 
 Configure it after the SignPath Foundation application is approved:
@@ -153,7 +154,7 @@ Configure it after the SignPath Foundation application is approved:
 |--------------|------|---------|
 | `SIGNPATH_API_TOKEN` | secret | SignPath API token with submitter permission |
 | `SIGNPATH_ORG_ID` | variable | SignPath organization ID |
-| `SIGNPATH_PROJECT_SLUG` | variable | SignPath project slug (e.g. `lowkey`) |
+| `SIGNPATH_PROJECT_SLUG` | variable | SignPath project slug (e.g. `tabless`) |
 | `SIGNPATH_POLICY_SLUG` | variable | signing policy slug (e.g. `release-signing`) |
 
 In the SignPath console the project needs the **GitHub.com** trusted build system
@@ -170,9 +171,9 @@ so every release so far shipped unsigned (`Get-AuthenticodeSignature` →
 1. Apply to the SignPath Foundation OSS programme (signpath.org → Apply) with
    the repo URL, MIT licence and `package-windows` as the build definition, and
    wait for approval. MFA must be on for the GitHub and SignPath accounts.
-2. In SignPath: create the project (slug e.g. `lowkey`), a signing policy (e.g.
+2. In SignPath: create the project (slug e.g. `tabless`), a signing policy (e.g.
    `release-signing`), link the **GitHub.com** trusted build system and install
-   the SignPath GitHub App on `sectapunterx/lowkey`.
+   the SignPath GitHub App on `sectapunterx/tabless`.
 3. Add the two artifact configurations from `packaging/windows/signpath/`.
 4. Create an API token for a user with *submitter* rights on that policy.
 5. In GitHub → Settings → Secrets and variables → Actions: secret
@@ -195,7 +196,7 @@ These formats from the original scope are intentionally deferred — each needs
 extra tooling/infra that is easiest to add once the core three platforms are
 proven:
 
-- **Flatpak** — the `io.github.sectapunterx.heap.yaml` manifest built via `flatpak-builder`
+- **Flatpak** — the `io.github.sectapunterx.tabless.yaml` manifest built via `flatpak-builder`
   and pushed to a Flathub repo.
 - **`.deb` / `.rpm`** — only with Qt bundled or against a distribution whose Qt is 6.9+: until 0.5.1 a
   `.deb` built on Ubuntu 24.04's Qt 6.4 shipped, and the UI does not run there.
