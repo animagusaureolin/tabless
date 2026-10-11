@@ -200,6 +200,20 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 2
 
+      # ccache hashes the compiler's command line, absolute paths included.
+      # Renaming the repository (lowkey -> tabless) moved the checkout and
+      # the Qt install, and every object missed: 13-minute builds on all
+      # three runners. With the runner's work directory as base_dir the
+      # paths are hashed relative to the build directory instead. A -g build
+      # (ASan) hashes the working directory too; NOHASHDIR drops it (only the
+      # debug info's compile dir can then be off, which CI never reads).
+      - name: ccache base dir
+        shell: bash
+        run: |
+          base=$(cd "$GITHUB_WORKSPACE/../.." && { pwd -W 2>/dev/null || pwd; })
+          { echo "CCACHE_BASEDIR=$base"; echo "CCACHE_NOHASHDIR=true"; } >> "$GITHUB_ENV"
+          echo "CCACHE_BASEDIR=$base"
+
       # Ubuntu 24.04's apt ships Qt 6.4.2, which has a static-QML-module
       # qmlcachegen bug: file-based .qml components ("SideRail is not a type")
       # don't resolve in a downstream Quick Test binary, forcing heap_qml_tests
@@ -610,6 +624,20 @@ jobs:
           version: "6.9.1"
           cache: true
           modules: qtnetworkauth
+
+      # ccache hashes the compiler's command line, absolute paths included.
+      # Renaming the repository (lowkey -> tabless) moved the checkout and
+      # the Qt install, and every object missed: 13-minute builds on all
+      # three runners. With the runner's work directory as base_dir the
+      # paths are hashed relative to the build directory instead. A -g build
+      # (ASan) hashes the working directory too; NOHASHDIR drops it (only the
+      # debug info's compile dir can then be off, which CI never reads).
+      - name: ccache base dir
+        shell: bash
+        run: |
+          base=$(cd "$GITHUB_WORKSPACE/../.." && { pwd -W 2>/dev/null || pwd; })
+          { echo "CCACHE_BASEDIR=$base"; echo "CCACHE_NOHASHDIR=true"; } >> "$GITHUB_ENV"
+          echo "CCACHE_BASEDIR=$base"
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24

@@ -27,6 +27,10 @@ Item {
     implicitHeight: col.implicitHeight
 
     function focusInput() { input.forceActiveFocus(); }
+    // Hidden (the example opened, the first task made), the input lets go of
+    // the keyboard: its FocusScope handed it straight back, and what was typed
+    // went into an invisible field, Return making a hidden task (VERIFY-B-1).
+    onVisibleChanged: if (!visible) input.focus = false
 
     // "Ctrl+K" as keymap.md writes it: "Ctrl K".
     function _keys(id, fallback) {
@@ -93,7 +97,9 @@ Item {
             radius: root.quiet ? 0 : Theme.radiusXl
             color: root.quiet ? "transparent" : Theme.bg2
             border.width: root.quiet ? 0 : 1
-            border.color: input.activeFocus ? Theme.focusRing : Theme.text
+            // Only real focus looks active: the brightest edge at rest read
+            // as a caret that was not there (PERSONA-2).
+            border.color: input.activeFocus ? Theme.focusRing : Theme.borderStrong
             Rectangle {
                 visible: root.quiet
                 anchors.bottom: parent.bottom
