@@ -34,16 +34,10 @@
 - **Vim-style keys** — `j` `k`, `g b`, `d`, `/`; any layout, every key rebindable.
 - **Yours, on disk** — one readable `state.json`. No account, no analytics, works offline. Free, MIT.
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/assets/img/readme/board.png" alt="Tasks as a board"><br><sub>Board — one keypress per move</sub></td>
-    <td width="50%"><img src="docs/assets/img/readme/calendar.png" alt="Tasks as a week calendar"><br><sub>Week — meetings and planned tasks</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/img/readme/task.png" alt="A task open as a document"><br><sub>A task opens as a document</sub></td>
-    <td><img src="docs/assets/img/readme/knowledge.png" alt="Knowledge with a note open"><br><sub>Markdown notes linked to tasks</sub></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/assets/img/readme/board.png" width="100%" alt="Tasks as a board">
+  <br><sub>Board — your tasks by status, one keypress per move</sub>
+</p>
 
 ## Up and running in two minutes
 
@@ -58,6 +52,11 @@
 
 **Morning.** Today shows the meetings and tasks of the day by the hour, plus what is in progress and due.
 
+<p align="center">
+  <img src="docs/assets/img/readme/calendar.png" width="100%" alt="Tasks as a week calendar">
+  <br><sub>Week — meetings and planned tasks side by side</sub>
+</p>
+
 **A thought mid-call.** `Ctrl+Shift+Space` over any app. Date, time, priority and label are read from the
 words, in English or Russian. `Ctrl+Shift+N` does the same for a note.
 
@@ -67,8 +66,18 @@ words, in English or Russian. `Ctrl+Shift+N` does the same for a note.
 **Your own layer on every ticket.** Private notes, checklist, tags and dates on any tracker task. A sync
 never overwrites them, and none of it goes back to the tracker.
 
+<p align="center">
+  <img src="docs/assets/img/readme/task.png" width="100%" alt="A task open as a document">
+  <br><sub>A task opens as a document — plan, code, history</sub>
+</p>
+
 **Notes that point at work.** `#APP-112` in a note becomes a link with the task's title. Bring an existing
 folder of `.md` files or an Obsidian vault — you see what comes in before anything is copied.
+
+<p align="center">
+  <img src="docs/assets/img/readme/knowledge.png" width="100%" alt="Knowledge with a note open">
+  <br><sub>Knowledge — Markdown notes linked to tasks</sub>
+</p>
 
 ## It never does these without asking
 
