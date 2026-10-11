@@ -1255,10 +1255,12 @@ Item {
                                 radius: Theme.radiusSm
                                 opacity: shown ? 1 : 0
                                 color: addMA.hovered || addMA.keyboardFocused ? Theme.panel3 : Theme.bg
+                                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                                 Text {
                                     anchors.centerIn: parent
                                     text: "+"
                                     color: addMA.hovered || addMA.keyboardFocused ? Theme.text : Theme.textDim
+                                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                                     font.pixelSize: Theme.fsLg
                                 }
                                 ClickArea {
@@ -1417,6 +1419,23 @@ Item {
                                 // One proxy per column, so only the cards that
                                 // belong here are in the model at all.
                                 model: colFilter
+                                // A card that comes into the column fades in,
+                                // one that leaves fades out, and the cards
+                                // around them close up instead of jumping
+                                // (APP-175). The proxy inserts and removes
+                                // rows one by one, so only the cards that
+                                // changed move.
+                                add: Transition {
+                                    NumberAnimation { property: "enterFade"; from: 0; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
+                                }
+                                remove: Transition {
+                                    NumberAnimation { property: "enterFade"; to: 0; duration: Theme.durPopOut; easing.type: Theme.easeExit }
+                                }
+                                displaced: Transition {
+                                    NumberAnimation { property: "y"; duration: Theme.durMove; easing.type: Theme.easeEnter }
+                                    // A card displaced mid-fade lands fully drawn.
+                                    NumberAnimation { property: "enterFade"; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
+                                }
                                 // A search or filter change swaps most of the
                                 // rows in every column at once; building a
                                 // fresh TaskCard for each was ~2.5 ms a card
@@ -1515,7 +1534,7 @@ Item {
                                                 tc.releaseMenu();
                                                 tc.visible = false;
                                             }
-                                            ListView.onReused: tc.visible = true
+                                            ListView.onReused: { tc.visible = true; tc.enterFade = 1; }
                                             // A card dropped into another column
                                             // leaves this one while it is still
                                             // lifted into the drag layer. Hold its
@@ -1742,6 +1761,7 @@ Item {
     // ── Popups ──────────────────────────────────────────────────────────────
 
     Popup {
+        PopupArrival { popup: colorPopup; dialog: false }
         id: colorPopup
         modal: false
         focus: true
@@ -1934,6 +1954,7 @@ Item {
         z: 900
         radius: Theme.radiusMd
         color: hiddenColsMA.hovered || hiddenColsMA.keyboardFocused ? Theme.panel3 : Theme.bg
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         implicitWidth: hiddenColsT.implicitWidth + 2 * Theme.spMd
         implicitHeight: hiddenColsT.implicitHeight + 2 * Theme.spXs
         Text {
@@ -2186,6 +2207,7 @@ Item {
 
     // ── Work-in-progress limit ────────────────────────────────────────
     QQC.Dialog {
+        PopupArrival { popup: wipPopup }
         id: wipPopup
         objectName: "wip-popup"
         property string statusId: ""
@@ -2253,6 +2275,7 @@ Item {
     // Cards that sit in the column this many days go to the archive. For
     // Done it is the same number as Settings → Tasks.
     QQC.Dialog {
+        PopupArrival { popup: archivePopup }
         id: archivePopup
         objectName: "archive-popup"
         property string statusId: ""

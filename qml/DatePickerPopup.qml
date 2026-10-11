@@ -24,6 +24,7 @@ import QtQuick.Layouts
 import TodoCpp
 
 Popup {
+    PopupArrival { popup: pop; dialog: false }
     id: pop
 
     // The date the grid opens on / highlights. Emitted value on selection.
@@ -260,6 +261,7 @@ Popup {
                         implicitWidth: Theme.chipH; implicitHeight: Theme.chipH
                         radius: Theme.radiusMd
                         color: navMA.hovered ? Theme.panel3 : "transparent"
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         Icon { anchors.centerIn: parent; name: navBtn.modelData.icon; color: Theme.textMuted }
                         ClickArea {
                             id: navMA
@@ -309,6 +311,7 @@ Popup {
                             anchors.margins: Math.round(Theme.spXs / 2)
                             radius: Theme.radiusMd
                             color: dayMA.hovered && !cell.isSel ? Theme.panel3 : "transparent"
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             border.width: cell.isSel ? 1 : 0
                             border.color: pop._inTimes ? Theme.borderStrong : Theme.text
                         }
@@ -351,6 +354,7 @@ Popup {
                     implicitHeight: Theme.chipH
                     radius: Theme.radiusMd
                     color: todayMA.hovered ? Theme.panel3 : Theme.panel2
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     border.color: Theme.border; border.width: 1
                     Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.family: Theme.fontUi; font.pixelSize: Theme.fsSm }
                     ClickArea {
@@ -368,6 +372,7 @@ Popup {
                     implicitHeight: Theme.chipH
                     radius: Theme.radiusMd
                     color: clearMA.hovered ? Theme.panel3 : Theme.panel2
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     border.color: Theme.border; border.width: 1
                     Text { anchors.centerIn: parent; text: I18n.t("datePicker.clear"); color: Theme.text; font.family: Theme.fontUi; font.pixelSize: Theme.fsSm }
                     ClickArea {
@@ -421,6 +426,7 @@ Popup {
                     height: Theme.chipH
                     radius: Theme.radiusMd
                     color: slot.on ? Theme.panel3 : (slotMA.hovered ? Theme.panel2 : "transparent")
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     border.width: slot.on && pop._inTimes ? 1 : 0
                     border.color: Theme.borderStrong
                     Row {

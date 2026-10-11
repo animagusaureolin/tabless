@@ -19,6 +19,7 @@ import "PopupStack.js" as PopupStack
 //  • "прикрепить к …" → the entry links the task ([[id]]), so the task's
 //                      backlinks list it
 Popup {
+    PopupArrival { popup: root }
     id: root
     // Standalone it is the whole window — there is nothing behind it to
     // dim or block, so no scrim.
@@ -145,6 +146,7 @@ Popup {
                 text: (root.attachId.length ? I18n.t("quickNote.attachTo").arg(root._taskLabel(root.attachTask))
                                             : I18n.t("quickNote.attach")) + " ▾"
                 color: attachCA.hovered ? Theme.text : Theme.textMuted
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
                 ClickArea {

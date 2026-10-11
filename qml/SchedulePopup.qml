@@ -10,6 +10,7 @@ import QtQuick.Controls
 import TodoCpp
 
 Popup {
+    PopupArrival { popup: root; dialog: false }
     id: root
     objectName: "schedule-popup"
     modal: false

@@ -61,11 +61,13 @@ ColumnLayout {
                 name: root._open ? "chevron-down" : "chevron-right"
                 size: Theme.iconSize - 2
                 color: togCA.hovered ? Theme.text : Theme.textDim
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: I18n.count(root.sessions.length, "local.sessions.count")
                 color: togCA.hovered ? Theme.text : Theme.textDim
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
             }
@@ -135,6 +137,7 @@ ColumnLayout {
         visible: root._open && root._editId !== "new"
         text: "+ " + I18n.t("local.sessions.add")
         color: addCA.hovered ? Theme.text : Theme.textDim
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsXs
         ClickArea { id: addCA; label: parent.text; onActivated: root._editId = "new" }

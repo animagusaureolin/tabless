@@ -79,6 +79,7 @@ Row {
         height: Theme.px(28)
         radius: Theme.radiusMd
         color: Style.fills && arrowCA.hovered ? Theme.panel2 : "transparent"
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         border.width: Style.fills ? 1 : 0
         border.color: Theme.buttonLine
         Icon {
@@ -86,6 +87,7 @@ Row {
             name: arrow.dir < 0 ? "chevron-left" : "chevron-right"
             size: Theme.px(12)
             color: arrowCA.hovered ? Theme.text : (Style.fills ? Theme.textMuted : Theme.textDim)
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         }
         ClickArea {
             id: arrowCA

@@ -13,6 +13,7 @@ import "EventRule.js" as EventRule
 // Ctrl Alt E opens it on the next free hour; a click or a drag on the
 // calendar opens it on that slot, which the line can still override.
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "event-capture"
     modal: true

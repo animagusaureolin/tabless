@@ -796,6 +796,7 @@ FocusScope {
                                     visible: !root.cards
                                     text: I18n.t("today.q.wrote")
                                     color: wroteCA.hovered ? Theme.text : Theme.textDim
+                                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                                     font.family: Theme.fontUi
                                     font.pixelSize: Theme.fsSm
                                     font.underline: true
@@ -866,6 +867,7 @@ FocusScope {
         implicitWidth: Theme.chipH; implicitHeight: Theme.chipH
         radius: Theme.radiusMd
         color: nbCA.hovered && !root.plain ? Theme.panel2 : "transparent"
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         border.color: Theme.border
         border.width: root.plain ? 0 : 1
         Icon {
@@ -873,6 +875,7 @@ FocusScope {
             name: nb.icon
             size: Theme.fsMd
             color: root.plain && !nbCA.hovered ? Theme.textDim : Theme.textMuted
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         }
         ClickArea { id: nbCA; label: nb.label; shortcutId: nb.shortcutId; onActivated: nb.activated() }
     }
@@ -934,6 +937,7 @@ FocusScope {
                 Layout.fillWidth: root.cards
                 text: fl.text
                 color: flCA.hovered ? Theme.text : (root.cards ? Theme.textMuted : Theme.textDim)
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: root.cards ? Theme.fsMd : Theme.fsSm
                 font.underline: !root.cards

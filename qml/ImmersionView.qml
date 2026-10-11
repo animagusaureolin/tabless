@@ -102,6 +102,7 @@ FocusScope {
         anchors.rightMargin: Theme.sp3xl; anchors.topMargin: Theme.sp3xl
         text: I18n.t("immersion.escExit")
         color: exitCA.hovered ? Theme.text : Theme.textMuted
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsSm
         ClickArea { id: exitCA; label: exitText.text; onActivated: AppController.stopImmersion() }
@@ -117,6 +118,7 @@ FocusScope {
             spacing: Theme.spSm
             StatusRing {
                 category: root.hasTask ? AppController.statusCategory(root.task.status) : "todo"
+                subject: root.hasTask ? root.task.id : ""
             }
             Text {
                 text: root.taskId

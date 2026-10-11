@@ -97,7 +97,9 @@ Rectangle {
                 property bool active: root.priorities[modelData] === true
                 radius: Theme.radiusPill
                 color: active ? Theme.accentSoft : (priMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 border.color: active ? Theme.accent : (priMA.containsMouse ? Theme.borderStrong : Theme.border)
+                Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 border.width: 1
                 implicitWidth: chRow.implicitWidth + 20
                 implicitHeight: 24
@@ -144,8 +146,10 @@ Rectangle {
             }
             radius: Theme.radiusPill
             border.color: clrMA.containsMouse ? Theme.borderStrong : Theme.border
+            Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.width: 1
             color: clrMA.containsMouse ? Theme.panel3 : Theme.panel2
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             implicitWidth: clrT.implicitWidth + 16
             implicitHeight: 24
             activeFocusOnTab: visible
@@ -159,6 +163,7 @@ Rectangle {
                 anchors.centerIn: parent
                 text: I18n.t("filter.clear")
                 color: clrMA.containsMouse ? Theme.text : Theme.textDim
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.pixelSize: Theme.fsSm
             }
             MouseArea {
@@ -245,7 +250,9 @@ Rectangle {
             }
             radius: Theme.radiusPill
             color: sortMenu.visible ? Theme.panel3 : (sortMA.containsMouse ? Theme.panel3 : Theme.panel2)
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.color: sortMA.containsMouse || sortMenu.visible ? Theme.borderStrong : Theme.border
+            Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.width: 1
             implicitWidth: sortRow.implicitWidth + 20
             implicitHeight: 24
@@ -317,7 +324,9 @@ Rectangle {
             visible: root.showArchivedToggle
             radius: Theme.radiusPill
             color: root.showArchived ? Theme.accentSoft : (archMA.containsMouse ? Theme.panel3 : Theme.panel2)
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.color: root.showArchived ? Theme.accent : (archMA.containsMouse ? Theme.borderStrong : Theme.border)
+            Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.width: 1
             implicitWidth: archRow.implicitWidth + 16
             implicitHeight: 24
@@ -392,7 +401,9 @@ Rectangle {
         signal activated()
         radius: Theme.radiusPill
         color: chip.selected ? Theme.accentSoft : (chipMA.containsMouse ? Theme.panel3 : Theme.panel2)
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         border.color: chip.selected ? Theme.accent : (chipMA.containsMouse ? Theme.borderStrong : Theme.border)
+        Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         border.width: 1
         implicitWidth: chipRow.implicitWidth + 16
         implicitHeight: 24
@@ -424,6 +435,7 @@ Rectangle {
                     sourceSize.width: 18
                     sourceSize.height: 18
                     color: chip.selected ? Theme.accentStrong : (chipMA.containsMouse ? Theme.text : Theme.textMuted)
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 }
                 Rectangle {
                     objectName: "bar-chip-dot"

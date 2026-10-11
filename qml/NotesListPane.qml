@@ -493,6 +493,7 @@ Rectangle {
                 objectName: "note-new"
                 width: Theme.px(26); height: Theme.px(26); radius: Theme.radiusSm
                 color: newMA.hovered ? Theme.panel3 : (Style.quiet ? "transparent" : Theme.panel2)
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 border.color: Style.quiet ? "transparent" : Theme.border
                 border.width: 1
                 PlusGlyph {
@@ -686,6 +687,7 @@ Rectangle {
                     height: Theme.px(30)
                     radius: Theme.radiusMd
                     color: drowCA.hovered ? Theme.panel2 : "transparent"
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     readonly property bool current: drow.rowData.kind === "page" && drow.rowData.id === root.openPageId
                     // Quiet draws no tag chip: a reference reads "RFC 9110 · title".
                     readonly property string shownTitle: {
@@ -807,6 +809,7 @@ Rectangle {
                     // A doc page open in the document is the current row instead.
                     readonly property bool current: row.note.id === AppController.activeNoteId && root.openPageId.length === 0
                     color: rowMA.containsMouse ? Theme.panel2 : "transparent"
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     Accessible.role: Accessible.ListItem
                     Accessible.name: row.note.title || ""
                     readonly property alias menu: rowMenu
@@ -1012,6 +1015,7 @@ Rectangle {
     }
 
     QQC.Dialog {
+        PopupArrival { popup: folderPopup }
         id: folderPopup
         objectName: "note-folder-rename"
         property string folder: ""
@@ -1056,6 +1060,7 @@ Rectangle {
 
     // A page keeps its name and body; renaming is all the list offers.
     QQC.Dialog {
+        PopupArrival { popup: pageRenamePopup }
         id: pageRenamePopup
         objectName: "knowledge-page-rename"
         property string pageId: ""
@@ -1096,6 +1101,7 @@ Rectangle {
     // A snippet (title, language, code), a link (title, ref, URL) or a
     // contact (name, role, Mattermost handle): new or edited, one dialog.
     QQC.Dialog {
+        PopupArrival { popup: docDialog }
         id: docDialog
         objectName: "knowledge-doc-dialog"
         property string kind: "snippet"
@@ -1224,6 +1230,7 @@ Rectangle {
     // Rename and re-file in one place: they are the same edit as far as the
     // reader is concerned — what this note is called and where it lives.
     QQC.Dialog {
+        PopupArrival { popup: renamePopup }
         id: renamePopup
         objectName: "note-rename"
         property string noteId: ""

@@ -9,6 +9,7 @@ import TodoCpp
 // and "Другая папка" / "Импортировать". Nothing runs before the click; the
 // picker hands over a folder whose contents it does not show.
 QQC.Dialog {
+    PopupArrival { popup: root }
     id: root
     objectName: "vault-import-confirm"
 

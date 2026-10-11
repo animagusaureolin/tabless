@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import TodoCpp
 
 Popup {
+    PopupArrival { popup: root }
     id: root
     // Standalone it is the whole window — there is nothing behind it to
     // dim or block, so no scrim.
@@ -564,6 +565,7 @@ Popup {
                         anchors.verticalCenter: parent.verticalCenter
                         text: I18n.t("capture.inProfile").arg(AppController.profileById(AppController.activeProfileId).name || "")
                         color: profCA.hovered ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsSm
                         elide: Text.ElideRight
@@ -574,6 +576,7 @@ Popup {
                         name: "chevron-down"
                         size: Theme.iconSize - 4
                         color: profCA.hovered ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     }
                 }
                 ClickArea {
@@ -951,6 +954,7 @@ Popup {
                                       : I18n.t("capture.branch.offer").arg(root._branch)
                 textFormat: Text.PlainText
                 color: branchCA.hovered || root.linkBranch ? Theme.text : Theme.textDim
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
                 font.underline: branchCA.hovered

@@ -152,6 +152,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: tocRow.modelData.label
                         color: tocMa.hovered ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
                         font.underline: tocMa.hovered

@@ -196,6 +196,7 @@ Item {
             text: root.active.name || I18n.t("topbar.profile.fallback")
             elide: Text.ElideRight
             color: nameMA.hovered ? Theme.text : Theme.textMuted
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSm
             font.weight: Theme.fwBody
@@ -222,6 +223,7 @@ Item {
 
     // The switcher: a search field over the list, the actions under it.
     QQC.Popup {
+        PopupArrival { popup: picker; dialog: false }
         id: picker
         objectName: "sidebar-profile-picker"
         padding: Theme.spXs

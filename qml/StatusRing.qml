@@ -22,6 +22,26 @@ Item {
     // A repeating task: a small arrow beside the shape, never instead of it.
     property bool repeats: false
 
+    // The task this ring stands for, when it stands for one. A ring that
+    // keeps its task and turns "done" answers with a small pop (APP-175),
+    // like the Done count on the board; a pooled row handed another task
+    // just redraws.
+    property string subject: ""
+    property string _lastSubject: ""
+    property string _lastCategory: ""
+    readonly property bool popping: popAnim.running
+    function _settle() {
+        if (root.subject.length > 0 && root.subject === root._lastSubject
+                && root.category === "done" && root._lastCategory !== "done"
+                && Theme.motion > 0)
+            popAnim.restart();
+        root._lastSubject = root.subject;
+        root._lastCategory = root.category;
+    }
+    Component.onCompleted: { root._lastSubject = root.subject; root._lastCategory = root.category; }
+    onCategoryChanged: Qt.callLater(root._settle)
+    onSubjectChanged: Qt.callLater(root._settle)
+
     implicitWidth: size + (repeats ? Math.round(size * 0.7) : 0)
     implicitHeight: size
 
@@ -40,6 +60,7 @@ Item {
         id: shape
         width: root.size
         height: root.size
+        transformOrigin: Item.Center
         preferredRendererType: Shape.CurveRenderer
 
         // the ring
@@ -88,6 +109,12 @@ Item {
         font.family: Theme.fontUi
         font.pixelSize: Math.max(Theme.fsXs - 3, Math.round(root.size * 0.7))
         font.weight: Theme.fwTitle
+    }
+
+    SequentialAnimation {
+        id: popAnim
+        NumberAnimation { target: shape; property: "scale"; to: 1.18; duration: Theme.durTap; easing.type: Theme.easeEnter }
+        NumberAnimation { target: shape; property: "scale"; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
     }
 
     // repeat: ↻ beside the shape

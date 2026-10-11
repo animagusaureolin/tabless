@@ -22,6 +22,7 @@ import "ArmGuard.js" as ArmGuard
 // actions, Esc closes. A deleted task's id in the diff brings back that one
 // task (undoable); restoring everything asks twice and snapshots first.
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "time-machine"
     modal: true
@@ -256,6 +257,7 @@ Popup {
                     implicitHeight: Theme.chipH + Theme.spXs
                     radius: Theme.radiusMd
                     color: snapRow.on ? Theme.panel3 : (snapMA.hovered ? Theme.panel2 : "transparent")
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     // The chosen version: filled; bold adds a light bar on the
                     // left (N-Dlg-TimeMachine, R3-079). No ring round the row.
                     Rectangle {
@@ -310,6 +312,7 @@ Popup {
                 Layout.topMargin: Theme.spMd
                 text: I18n.t("tm.keepLine").arg(I18n.t("tm.keep.days").arg(root.keepDays)).arg(I18n.t("tm.cap.mb").arg(root.capMb))
                 color: keepMA.hovered ? Theme.text : Theme.textMuted
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
                 font.underline: keepMA.hovered

@@ -99,6 +99,7 @@ Item {
             Layout.alignment: Qt.AlignVCenter
             text: I18n.t("query.saveView")
             color: saveArea.hovered ? Theme.text : Theme.textMuted
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSm
             ClickArea { id: saveArea; label: parent.text; shortcutId: "view.save"; onActivated: root.saveRequested() }

@@ -19,6 +19,7 @@ import TodoCpp
 // the tray used to mark the week seen with nobody looking. Until then the
 // board's recap button carries a dot. A task in the list opens in the editor.
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "weekly-recap"
     modal: true

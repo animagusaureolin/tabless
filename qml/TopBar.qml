@@ -234,6 +234,7 @@ Rectangle {
             implicitWidth: optionRow.implicitWidth + 2 * Theme.spLg
             radius: Theme.radiusMd
             color: optionArea.hovered || optionMenu.visible ? Theme.surfaceCardHover : Theme.chipBg
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.width: 1
             border.color: Theme.chipBorder
             Row {
@@ -305,6 +306,7 @@ Rectangle {
                         height: Theme.chipH - 2 * Theme.sp2xs - 2
                         radius: Theme.radiusMd
                         color: seg.on ? Theme.segmentSelected : (segCA.hovered ? Theme.panel2 : "transparent")
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         Text {
                             id: segText
                             anchors.centerIn: parent
@@ -358,6 +360,7 @@ Rectangle {
                         objectName: "zoom-" + word.modelData.id
                         text: word.modelData.label.toLowerCase()
                         color: word.on || wordCA.hovered ? Theme.text : Theme.textDim
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
                         font.weight: word.on ? Theme.fwTitle : Theme.fwBody
@@ -493,6 +496,7 @@ Rectangle {
                 Rectangle {
                     radius: Theme.radiusSm
                     color: openMA.hovered ? Theme.accentStrong : "transparent"
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     border.color: Theme.accentStrong
                     border.width: 1
                     implicitWidth: openT.implicitWidth + 12
@@ -502,6 +506,7 @@ Rectangle {
                         anchors.centerIn: parent
                         text: I18n.t("topbar.git.open")
                         color: openMA.hovered ? Theme.bg : Theme.accentStrong
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.pixelSize: Theme.fsXs
                         font.weight: Theme.fwTitle
                     }
@@ -520,11 +525,13 @@ Rectangle {
                     Layout.preferredHeight: 20
                     radius: Theme.radiusSm
                     color: dismissMA.hovered ? Theme.withAlpha(Theme.accentStrong, 0.18) : "transparent"
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     Icon {
                         anchors.centerIn: parent
                         name: "close"
                         size: Theme.px(12)
                         color: dismissMA.hovered ? Theme.accentStrong : Theme.textDim
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     }
                     ClickArea {
                         id: dismissMA
@@ -545,6 +552,7 @@ Rectangle {
             Layout.preferredWidth: immersionRow.implicitWidth + 2 * Theme.spLg
             radius: Theme.radiusMd
             color: immersionMA.hovered ? Theme.panel3 : Theme.accentSoft
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.color: Theme.accent
             border.width: 1
             property int _tick: 0
@@ -760,6 +768,7 @@ Rectangle {
             // An error pasted into search that this workspace has met
             // before (APP-159): a line under the box, over the view.
             QQC.Popup {
+                PopupArrival { popup: seenPopup; dialog: false }
                 id: seenPopup
                 y: searchBox.height + Theme.spXs
                 x: 0
@@ -785,6 +794,7 @@ Rectangle {
                     objectName: "query-save-view"
                     text: I18n.t("query.saveView")
                     color: saveCA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
                     Layout.alignment: Qt.AlignVCenter
@@ -837,6 +847,7 @@ Rectangle {
                 leftPadding: Theme.spXs
                 text: I18n.t("query.editFilter")
                 color: editCA.hovered ? Theme.textMuted : Theme.textDim
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsMd
                 ClickArea { id: editCA; label: parent.text; shortcutId: "search.focus"; onActivated: root.focusEnd() }

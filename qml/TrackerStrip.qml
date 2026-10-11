@@ -143,6 +143,7 @@ ColumnLayout {
                     objectName: "tracker-strip-action"
                     text: line.modelData.actionText
                     color: actCA.hovered ? Theme.textMuted : Theme.text
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsMd
                     font.weight: Theme.fwTitle
@@ -165,6 +166,7 @@ ColumnLayout {
                         name: "close"
                         size: Theme.px(10)
                         color: hideCA.hovered ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     }
                     ClickArea {
                         id: hideCA
