@@ -233,7 +233,7 @@ TestCase {
         tc.host.apply(id);
         clickLaidOut("saved-view-chip");
         compare(tc.host.activeId, "");
-        compare(tc.win.searchText, "");
+        compare(tc.win.searchText, tc.win.defaultQuery("", false));  // the reset keeps is:open (IDIOT-TASKS-5)
     }
 
     // A second click on the active view in the sidebar turns it off.
@@ -244,7 +244,7 @@ TestCase {
         compare(tc.win.searchText, "svprobe");
         tc.host.toggle(id);
         compare(tc.host.activeId, "");
-        compare(tc.win.searchText, "");
+        compare(tc.win.searchText, tc.win.defaultQuery("", false));  // the reset keeps is:open (IDIOT-TASKS-5)
         // A different view while one is on switches to it.
         const other = mkView("Other", "svprobe other");
         tc.host.toggle(id);
@@ -269,7 +269,7 @@ TestCase {
         // The same key again turns it off.
         keyClick(Qt.Key_5, Qt.ControlModifier);
         compare(tc.host.activeId, "");
-        compare(tc.win.searchText, "");
+        compare(tc.win.searchText, tc.win.defaultQuery("", false));  // the reset keeps is:open (IDIOT-TASKS-5)
         AppController.currentView = "board";
     }
 

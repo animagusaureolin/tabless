@@ -413,14 +413,11 @@ Item {
         return true;
     }
 
-    // F2: the document on screen (IDIOT-KNOW-4): the open page in Docs,
-    // the open note in Notes.
+    // F2: the document on screen, a page or the note (IDIOT-KNOW-4). A page
+    // can be open on either screen.
     function renameShown() {
-        if (root.docs) {
-            if (root.pageId.length > 0) notesList.renamePage(root.pageId);
-        } else if (AppController.activeNoteId.length > 0) {
-            notesList.renameActive();
-        }
+        if (root.pageId.length > 0) notesList.renamePage(root.pageId);
+        else if (AppController.activeNoteId.length > 0) notesList.renameActive();
     }
 
     // Ctrl+N: a note in Notes, a page in Docs.
@@ -1400,8 +1397,7 @@ Item {
     Shortcut {
         sequence: root._kbd("notes.rename")
         context: Qt.WindowShortcut
-        enabled: root._keysOn && sequence.length > 0
-                 && (root.docs ? root.pageId.length > 0 : AppController.activeNoteId.length > 0)
+        enabled: root._keysOn && sequence.length > 0 && (AppController.activeNoteId.length > 0 || root.pageId.length > 0)
         onActivated: root.renameShown()
     }
     Shortcut {
