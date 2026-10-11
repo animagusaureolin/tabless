@@ -98,7 +98,7 @@ The site's own keys: Ctrl K and `/` open the search, `g g` goes to the top, Shif
 | 46 | Tracker cards carry a `local` layer (notes, checklist, tags, dates) a sync never overwrites | `TaskLocal.cpp`, APP-244 | built | ☐ |
 | 47 | Read-only by default; status write-back per tracker ("Change the status in %1 when I move a card"); titles, descriptions, comments never written | `integrations.<id>.writeStatus`, `IntegrationProvider.h:33` | built | ☐ |
 | 48 | Write-back exists for GitHub, GitLab, Gitea, Forgejo, Jira (the rest are pull-only) | `ProviderRegistry.cpp` | built | ☐ |
-| 49 | Backups and time machine: "Nothing gets lost" | rows 41–42 | built | ☐ |
+| 49 | Backups and time machine: "You can roll back" | rows 41–42 | built | ☐ |
 
 ### What the app sends on its own ("the complete list")
 

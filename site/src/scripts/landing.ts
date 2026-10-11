@@ -18,9 +18,6 @@ const T = EN
       task: ['task', 'tasks', 'tasks'] as [string, string, string],
       done: 'done',
       allDone: 'all done',
-      closed: ['task closed', 'tasks closed', 'tasks closed'] as [string, string, string],
-      secs: ['second', 'seconds', 'seconds'] as [string, string, string],
-      in: 'in',
       tick: ['Done', 'Undo'],
     }
   : {
@@ -29,9 +26,6 @@ const T = EN
       task: ['задача', 'задачи', 'задач'] as [string, string, string],
       done: 'готово',
       allDone: 'всё сделано',
-      closed: ['задача закрыта', 'задачи закрыты', 'задач закрыто'] as [string, string, string],
-      secs: ['секунду', 'секунды', 'секунд'] as [string, string, string],
-      in: 'за',
       tick: ['Готово', 'Вернуть'],
     };
 
@@ -106,7 +100,6 @@ const emptyEl = $('.empty', demo);
 const factsEl = $('.demo-facts', demo);
 const tasks: Task[] = T.seed.map(([title, ...meta]) => ({ title, meta, done: false }));
 let cursor = 0;
-let firstTouch = 0;
 let closed = 0;
 let lastDone = { i: -1, at: 0 };
 
@@ -180,8 +173,6 @@ function render() {
   renderFacts();
   const allDone = tasks.length > 0 && tasks.every((t) => t.done);
   if (allDone && emptyEl.hidden) {
-    const secs = Math.max(1, Math.round((Date.now() - firstTouch) / 1000));
-    $('.empty-s', emptyEl).textContent = `${closed} ${plural(closed, T.closed)} ${T.in} ${secs} ${plural(secs, T.secs)}.`;
     emptyEl.hidden = false;
     gsap.to(listEl, { height: 0, opacity: 0, duration: reduce ? 0 : 0.6, ease: 'expo.inOut', delay: reduce ? 0 : 0.5 });
     if (!reduce) gsap.from(emptyEl.children, { y: 16, opacity: 0, stagger: 0.1, duration: 0.9, ease: 'expo.out', delay: 0.8 });
@@ -195,7 +186,6 @@ function toggle(i: number, fromKey = false) {
   if (!t) return;
   // as in the app: a second d on the same task within half a second is a Vim "dd", not an undo
   if (fromKey && lastDone.i === i && Date.now() - lastDone.at < 500) return;
-  if (!firstTouch) firstTouch = Date.now();
   t.done = !t.done;
   if (t.done) lastDone = { i, at: Date.now() };
   closed += t.done ? 1 : -1;
@@ -207,7 +197,6 @@ function toggle(i: number, fromKey = false) {
 function add() {
   const p = parse(input.value);
   if (!p.title) return;
-  if (!firstTouch) firstTouch = Date.now();
   tasks.unshift({ title: p.title, meta: metaOf(p), done: false });
   cursor = 0;
   input.value = '';

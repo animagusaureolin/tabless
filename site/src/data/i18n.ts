@@ -1,6 +1,6 @@
 // Page copy for both languages. Runtime strings of the live demo live in scripts/landing.ts.
 // Rule for every block (APP-281 B6/B7): a fact you can check in the app, listed in site/PROMISES.md.
-// At most two emotional lines per page. The product name is "Tabless", capital T, an ordinary proper
+// At most one emotional line per page. The product name is "Tabless", capital T, an ordinary proper
 // noun (it may start a sentence). The tagline "Just makes your day easier." is English on both pages.
 // Commands and file names stay lowercase: tabless, tabless-v0.9.0-….
 export type Lang = 'ru' | 'en';
@@ -52,9 +52,9 @@ const ru = {
       ['Todoist', '4 просрочено'],
     ],
     a: 'Восемь вкладок, чтобы понять, что делать сейчас?',
-    b: 'Одно окно.<br />Ничего лишнего.',
+    b: 'Одно окно<br />на весь день.',
     pa: 'Трекер, календарь, почта, заметки, мессенджер — у каждого свои уведомления и свои счётчики.',
-    pb: 'Задачи из трекеров и встречи из календаря Tabless собирает в одну ленту на день. Цветом отмечено только срочное.',
+    pb: 'Задачи из трекеров и встречи из календаря Tabless собирает в одну ленту на день. Срочное выделено цветом.',
     calmHead: 'Сегодня',
     calmFacts: '1 встреча · 2 задачи',
     rows: [['cal', 'Дейлик', '09:30'], ['ring', 'Ревью #482', 'GitHub'], ['ring half', 'Rate limit для логина', 'Jira']],
@@ -136,13 +136,12 @@ const ru = {
     cards: [
       ['Офлайн', 'Задачи, встречи и заметки хранятся в одном файле state.json. Сеть нужна только для проверки обновлений и того, что вы подключили сами.'],
       ['Без регистрации', 'Скачали, открыли, работаете. Ни аккаунта, ни почты.'],
-      ['Трекеры — только чтение', 'В трекеры ничего не пишется. Запись статуса включается для каждого трекера отдельно: «Менять статус в Jira при перемещении карточки». Заголовки, описания и комментарии не пишутся никогда.'],
-      ['Ничего не теряется', 'Резервные копии по расписанию (по умолчанию раз в день, хранятся последние 20) и машина времени: снимки каждый час за двое суток и каждый день за месяц.'],
+      ['Только чтение, пока не включите', 'По умолчанию в трекеры ничего не пишется. Запись статуса включается для каждого трекера отдельно: «Менять статус в Jira при перемещении карточки». Перед каждой записью задача проверяется ещё раз: если её уже поменяли в трекере, ничего не отправится. Заголовки, описания и комментарии не пишутся никогда.'],
+      ['Можно откатиться назад', 'Резервные копии по расписанию (по умолчанию раз в день, хранятся последние 20) и машина времени: снимки каждый час за двое суток и каждый день за месяц.'],
     ],
     whereH: 'Где лежат данные',
     whereP: [
       'Рядом с файлом — папка backups с резервными копиями и папка history со снимками машины времени.',
-      'Раньше приложение называлось lowkey, а до того — heap. При первом запуске старая папка lowkey/lowkey (или heap/heap) один раз копируется в новую. Старая остаётся на месте, внутри — записка MOVED-TO-TABLESS.txt.',
       'Токены трекеров не лежат в state.json. На Windows они хранятся в системном хранилище учётных данных; сборки для macOS и Linux держат их в файле secrets.json рядом, доступном только вашему пользователю.',
       'Заметки выгружаются папкой Markdown-файлов, которую открывает Obsidian, и загружаются из неё обратно.',
     ],
@@ -212,7 +211,7 @@ const ru = {
   },
   notFound: { title: 'Страница не найдена', h: 'Такой страницы нет.', p: 'Возможно, она переехала, когда сайт пересобирали.', home: 'На главную' },
   dock: { label: 'Где вы на странице', next: 'Перейти к следующему разделу' },
-  sections: ['Начало', 'Тишина', 'Попробуйте', 'Один день', 'Git', 'Клавиатура', 'Стиль', 'Как сделано', 'Ваши данные', 'Вопросы', 'Скачать'],
+  sections: ['Начало', 'Одно окно', 'Попробуйте', 'Один день', 'Git', 'Клавиатура', 'Стиль', 'Как сделано', 'Ваши данные', 'Вопросы', 'Скачать'],
 };
 
 const en: typeof ru = {
@@ -251,9 +250,9 @@ const en: typeof ru = {
       ['Todoist', '4 overdue'],
     ],
     a: 'Eight tabs just to know what to do next?',
-    b: 'One window.<br />Nothing extra.',
+    b: 'One window<br />for the whole day.',
     pa: 'Tracker, calendar, mail, notes, chat — each with its own notifications and its own counters.',
-    pb: 'Tasks from your trackers and meetings from your calendar, gathered into one feed for the day. Colour marks only what’s urgent.',
+    pb: 'Tasks from your trackers and meetings from your calendar, gathered into one feed for the day. What’s urgent stands out in colour.',
     calmHead: 'Today',
     calmFacts: '1 meeting · 2 tasks',
     rows: [['cal', 'Daily', '09:30'], ['ring', 'Review #482', 'GitHub'], ['ring half', 'Login rate limit', 'Jira']],
@@ -335,13 +334,12 @@ const en: typeof ru = {
     cards: [
       ['Offline', 'Tasks, meetings and notes live in one file, state.json. The network is used only for the update check and for what you connect yourself.'],
       ['No sign-up', 'Download, open, work. No account, no email.'],
-      ['Trackers are read-only', 'Nothing is written to your trackers. Status write-back is turned on per tracker: “Change the status in Jira when I move a card”. Titles, descriptions and comments are never written.'],
-      ['Nothing gets lost', 'Scheduled backups (daily by default, the last 20 kept) and a time machine: hourly snapshots for two days, daily ones for a month.'],
+      ['Read-only until you turn it on', 'By default nothing is written to your trackers. Status write-back is turned on per tracker: “Change the status in Jira when I move a card”. Before every write the task is checked again; if the tracker changed it meanwhile, nothing is sent. Titles, descriptions and comments are never written.'],
+      ['You can roll back', 'Scheduled backups (daily by default, the last 20 kept) and a time machine: hourly snapshots for two days, daily ones for a month.'],
     ],
     whereH: 'Where your data lives',
     whereP: [
       'Next to the file: a backups folder with the scheduled copies and a history folder with the time machine’s snapshots.',
-      'The app used to be called lowkey, and heap before that. On the first start the old lowkey/lowkey (or heap/heap) folder is copied over once. The old folder stays where it was, with a MOVED-TO-TABLESS.txt note inside.',
       'Tracker tokens are not in state.json. On Windows they go to the system credential store; the macOS and Linux builds keep them in a secrets.json next to it that only your user can read.',
       'Notes export as a folder of Markdown files that Obsidian opens as-is, and import back from one.',
     ],
@@ -411,7 +409,7 @@ const en: typeof ru = {
   },
   notFound: { title: 'Page not found', h: 'This page is not here.', p: 'It may have moved when the site was rebuilt.', home: 'Home' },
   dock: { label: 'Where you are on the page', next: 'Go to the next section' },
-  sections: ['Start', 'Quiet', 'Try it', 'A day', 'Git', 'Keyboard', 'Style', 'How it’s built', 'Your data', 'FAQ', 'Download'],
+  sections: ['Start', 'One window', 'Try it', 'A day', 'Git', 'Keyboard', 'Style', 'How it’s built', 'Your data', 'FAQ', 'Download'],
 };
 
 export const copy = { ru, en };
