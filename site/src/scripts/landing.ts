@@ -307,12 +307,31 @@ addEventListener('keydown', (e) => {
 });
 
 /* ---------- git: switch a branch, the matching card is marked ---------- */
+// The scene plays once when it scrolls into view; the button plays it again from the start.
 const gitStage = $('[data-git]');
 const gitCmd = $('[data-git-cmd]', gitStage);
-let gitDone = false;
+const gitMeta = $('[data-git-meta]', gitStage);
+const gitMetaBefore = gitMeta.textContent ?? '';
+let gitRunning = false;
+let gitPlayed = false;
+const resetGit = () => {
+  gitCmd.textContent = '';
+  $('[data-git-out]', gitStage).hidden = true;
+  const head = $('[data-git-head]', gitStage);
+  head.textContent = 'main';
+  head.classList.remove('on');
+  $$('[data-git-on]', gitStage).forEach((el) => (el.hidden = true));
+  $$('[data-git-off]', gitStage).forEach((el) => (el.hidden = false));
+  gitMeta.textContent = gitMetaBefore;
+  $('[data-git-card]', gitStage).classList.remove('on');
+  const caret = $('.term-caret', gitStage);
+  if (caret) caret.hidden = false;
+};
 const runGit = () => {
-  if (gitDone) return;
-  gitDone = true;
+  if (gitRunning) return;
+  if (gitPlayed) resetGit();
+  gitRunning = true;
+  gitPlayed = true;
   const text = gitCmd.dataset.text!;
   const finish = () => {
     gitCmd.textContent = text;
@@ -325,7 +344,9 @@ const runGit = () => {
     const meta = $('[data-git-meta]', gitStage);
     meta.textContent = meta.dataset.after!;
     $('[data-git-card]', gitStage).classList.add('on');
-    $('.term-caret', gitStage)?.remove();
+    const caret = $('.term-caret', gitStage);
+    if (caret) caret.hidden = true;
+    gitRunning = false;
   };
   if (reduce) return finish();
   let i = 0;
@@ -337,7 +358,7 @@ const runGit = () => {
   step();
 };
 $('[data-git-run]').addEventListener('click', runGit);
-ScrollTrigger.create({ trigger: gitStage, start: 'top 70%', once: true, onEnter: () => setTimeout(runGit, 400) });
+ScrollTrigger.create({ trigger: gitStage, start: 'top 70%', once: true, onEnter: () => setTimeout(() => gitPlayed || runGit(), 400) });
 
 /* ---------- quiet vs bold ---------- */
 const cmp = $('.compare');

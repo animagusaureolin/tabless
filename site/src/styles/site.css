@@ -278,6 +278,7 @@ kbd { min-width: 44px; height: 44px; padding: 0 12px; display: grid; place-items
 .term-ps { color: var(--dim); }
 .term-out { color: var(--muted); }
 .term-caret { display: inline-block; width: 7px; height: 1.1em; vertical-align: -0.2em; margin-left: 2px; background: var(--muted); animation: caret 1s steps(1) infinite; }
+.term-caret[hidden] { display: none; }
 @keyframes caret { 50% { opacity: 0; } }
 .gcard { position: relative; padding: 16px 18px 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); transition: border-color 0.5s, background-color 0.5s, box-shadow 0.5s; }
 .gcard::after { content: ""; position: absolute; left: 18px; bottom: 8px; width: 32px; height: 2px; border-radius: 2px; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 0.6s var(--ease); }
