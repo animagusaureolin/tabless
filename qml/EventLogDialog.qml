@@ -13,6 +13,7 @@ import TodoCpp
 // the row's action, ←/→ switch tabs, Esc closes. AppController.eventLog
 // keeps the last 100, this session only.
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "event-log"
     modal: true
@@ -242,6 +243,7 @@ Popup {
                         visible: row.action.length > 0
                         text: row.action.length > 0 ? I18n.t("eventLog.action." + row.action) : ""
                         color: actionMA.hovered ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsSm
                         font.underline: actionMA.hovered

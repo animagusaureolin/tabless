@@ -170,6 +170,7 @@ Rectangle {
                 radius: Theme.radiusMd
                 color: dragArea.drag.active ? Theme.panel3 : Theme.panel2
                 border.color: dragArea.containsMouse ? Theme.borderStrong : Theme.border
+                Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 border.width: 1
 
                 // The grids read `taskId` off whatever is dropped on them, the

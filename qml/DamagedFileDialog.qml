@@ -12,6 +12,7 @@ import TodoCpp
 // or keep what is open now. Closing the card keeps what is open; every
 // snapshot stays in the time machine (Ctrl K).
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "damaged-file"
     modal: true

@@ -9,6 +9,7 @@ import TodoCpp
 // "ждёт сети · 1 изменение в очереди", a calendar link's last fetch — and
 // "Синхронизировать всё" with its key. Facts only; "войти" opens Settings.
 Popup {
+    PopupArrival { popup: root; dialog: false }
     id: root
     objectName: "sync-popover"
     padding: Theme.spSm

@@ -493,6 +493,7 @@ Item {
                     objectName: navBtn.modelData.d < 0 ? "month-prev" : "month-next"
                     width: 28; height: 28; radius: Theme.radiusMd
                     color: navMA.hovered ? Theme.panel3 : Theme.panel2
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     border.color: Theme.border; border.width: 1
                     Text { anchors.centerIn: parent; text: navBtn.modelData.g; color: Theme.text; font.pixelSize: Theme.fsLg }
                     ClickArea {
@@ -527,6 +528,7 @@ Item {
                         // A selected segment is tinted, not filled: a filled
                         // accent is the screen's one action ("+ Task").
                         color: sel ? Theme.accentSoft : (modeMA.hovered ? Theme.panel3 : Theme.panel2)
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         border.color: sel ? Theme.withAlpha(Theme.accent, 0.5) : Theme.border; border.width: 1
                         Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.accentStrong : Theme.text; font.pixelSize: Theme.fsSm; font.weight: parent.sel ? Theme.fwTitle : Theme.fwBody }
                         ClickArea {
@@ -565,6 +567,7 @@ Item {
             Rectangle {
                 width: 60; height: 28; radius: Theme.radiusMd
                 color: todayMA.hovered ? Theme.panel3 : Theme.panel2
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 border.color: Theme.border; border.width: 1
                 Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.pixelSize: Theme.fsSm }
                 // AppController.today, like every other "today" in the app —
@@ -794,6 +797,7 @@ Item {
                                 // (DG-050): a flag for a deadline, the status
                                 // ring for a planned day.
                                 color: chipMA.containsMouse ? Theme.panel2 : "transparent"
+                                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                                 Row {
                                     anchors.fill: parent; spacing: Theme.spXs
                                     Item {
@@ -892,6 +896,7 @@ Item {
                                 implicitHeight: Theme.px(18)
                                 radius: Theme.radiusXs
                                 color: evCA.hovered ? Theme.panel2 : "transparent"
+                                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                                 // A meeting is the calendar glyph and its
                                 // title (DG-050); the time is in the tooltip.
                                 Row {
@@ -927,6 +932,7 @@ Item {
                             visible: _extra > 0
                             text: root.chrome ? "+" + _extra : I18n.t("cal.moreN").arg(_extra)
                             color: moreMA.hovered ? Theme.text : Theme.textDim
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsXs
                             ClickArea {

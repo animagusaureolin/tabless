@@ -19,6 +19,7 @@ import TodoCpp
 // leftover has its buttons (APP-248) for the person to press or ignore, a
 // running timer a link. A leftover's title opens it.
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "end-of-day"
     modal: true

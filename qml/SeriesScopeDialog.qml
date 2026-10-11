@@ -24,6 +24,7 @@ import TodoCpp
 //   scope.ask("move", (answer) => AppController.moveOccurrence(occ, dh, answer),
 //             () => block.reset(), "«1:1», пт 11:00 → пт 14:00")
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "series-scope"
     modal: true

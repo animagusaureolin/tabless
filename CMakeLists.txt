@@ -458,6 +458,10 @@ qt_add_qml_module(heap_core
         qml/Toast.qml
         qml/ToastTiming.js
         qml/AppMenu.qml
+        qml/PopEnter.qml
+        qml/PopExit.qml
+        qml/PopupArrival.qml
+        qml/PanelArrival.qml
         qml/AppMenuItem.qml
         qml/AppMenuHeader.qml
         qml/AppMenuSeparator.qml

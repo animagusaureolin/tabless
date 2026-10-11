@@ -56,6 +56,7 @@ Flow {
             objectName: "att-chip-" + attId
             radius: Theme.radiusMd
             color: chipHover.hovered ? Theme.panel3 : Theme.panel2
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.color: chip.broken ? Theme.danger : Theme.border
             border.width: 1
             implicitWidth: chipRow.implicitWidth + 2 * Theme.spMd
@@ -153,6 +154,7 @@ Flow {
         Accessible.name: cb.tip
         Accessible.onPressAction: cb.activated()
         color: cbMA.containsMouse ? Theme.text : Theme.textDim
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         font.pixelSize: Theme.fsSm
         MouseArea {
             id: cbMA
@@ -178,6 +180,7 @@ Flow {
     Component {
         id: confirmComponent
     QQC.Dialog {
+        PopupArrival { popup: confirm }
         id: confirm
         objectName: "att-open-confirm"
         property string attId: ""

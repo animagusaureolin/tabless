@@ -7,6 +7,7 @@ import TodoCpp
 import "ArmGuard.js" as ArmGuard
 
 Popup {
+    PopupArrival { popup: root }
     id: root
     modal: false
     focus: true
@@ -178,6 +179,7 @@ Popup {
                 Rectangle {
                     width: 22; height: 22; radius: Theme.radiusSm
                     color: closeMA.hovered ? Theme.panel3 : "transparent"
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     Text { anchors.centerIn: parent; text: "✕"; color: Theme.textDim; font.pixelSize: Theme.fsMd }
                     ClickArea {
                         id: closeMA
@@ -255,6 +257,7 @@ Popup {
         Rectangle {
             anchors.fill: rowBody
             color: rowHover.containsMouse ? Theme.panel2 : "transparent"
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         }
         Rectangle {
             id: groupHead
@@ -563,6 +566,7 @@ Popup {
             Rectangle {
                 width: 22; height: 22; radius: Theme.radiusSm
                 color: editMA.hovered ? Theme.panel3 : "transparent"
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 border.color: Theme.border; border.width: 1
                 Text {
                     anchors.centerIn: parent
@@ -585,6 +589,7 @@ Popup {
                 width: 22; height: 22; radius: Theme.radiusSm
                 visible: chip.sequence !== chip.defaultSequence
                 color: resetMA.hovered ? Theme.panel3 : "transparent"
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 border.color: Theme.border; border.width: 1
                 Text {
                     anchors.centerIn: parent

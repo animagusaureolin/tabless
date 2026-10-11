@@ -228,10 +228,50 @@ Item {
 
         Repeater {
             model: root._items
-            delegate: Item {
+            delegate: cardComp
+        }
+    }
+
+    // A toast that leaves (dismissed, run out, pushed off) is gone from the
+    // list at once, so counts and tests see it go; a copy of its card stays
+    // a moment longer and sinks out (APP-175). Not with "Reduce motion".
+    property var _ghosts: []
+    property var _shown: []
+    on_ItemsChanged: {
+        const now = {};
+        for (let i = 0; i < _items.length; i++) now[_items[i].id] = true;
+        const gone = [];
+        for (let i = 0; i < _shown.length; i++)
+            if (!now[_shown[i].id] && Theme.motion > 0)
+                gone.push(Object.assign({}, _shown[i], { ghost: true }));
+        _shown = _items;
+        if (gone.length) _ghosts = _ghosts.concat(gone);
+    }
+    function _dropGhost(id) {
+        _ghosts = _ghosts.filter(g => g.id !== id);
+    }
+    Item {
+        id: ghostLayer
+        x: stack.x
+        width: stack.width
+        anchors.bottom: parent.bottom
+        enabled: false
+        Accessible.ignored: true
+        Repeater {
+            model: root._ghosts
+            delegate: cardComp
+        }
+    }
+
+    Component {
+        id: cardComp
+            Item {
                 id: card
                 required property var modelData
-                objectName: "toast-card"
+                readonly property bool ghost: !!modelData.ghost
+                objectName: card.ghost ? "toast-ghost" : "toast-card"
+                // A ghost sits on the stack's bottom edge, where it was.
+                y: card.ghost ? -card.height : 0
                 readonly property color kindColor: Theme.toastKindColor(modelData.kind)
                 readonly property bool alert: modelData.kind === "warning" || modelData.kind === "error"
                 readonly property int leftPad: Theme.spXl
@@ -258,6 +298,7 @@ Item {
                 }
 
                 Component.onCompleted: {
+                    if (card.ghost) { leave.start(); return; }
                     const id = card.modelData.id;
                     if (!root._firstShow(id)) return;
                     card.entering = true;
@@ -265,6 +306,15 @@ Item {
                     slide.y = Theme.toastSlide;
                     card.opacity = 0;
                     enter.start();
+                }
+
+                SequentialAnimation {
+                    id: leave
+                    ParallelAnimation {
+                        NumberAnimation { target: slide; property: "y"; to: Theme.toastSlide; duration: Theme.durMoveOut; easing.type: Theme.easeExit }
+                        NumberAnimation { target: card; property: "opacity"; to: 0; duration: Theme.durMoveOut; easing.type: Theme.easeExit }
+                    }
+                    ScriptAction { script: root._dropGhost(card.modelData.id) }
                 }
 
                 ParallelAnimation {
@@ -420,6 +470,5 @@ Item {
                     }
                 }
             }
-        }
     }
 }

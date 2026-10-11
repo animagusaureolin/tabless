@@ -467,6 +467,7 @@ ListView {
                             objectName: "mdCodeCopy"
                             text: copyArea.copied ? I18n.t("notes.code.copied") : I18n.t("notes.code.copy")
                             color: copyArea.hovered ? Theme.accentStrong : Theme.textDim
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsSm
                             ClickArea {
@@ -715,6 +716,7 @@ ListView {
                         visible: /^https?:\/\//i.test(rowItem.model.imageSource)
                         text: I18n.t("notes.image.load")
                         color: loadArea.hovered ? Theme.accentStrong : Theme.textDim
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
                         ClickArea {
@@ -727,6 +729,7 @@ ListView {
                     Text {
                         text: I18n.t("notes.image.open")
                         color: openArea.hovered ? Theme.accentStrong : Theme.textDim
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
                         ClickArea {

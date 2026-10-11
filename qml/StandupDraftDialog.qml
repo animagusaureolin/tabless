@@ -10,6 +10,7 @@ import TodoCpp
 // field the person edits before copying it. Nothing is sent anywhere, and the
 // text is not kept: closing drops it, opening builds a fresh one.
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "standup-draft"
     modal: true

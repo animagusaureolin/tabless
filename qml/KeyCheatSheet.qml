@@ -11,6 +11,7 @@ import "KeyRules.js" as KeyRules
 // rebinds. The keys come from the one catalogue (AppController.shortcuts),
 // so a rebinding changes them here, in the menus and in the hints alike.
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "key-cheat-sheet"
     modal: true
@@ -398,6 +399,7 @@ Popup {
                 objectName: "key-sheet-edit"
                 text: I18n.t("keys.sheet.edit")
                 color: editCA.hovered ? Theme.text : Theme.accentStrong
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSm
                 ClickArea {

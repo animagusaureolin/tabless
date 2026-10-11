@@ -14,6 +14,7 @@ import "PaletteMatch.js" as Match
 import "KeyRules.js" as KeyRules
 
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "command-line"
     modal: true
@@ -965,6 +966,7 @@ Popup {
                             textFormat: Text.PlainText
                             elide: Text.ElideMiddle
                             color: createCA.hovered ? Theme.textMuted : Theme.textDim
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsMd
                             ClickArea {

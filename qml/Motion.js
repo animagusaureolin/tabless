@@ -17,3 +17,19 @@ function settleFrom(dropX, dropY, homeX, homeY, motion) {
     var m = motion > 0 ? 1 : 0;
     return { x: (dropX - homeX) * m, y: (dropY - homeY) * m };
 }
+
+// Which of `ids` were not in the list the last time `memo` saw it, as a
+// set ({id: true}), so a row rebuilt from a snapshot can tell an arrival
+// (a new task, a group unfolded, a search widening) from a row that was
+// already on screen. The first call only remembers: a list that opens
+// does not fade every row in.
+function arrivals(memo, ids) {
+    var fresh = {};
+    var next = {};
+    for (var i = 0; i < ids.length; i++) {
+        if (memo.ids && !memo.ids[ids[i]]) fresh[ids[i]] = true;
+        next[ids[i]] = true;
+    }
+    memo.ids = next;
+    return fresh;
+}

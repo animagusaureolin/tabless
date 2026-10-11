@@ -173,8 +173,6 @@ ComboBox {
             ScrollBar.vertical: ThinScrollBar {}
         }
         background: PopupSurface {}
-        enter: Transition {
-            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
-        }
+        enter: PopEnter {}
     }
 }

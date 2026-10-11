@@ -1591,6 +1591,7 @@ Item {
                                 leftPadding: Theme.spXs
                                 text: I18n.t("cal.moreN").arg(headCol.modelData.tasks.length - _shown)
                                 color: moreMA.hovered ? Theme.text : Theme.textDim
+                                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                                 font.family: Theme.fontUi
                                 font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXs
@@ -2318,6 +2319,7 @@ Item {
                             // Bold draws the outline bright in the week, quiet
                             // and the day a hairline (N-Oth-DayMonth, R4-047).
                             color: wkBlockMA.hovered || wkMove.containsMouse ? Theme.panel2 : Theme.bg
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             border.color: Style.fills && !root.dayZoom ? Theme.textMuted : Theme.border
                             border.width: Style.fills && !root.dayZoom ? 1.5 : 1
                             readonly property bool oneLine: height < Theme.px(36)

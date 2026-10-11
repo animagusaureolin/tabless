@@ -10,6 +10,7 @@ import TodoCpp
 // (off by default). Copy puts exactly the preview in the clipboard; "Open an
 // issue on GitHub" opens a new-issue page with it. Nothing is sent by Tabless.
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "report-issue"
     modal: true

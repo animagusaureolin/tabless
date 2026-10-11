@@ -35,6 +35,9 @@ FocusScope {
     property string eventId: ""
     readonly property bool opened: root.eventId.length > 0
     visible: root.opened
+    // Slides in from the right edge (APP-175).
+    transform: [arrival.shift]
+    PanelArrival { id: arrival; target: root; shown: root.opened }
     // Not saved yet (an old caller's draft): saving is what makes it.
     property bool _isDraft: false
     property string masterId: ""
@@ -494,6 +497,7 @@ FocusScope {
         property bool add: false
         Layout.fillWidth: true
         color: vl.add || linkCA.hovered ? (linkCA.hovered ? Theme.text : Theme.textMuted) : Theme.text
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsMd
         elide: Text.ElideRight
@@ -544,6 +548,7 @@ FocusScope {
                     objectName: "event-kind"
                     text: root.typeLabel(root.type) + (root.repeating ? " · " + I18n.t("event.kind.repeats") : "")
                     color: kindCA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
                     ClickArea {
@@ -668,6 +673,7 @@ FocusScope {
 
                     // People offered for the name under the caret.
                     Popup {
+                        PopupArrival { popup: attSuggest; dialog: false }
                         id: attSuggest
                         objectName: "event-attendee-suggest"
                         property var items: []
@@ -713,6 +719,7 @@ FocusScope {
                                 height: Theme.rowH
                                 radius: Theme.radiusSm
                                 color: sugRow.index === attSuggest.sel ? Theme.panel3 : (sugMA.hovered ? Theme.panel2 : "transparent")
+                                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
@@ -760,6 +767,7 @@ FocusScope {
                     visible: callField.text.trim().length > 0
                     text: "· " + I18n.t("event.join").toLowerCase()
                     color: joinCA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsMd
                     font.underline: joinCA.hovered

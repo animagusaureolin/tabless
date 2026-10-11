@@ -226,6 +226,7 @@ ColumnLayout {
                         radius: Theme.radius
                         color: t.colors.bg
                         border.color: selected ? Theme.accent : (cardMA.hovered ? Theme.borderStrong : Theme.border)
+                        Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         border.width: selected ? 2 : 1
 
                         // A miniature of the theme: a panel, a line of text, accent
@@ -395,6 +396,7 @@ ColumnLayout {
         implicitHeight: colorsRow.implicitHeight + Theme.spMd * 2
         radius: Theme.radiusMd
         color: colorsMA.hovered ? Theme.panel3 : Theme.panel2
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         border.color: Theme.border
         RowLayout {
             id: colorsRow
@@ -545,6 +547,7 @@ ColumnLayout {
                             text: "↺"
                             opacity: tokRow.changed ? 1 : 0
                             color: resetMA.hovered ? Theme.accentStrong : Theme.textMuted
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             font.pixelSize: Theme.fsMd
                             Layout.preferredWidth: 14
                             ClickArea {

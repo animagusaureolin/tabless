@@ -35,6 +35,7 @@ ColumnLayout {
         visible: !root._shown
         text: "+ " + I18n.t("local.draft.start")
         color: startCA.hovered ? Theme.text : Theme.textDim
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsXs
         ClickArea {

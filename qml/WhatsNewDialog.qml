@@ -10,6 +10,7 @@ import "WhatsNew.js" as WhatsNew
 // notes (WhatsNew.js), facts only. The controller knows the line the data
 // last ran with (settings.lastRunVersion); a fresh install shows nothing.
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "whats-new"
     modal: true

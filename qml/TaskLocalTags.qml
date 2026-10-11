@@ -85,6 +85,7 @@ ColumnLayout {
             objectName: "task-doc-tags-manage"
             text: root._manage ? I18n.t("local.tags.manageDone") : I18n.t("local.tags.manage")
             color: manCA.hovered ? Theme.text : Theme.textDim
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsXs
             ClickArea { id: manCA; label: parent.text; onActivated: root._manage = !root._manage }
@@ -105,6 +106,7 @@ ColumnLayout {
                 objectName: "task-doc-tags-match-" + m.index
                 text: "#" + m.modelData.id + "  " + m.modelData.count
                 color: root._pick === m.index || mCA.hovered ? Theme.text : Theme.textMuted
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
                 ClickArea { id: mCA; label: m.text; onActivated: { root.complete(m.modelData.id); field.forceActiveFocus(); } }

@@ -1433,6 +1433,7 @@ Item {
 
     // ── Autocomplete popup ───────────────────────────────────────
     Popup {
+        PopupArrival { popup: acPopup; dialog: false }
         id: acPopup
         modal: false
         focus: false
@@ -1745,6 +1746,7 @@ Item {
     // A broken link is usually a note somebody meant to write, so the offer to
     // write it is the useful thing to do with the click.
     Dialog {
+        PopupArrival { popup: missingLinkPopup }
         id: missingLinkPopup
         objectName: "missing-link"
         property string wanted: ""
