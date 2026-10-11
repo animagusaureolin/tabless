@@ -1,15 +1,17 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/lowkey/lowkey-wordmark-on-dark.svg">
-    <img src="design/brand-export/lowkey/lowkey-wordmark-on-light.svg" width="320" alt="lowkey">
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/tabless/tabless-wordmark-on-dark.svg">
+    <img src="design/brand-export/tabless/tabless-wordmark-on-light.svg" width="320" alt="Tabless">
   </picture>
 </p>
 
-<h3 align="center">Quiet by default.</h3>
+<h3 align="center">Just makes your day easier.</h3>
+
+<p align="center">A developer’s workday in one window</p>
 
 <p align="center">
-  <a href="https://github.com/sectapunterx/lowkey/releases/latest"><b>Download</b></a> ·
-  <a href="https://sectapunterx.github.io/lowkey/">The tour on the website</a> ·
+  <a href="https://github.com/sectapunterx/tabless/releases/latest"><b>Download</b></a> ·
+  <a href="https://sectapunterx.github.io/tabless/">The tour on the website</a> ·
   <a href="#docs">Docs</a>
 </p>
 
@@ -18,15 +20,19 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sectapunterx/lowkey/releases"><img src="https://img.shields.io/github/v/release/sectapunterx/lowkey?sort=semver" alt="Release"></a>
+  <a href="https://github.com/sectapunterx/tabless/releases"><img src="https://img.shields.io/github/v/release/sectapunterx/tabless?sort=semver" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
 </p>
 
-If your work lives in someone else's tracker, your meetings in a calendar tab and your notes in a third
-place, this is a desk of your own next to all of that. Your assigned issues, today's meetings and your
-notes sit in one native window on Windows, macOS or Linux, and you drive it from the keyboard. It is free,
-MIT-licensed, needs no account, and the website has the full tour:
-<https://sectapunterx.github.io/lowkey/>.
+If your work lives in someone else's tracker, your meetings in a calendar tab and your notes somewhere else
+again, Tabless is a desk of your own next to all of that. The tasks assigned to you, today's meetings and
+your notes sit in one native window on Windows, macOS or Linux, and you drive it from the keyboard. It's
+free, MIT-licensed and needs no account. The website has the full tour:
+<https://sectapunterx.github.io/tabless/>.
+
+<p align="center">
+  <img src="docs/assets/img/readme/capture.gif" width="100%" alt="Quick capture: typing 'fix login 15:00 p1 #auth' over the Today screen puts the task into today's plan at 15:00">
+</p>
 
 This page is the practical side: whether it fits you, what it will and won't touch, and how to get going.
 
@@ -34,8 +40,8 @@ This page is the practical side: whether it fits you, what it will and won't tou
 
 **Probably yes, if:**
 
-- you take tasks from GitHub, GitLab, Jira, Trello, Gitea, Forgejo, Redmine, Todoist, Asana, ClickUp,
-  Sentry or Bitbucket — one of them or several at once;
+- you take tasks from any of 13 trackers — GitHub, GitLab, Jira, Trello, Gitea, Forgejo, Redmine, Todoist,
+  Asana, ClickUp, Sentry, Bitbucket, and Mattermost (for @mentions) — one of them or several at once;
 - you'd rather press `j` than reach for the mouse, and you already know what `g g` does;
 - you want your plans in a file on your own disk, readable with any text editor;
 - you keep notes in Markdown, maybe in an Obsidian vault.
@@ -115,23 +121,43 @@ existing folder of `.md` files in — you see what will come in before anything 
 
 ## Install
 
-From [the latest release](https://github.com/sectapunterx/lowkey/releases/latest), where `X.Y.Z` is the
+From [the latest release](https://github.com/sectapunterx/tabless/releases/latest), where `X.Y.Z` is the
 version:
 
 | System | File |
 | --- | --- |
-| Windows | `lowkey-vX.Y.Z-windows-setup.exe` — installer, or `lowkey-vX.Y.Z-windows-portable.zip` — unzip anywhere and run `lowkey.exe` |
-| macOS | `lowkey-vX.Y.Z-macos.dmg` — open it and drag the app into Applications |
-| Linux | `lowkey-vX.Y.Z-linux-x86_64.AppImage` — `chmod +x` and run; Qt is inside, nothing else to install |
+| Windows | `tabless-vX.Y.Z-windows-setup.exe` — installer, or `tabless-vX.Y.Z-windows-portable.zip` — unzip anywhere and run `tabless.exe` |
+| macOS | `tabless-vX.Y.Z-macos.dmg` — open it and drag Tabless into Applications |
+| Linux | `tabless-vX.Y.Z-linux-x86_64.AppImage` — `chmod +x` and run; Qt is inside, nothing else to install |
 
 With [Scoop](https://scoop.sh) on Windows:
 
 ```sh
-scoop bucket add lowkey https://github.com/sectapunterx/lowkey
-scoop install lowkey
+scoop bucket add tabless https://github.com/sectapunterx/tabless
+scoop install tabless
 ```
 
 Uninstalling leaves your data folder in place.
+
+**Coming from lowkey or heap?** Tabless is the same app under a new name. On the first start your data
+folder is copied over once — tasks, notes, settings, backups, snapshots and tracker tokens, so nothing
+needs signing in again. The old folder stays where it was, with a `MOVED-TO-TABLESS.txt` note inside. The
+update check in lowkey finds the new version by itself.
+
+### Why Windows or macOS warns you on first launch
+
+The builds are not signed with a paid certificate yet: a free signing service for open-source projects
+turned the application down, and the Apple developer fee is not covered yet. So the first launch shows a
+warning that has nothing to do with the code itself.
+
+- **Windows** — SmartScreen says "Windows protected your PC": click **More info → Run anyway**. Installing
+  with Scoop (above) skips the download prompt in the browser.
+- **macOS** — the app is ad-hoc signed but not notarized: right-click it in Applications → **Open**. On
+  macOS 15 and later, open it once, then go to **System Settings → Privacy & Security → Open Anyway**.
+
+To check what you downloaded: every release ships `SHA256SUMS` and an SBOM next to the files, the in-app
+updater refuses a file whose checksum does not match, and the source is here under MIT if you'd rather
+[build it yourself](#building-from-source).
 
 ## Ten keys to start with
 
@@ -162,23 +188,23 @@ status:blocked   due:week   scheduled:none   is:overdue   priority:p0,p1
 ## The terminal is part of it
 
 ```sh
-lowkey today                                  # overdue first, then what's on today
-lowkey add "fix login tomorrow 14:00 p1 #backend"
-lowkey now                                    # the current task — fits a shell prompt
+tabless today                                  # overdue first, then what's on today
+tabless add "fix login tomorrow 14:00 p1 #backend"
+tabless now                                    # the current task — fits a shell prompt
 ```
 
-With the window open, changes show up there at once. On Windows the command is `lowkey-cli`. The rest,
+With the window open, changes show up there at once. On Windows the command is `tabless-cli`. The rest,
 including a starship snippet: [docs/CLI.md](docs/CLI.md).
 
 ## Where your data lives
 
 | Windows | macOS | Linux |
 | --- | --- | --- |
-| `%APPDATA%\lowkey\lowkey\` | `~/Library/Application Support/lowkey/lowkey/` | `~/.local/share/lowkey/lowkey/` |
+| `%APPDATA%\Tabless\Tabless\` | `~/Library/Application Support/Tabless/Tabless/` | `~/.local/share/Tabless/Tabless/` |
 
 - `state.json` — tasks, meetings, notes and settings, in one human-readable file.
 - `backups/` and `history/` — scheduled copies and time-machine snapshots.
-- `logs/lowkey.log` — attach it to a bug report.
+- `logs/tabless.log` — attach it to a bug report.
 - Tracker tokens are kept out of `state.json`: in the system credential store on Windows, in a
   `secrets.json` readable only by your user on macOS and Linux.
 
@@ -204,7 +230,7 @@ cmake --build build -j
 
 Per-platform setup is in [docs/BUILDING.md](docs/BUILDING.md); the code map and how to contribute are in
 [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and pull requests are welcome — please include
-`logs/lowkey.log`.
+`logs/tabless.log`.
 
 ## License
 

@@ -269,7 +269,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Update not installed: the release publishes no SHA-256 checksum for this file, so it cannot be checked.",
         "Обновление не установлено: в релизе нет контрольной суммы SHA-256 для этого файла, проверить его нельзя."}},
       {"update.downloadFailed", {"Download failed: %1", "Не удалось скачать: %1"}},
-      {"update.installing", {"Installing — lowkey will restart…", "Установка — lowkey перезапустится…"}},
+      {"update.installing", {"Installing — Tabless will restart…", "Установка — Tabless перезапустится…"}},
       {"update.installFailed", {"Could not install the update: %1", "Не удалось установить обновление: %1"}},
       {"update.installed", {"Updated to %1", "Обновлено до %1"}},
       {"sync.noTracker", {"Connect a tracker in Settings → Integrations first", "Сначала подключите трекер: Настройки → Интеграции"}},
@@ -560,7 +560,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"tray.quickNote", {"Quick note…", "Быстрая заметка…"}},
       {"tray.stopTimer", {"Stop timer", "Остановить таймер"}},
       {"tray.next", {"Next: %1", "Далее: %1"}},
-      {"tray.open", {"Open lowkey", "Открыть lowkey"}},
+      {"tray.open", {"Open Tabless", "Открыть Tabless"}},
       {"tray.dnd", {"Do not disturb for 1 h", "Не беспокоить 1 ч"}},
       {"tray.dndUntil", {"Do not disturb until %1 — turn off", "Не беспокоить до %1 — выключить"}},
       {"tray.quit", {"Quit", "Выход"}},
@@ -570,7 +570,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"history.notFound", {"That snapshot is gone", "Этого снимка больше нет"}},
       {"history.damaged", {"That snapshot cannot be read", "Этот снимок не читается"}},
-      {"history.newer", {"That snapshot was made by a newer lowkey", "Этот снимок сделан более новой версией lowkey"}},
+      {"history.newer", {"That snapshot was made by a newer Tabless", "Этот снимок сделан более новой версией Tabless"}},
       {"history.restored",
        {"Restored to %1. The state before it is in the time machine too.",
         "Состояние на %1 восстановлено. То, что было до него, тоже есть в машине времени."}},
@@ -592,10 +592,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "Файл данных был повреждён, бэкапа нет, поэтому открыто пустое пространство — это не новая установка. "
         "Повреждённый файл сохранён в папке данных как %1."}},
       {"data.schemaTooNew",
-       {"Read-only: this data file was written by a newer lowkey (schema v%1, this build reads v%2). "
-        "Nothing you change now is saved — update lowkey to edit it.",
-        "Только чтение: файл данных записан более новой версией lowkey (схема v%1, эта сборка знает v%2). "
-        "Изменения сейчас не сохраняются — обновите lowkey, чтобы редактировать."}},
+       {"Read-only: this data file was written by a newer Tabless (schema v%1, this build reads v%2). "
+        "Nothing you change now is saved — update Tabless to edit it.",
+        "Только чтение: файл данных записан более новой версией Tabless (схема v%1, эта сборка знает v%2). "
+        "Изменения сейчас не сохраняются — обновите Tabless, чтобы редактировать."}},
       // ── audit-plat: storage health banner (PLAT-1/4) ──
       {"storage.unreadable",
        {"Read-only: %1 could not be opened (%2). Nothing is saved over it until it opens — changes made now "
@@ -604,12 +604,12 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "сохраняется — изменения сейчас не сохранятся."}},
       {"storage.showingBackup", {"Showing backup %1.", "Показан бэкап %1."}},
       {"storage.editNotKept",
-       {"Not saved: this session is read-only, the change is lost when lowkey closes",
-        "Не сохранено: сессия только для чтения, правка пропадёт при закрытии lowkey"}},
+       {"Not saved: this session is read-only, the change is lost when Tabless closes",
+        "Не сохранено: сессия только для чтения, правка пропадёт при закрытии Tabless"}},
       {"storage.damagedLocked", {"the file is damaged and could not be set aside", "файл повреждён и его не удалось отложить в сторону"}},
       {"storage.writeFailed",
-       {"Not saved: writing %1 failed (%2). Your changes are kept in memory and lowkey keeps retrying.",
-        "Не сохранено: запись %1 не удалась (%2). Изменения в памяти, lowkey повторяет попытки."}},
+       {"Not saved: writing %1 failed (%2). Your changes are kept in memory and Tabless keeps retrying.",
+        "Не сохранено: запись %1 не удалась (%2). Изменения в памяти, Tabless повторяет попытки."}},
       // The storage strip's lead (R2-037), and "Save a copy elsewhere…".
       {"storage.reason.noSpace", {"no space left on disk %1", "на диске %1 нет места"}},
       {"storage.reason.readOnly", {"the disk is read-only", "диск только для чтения"}},
@@ -637,7 +637,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"backup.snapshotFailed",
        {"Restore cancelled: could not snapshot the current state first",
         "Восстановление отменено: не удалось сохранить текущее состояние"}},
-      {"backup.invalid", {"%1 is not a lowkey (or heap) state file", "%1 — не файл состояния lowkey (или heap)"}},
+      {"backup.invalid", {"%1 is not a Tabless, lowkey or heap state file", "%1 — не файл состояния Tabless, lowkey или heap"}},
       {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Укажите ветку — этого требуют настройки"}},
@@ -646,7 +646,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.action.done", {"Mark done", "Готово"}},
       {"notify.snoozedUntil", {"Reminder snoozed until %1", "Напоминание отложено до %1"}},
       {"notify.reminderTitle", {"Reminder", "Напоминание"}},
-      {"notify.test.title", {"lowkey test reminder", "lowkey — проверка напоминания"}},
+      {"notify.test.title", {"Tabless test reminder", "Tabless — проверка напоминания"}},
       {"notify.test.body", {"Buttons work like on a real reminder.", "Кнопки работают как у настоящего напоминания."}},
       {"settings.system.startAtLogin.failed",
        {"Could not change the login start: the system refused", "Не удалось изменить автозапуск: система не дала"}},
@@ -694,8 +694,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.timeMachine.open.desc", {"Bring back an earlier state from a snapshot.", "Вернуть прежнее состояние из снимка."}},
       {"shortcut.standup.draft.label", {"Standup draft", "Черновик стендапа"}},
       {"shortcut.standup.draft.desc",
-       {"Yesterday / Today / Blockers from what lowkey saw; to edit and copy.",
-        "Вчера / Сегодня / Блокеры из того, что видно в lowkey; поправить и скопировать."}},
+       {"Yesterday / Today / Blockers from what Tabless saw; to edit and copy.",
+        "Вчера / Сегодня / Блокеры из того, что видно в Tabless; поправить и скопировать."}},
       {"shortcut.recap.open.label", {"Weekly recap", "Сводка недели"}},
       {"shortcut.recap.open.desc", {"What changed column last week.", "Что сменило колонку на прошлой неделе."}},
       {"shortcut.endOfDay.open.label", {"End of day", "Конец дня"}},
@@ -779,7 +779,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Add the task under the cursor to the selection, or take it out.", "Добавить задачу под курсором в выделение или убрать."}},
       {"shortcut.selection.range.label", {"Select a range", "Выделить диапазон"}},
       {"shortcut.selection.range.desc", {"Then j / k grow the selection from the cursor.", "Дальше j / k расширяют выделение от курсора."}},
-      {"keymap.notice.kept", {"lowkey 0.8 has new keys; yours stay: %1.", "В lowkey 0.8 новые клавиши; ваши остались: %1."}},
+      {"keymap.notice.kept", {"Tabless 0.8 has new keys; yours stay: %1.", "В Tabless 0.8 новые клавиши; ваши остались: %1."}},
       {"keymap.notice.moved", {"%1 is now %2. All keys: ?", "%1 теперь — %2; карта сочетаний — ?"}},
       {"keymap.was.view.board", {"Today; the board is g b", "«Сегодня»; доска — g b"}},
       {"keymap.was.view.timeline", {"Tasks; the list is g l", "«Задачи»; список — g l"}},
@@ -801,8 +801,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"hotkeys.prefixTaken", {"%1 cannot be bound: %2 (%3) starts the same way", "%1 нельзя назначить: так же начинается %2 («%3»)"}},
       {"hotkeys.reserved.navigation", {"Tab moves between fields in every dialog", "Tab переводит между полями во всех диалогах"}},
       {"shell.notice.keys",
-       {"lowkey has a new sidebar: Ctrl+1 Today, Ctrl+2 Tasks, Ctrl+3 Knowledge, Ctrl+, Settings. Blocked and In review are in My views.",
-        "В lowkey новый сайдбар: Ctrl+1 «Сегодня», Ctrl+2 «Задачи», Ctrl+3 «Знания», Ctrl+, «Настройки». «Заблокировано» и «На ревью» — в "
+       {"Tabless has a new sidebar: Ctrl+1 Today, Ctrl+2 Tasks, Ctrl+3 Knowledge, Ctrl+, Settings. Blocked and In review are in My views.",
+        "В Tabless новый сайдбар: Ctrl+1 «Сегодня», Ctrl+2 «Задачи», Ctrl+3 «Знания», Ctrl+, «Настройки». «Заблокировано» и «На ревью» — в "
         "«Моих видах»."}},
       {"shell.notice.kept", {" Your own keys stay: %1.", " Ваши клавиши остались: %1."}},
       {"shortcut.view.board.label", {"Go to Board", "Перейти к доске"}},
@@ -1130,7 +1130,7 @@ AppController::AppController(QObject* parent) :
               n.id = routeId.isEmpty() ? QStringLiteral("info:") + QString::number(QDateTime::currentMSecsSinceEpoch()) : routeId;
               n.title = title;
               n.body = body;
-              n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
+              n.iconPath = QStringLiteral(":/brand/tabless/tabless-icon.svg");
               n.category = kind;
               if(!routeId.isEmpty() && m_notifier->supportsActions()) {
                 const bool canJoin =
@@ -5513,7 +5513,7 @@ void AppController::fetchCalendarSubscription(const QString& id) {
   }
   QNetworkRequest req(url);
   req.setRawHeader("Accept", "text/calendar, */*;q=0.5");
-  req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("lowkey/%1").arg(QString::fromLatin1(HEAP_VERSION)));
+  req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Tabless/%1").arg(QString::fromLatin1(HEAP_VERSION)));
   req.setTransferTimeout(30 * 1000);
   st.busy = true;
   emit calendarSubscriptionsChanged();
@@ -6039,7 +6039,7 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QStrin
     name.chop(3);
   }
   name = name.trimmed().isEmpty()
-             ? QStringLiteral("lowkey-notes-%1").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd-HHmm")))
+             ? QStringLiteral("tabless-notes-%1").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd-HHmm")))
              : heap::notes::detail::sanitiseFileName(name);
   QString target = name;
   for(int n = 2; parent.exists(target); ++n) {
@@ -9229,7 +9229,7 @@ QString AppController::issueReportBody() const {
                      "filled in automatically — please keep them. -->\n\n"
                      "---\n"
                      "**Diagnostics**\n"
-                     "- lowkey version: %1\n"
+                     "- Tabless version: %1\n"
                      "- OS: %2 (%3)\n"
                      "- Qt: %4\n"
                      "- The full log is on your clipboard — paste it below if it helps.\n\n"
@@ -9258,7 +9258,7 @@ QString AppController::issueReportPreview() const {
   };
   // The form's preview (X/N-Err-Storage): the facts on one line, then the
   // short log tail, scrubbed as for the URL (PLAT-28).
-  QString out = QStringLiteral("lowkey %1 · %2 · Qt %3").arg(appVersion(), QSysInfo::prettyProductName(), QString::fromLatin1(qVersion()));
+  QString out = QStringLiteral("Tabless %1 · %2 · Qt %3").arg(appVersion(), QSysInfo::prettyProductName(), QString::fromLatin1(qVersion()));
   const QString tail = heap::diag::tailLines(scrubbed(heap::logging::logTail()), 25, 1500);
   if(!tail.trimmed().isEmpty()) {
     out += QChar('\n') + tail;
@@ -9274,7 +9274,7 @@ QString AppController::issueDiagnostics() const {
   const auto scrubbed = [](const QString& text) {
     return heap::diag::scrubPersonalPaths(text, QDir::homePath(), heap::diag::currentUserName());
   };
-  QString out = QStringLiteral("lowkey %1 · %2 (%3) · Qt %4\n\n```\n%5\n```\n")
+  QString out = QStringLiteral("Tabless %1 · %2 (%3) · Qt %4\n\n```\n%5\n```\n")
                     .arg(QCoreApplication::applicationVersion(),
                          QSysInfo::prettyProductName(),
                          QSysInfo::currentCpuArchitecture(),
@@ -9306,7 +9306,7 @@ void AppController::reportAnIssue() {
     emit toast(tr_("issue.logCopied"));
   }
 
-  QUrl url(QStringLiteral("https://github.com/sectapunterx/lowkey/issues/new"));
+  QUrl url(QStringLiteral("https://github.com/sectapunterx/tabless/issues/new"));
   QUrlQuery query;
   query.addQueryItem(QStringLiteral("title"), QStringLiteral("[bug] "));
   query.addQueryItem(QStringLiteral("body"), body);
@@ -9315,7 +9315,7 @@ void AppController::reportAnIssue() {
 }
 
 void AppController::openIssueReport(const QString& body) const {
-  QUrl url(QStringLiteral("https://github.com/sectapunterx/lowkey/issues/new"));
+  QUrl url(QStringLiteral("https://github.com/sectapunterx/tabless/issues/new"));
   QUrlQuery query;
   query.addQueryItem(QStringLiteral("title"), QStringLiteral("[bug] "));
   // What the person saw in the preview, under a line for their own words.
@@ -11751,7 +11751,7 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + accessToken.toUtf8());
   req.setRawHeader("Accept", "application/json");
-  req.setRawHeader("User-Agent", "lowkey-sync");
+  req.setRawHeader("User-Agent", "tabless-sync");
 
   QNetworkReply* reply = m_oauthNam->get(req);
   connect(reply, &QNetworkReply::finished, this, [this, reply, label]() {
@@ -16330,7 +16330,7 @@ void AppController::notifyTaskAt(
   n.id = heap::notify::routingId(kind, taskId);
   n.title = title;
   n.body = body;
-  n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
+  n.iconPath = QStringLiteral(":/brand/tabless/tabless-icon.svg");
   n.category = kind;
   ShownReminder& shown = m_shownReminders[n.id];
   shown.title = title;
@@ -16359,7 +16359,7 @@ void AppController::notifyCapture(const QString& taskId, const QString& title, c
                                  taskId.isEmpty() ? QStringLiteral("-") : heap::notify::taskRef(m_activeProfileId, taskId));
   n.title = title;
   n.body = body;
-  n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
+  n.iconPath = QStringLiteral(":/brand/tabless/tabless-icon.svg");
   n.category = QStringLiteral("capture");
   m_notifier->post(n);
 }

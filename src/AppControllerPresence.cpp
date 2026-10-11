@@ -72,7 +72,7 @@ void AppController::refreshTray() {
                   m.value(QStringLiteral("hint")).toString(),
                   m.value(QStringLiteral("enabled")).toBool()});
   }
-  m_notifier->setTrayMenu(QStringLiteral("lowkey"), items);
+  m_notifier->setTrayMenu(QStringLiteral("Tabless"), items);
   m_notifier->setTrayToolTip(tip);
 }
 
@@ -133,7 +133,7 @@ QVariantList AppController::trayItemsAt(const QDateTime& now, QString* tooltip) 
   items.append(Item{});
   items.append({QStringLiteral("quit"), tr_(QStringLiteral("tray.quit")), {}, true});
   if(tooltip) {
-    *tooltip = timer.isEmpty() ? QStringLiteral("lowkey") : QStringLiteral("lowkey · ") + timerText;
+    *tooltip = timer.isEmpty() ? QStringLiteral("Tabless") : QStringLiteral("Tabless · ") + timerText;
   }
   QVariantList out;
   for(const Item& it : items) {
@@ -224,7 +224,7 @@ void AppController::sendTestNotification() {
   n.id = heap::notify::routingId(QStringLiteral("test"), QStringLiteral("heap"));
   n.title = tr_(QStringLiteral("notify.test.title"));
   n.body = tr_(QStringLiteral("notify.test.body"));
-  n.iconPath = QStringLiteral(":/brand/lowkey/lowkey-icon.svg");
+  n.iconPath = QStringLiteral(":/brand/tabless/tabless-icon.svg");
   n.category = QStringLiteral("test");
   if(m_notifier->supportsActions()) {
     n.actions = reminderActions(n.category);

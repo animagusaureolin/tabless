@@ -136,12 +136,12 @@ TEST(UpdatePackage, KnowsHowItWasInstalled) {
 TEST(UpdatePackage, AssetNamesMatchTheReleaseWorkflow) {
   using heap::update::assetNameFor;
   const QString tag = QStringLiteral("v0.5.7");
-  // lowkey since 0.8.0 (APP-280); a release that only has heap-… files is
-  // still found (Updater::downloadAsset falls back to the old name).
-  EXPECT_EQ(assetNameFor(PackageKind::WindowsSetup, tag), QStringLiteral("lowkey-v0.5.7-windows-setup.exe"));
-  EXPECT_EQ(assetNameFor(PackageKind::WindowsPortable, tag), QStringLiteral("lowkey-v0.5.7-windows-portable.zip"));
-  EXPECT_EQ(assetNameFor(PackageKind::MacApp, tag), QStringLiteral("lowkey-v0.5.7-macos.dmg"));
-  EXPECT_EQ(assetNameFor(PackageKind::LinuxAppImage, tag), QStringLiteral("lowkey-v0.5.7-linux-x86_64.AppImage"));
+  // Tabless since APP-283; a release that only has lowkey-… or heap-… files
+  // is still found (Updater::downloadAsset falls back to the old names).
+  EXPECT_EQ(assetNameFor(PackageKind::WindowsSetup, tag), QStringLiteral("tabless-v0.5.7-windows-setup.exe"));
+  EXPECT_EQ(assetNameFor(PackageKind::WindowsPortable, tag), QStringLiteral("tabless-v0.5.7-windows-portable.zip"));
+  EXPECT_EQ(assetNameFor(PackageKind::MacApp, tag), QStringLiteral("tabless-v0.5.7-macos.dmg"));
+  EXPECT_EQ(assetNameFor(PackageKind::LinuxAppImage, tag), QStringLiteral("tabless-v0.5.7-linux-x86_64.AppImage"));
   EXPECT_TRUE(assetNameFor(PackageKind::None, tag).isEmpty());
 }
 
@@ -182,13 +182,16 @@ class UpdateDownload : public ::testing::Test {
   }
 
   // A fake GitHub: the release JSON points at assets on the same server.
-  void publish(const QByteArray& package, const QByteArray& sums) {
+  void publish(const QByteArray& package,
+               const QByteArray& sums,
+               const QString& published = QStringLiteral("heap-v9.0.0-windows-portable.zip")) {
     const QString base = m_server->base();
     const QByteArray release = QStringLiteral(
                                    "{\"tag_name\":\"v9.0.0\",\"html_url\":\"%1/r\",\"assets\":["
-                                   "{\"name\":\"heap-v9.0.0-windows-portable.zip\",\"browser_download_url\":\"%1/dl/pkg\"},"
+                                   "{\"name\":\"%2\",\"browser_download_url\":\"%1/dl/pkg\"},"
                                    "{\"name\":\"SHA256SUMS\",\"browser_download_url\":\"%1/dl/sums\"}]}")
                                    .arg(base)
+                                   .arg(published)
                                    .toUtf8();
     m_server->route("GET /latest", {200, release});
     m_server->route("GET /dl/pkg", {200, package});
@@ -196,7 +199,11 @@ class UpdateDownload : public ::testing::Test {
   }
 
   // Check, then download the portable zip; returns the signal that ended it.
-  QString run(heap::update::Updater& u, QString& path, QString& sha, int& failure) {
+  QString run(heap::update::Updater& u,
+              QString& path,
+              QString& sha,
+              int& failure,
+              const QString& asked = QStringLiteral("heap-v9.0.0-windows-portable.zip")) {
     u.setLatestReleaseUrl(m_server->base() + QStringLiteral("/latest"));
     bool checked = false;
     QObject::connect(&u, &heap::update::Updater::updateAvailable, [&checked]() {
@@ -216,7 +223,7 @@ class UpdateDownload : public ::testing::Test {
       failure = kind;
       ended = QStringLiteral("failed");
     });
-    u.downloadAsset(QStringLiteral("heap-v9.0.0-windows-portable.zip"), m_dir.path());
+    u.downloadAsset(asked, m_dir.path());
     heap::testing::waitUntil([&ended]() {
       return !ended.isEmpty();
     });
@@ -239,6 +246,21 @@ TEST_F(UpdateDownload, AFileThatMatchesTheChecksumIsHandedOn) {
   QFile f(path);
   ASSERT_TRUE(f.open(QIODevice::ReadOnly));
   EXPECT_EQ(f.readAll(), package);
+}
+
+// lowkey 0.8 → Tabless (APP-283): a release published only under an older
+// name is still found and checked against the checksum of that name.
+TEST_F(UpdateDownload, AReleaseUnderAnOlderNameIsStillFound) {
+  const QByteArray package(5000, 'y');
+  publish(package,
+          hexSha256(package).toLatin1() + "  lowkey-v9.0.0-windows-portable.zip\n",
+          QStringLiteral("lowkey-v9.0.0-windows-portable.zip"));
+  heap::update::Updater u(QStringLiteral("0.5.7"));
+  QString path;
+  QString sha;
+  int failure = -1;
+  ASSERT_EQ(run(u, path, sha, failure, QStringLiteral("tabless-v9.0.0-windows-portable.zip")), QStringLiteral("verified"));
+  EXPECT_EQ(sha, hexSha256(package));
 }
 
 TEST_F(UpdateDownload, AFileThatDoesNotMatchIsDeleted) {

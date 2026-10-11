@@ -9,7 +9,7 @@ import "TaskDates.js" as TaskDates
 // "Кому написать" in full (DG-002, sheet X/N-Oth-Archive-People): the people
 // something is pending on, one of them open beside the list. It replaces the
 // legacy right panel's people list; Today shows the short version and opens
-// this one. You mark, lowkey only remembers: nothing is sent anywhere.
+// this one. You mark, Tabless only remembers: nothing is sent anywhere.
 Dialog {
     id: root
     objectName: "people-dialog"
@@ -254,7 +254,7 @@ Dialog {
                     lineHeight: Math.round(font.pixelSize * 1.7)
                     lineHeightMode: Text.FixedHeight
                 }
-                // What lowkey knows links to the person (DG-002): tasks
+                // What Tabless knows links to the person (DG-002): tasks
                 // waiting on them, their next meetings. A block with nothing
                 // in it is not drawn.
                 Text {

@@ -95,7 +95,7 @@ Item {
     property bool showBacklinks: root.width > Theme.px(1000)
     property var  _incoming: []
     // APP-269: the tasks the note names, the tasks that link here, the
-    // note's links out of lowkey.
+    // note's links out of Tabless.
     property var  _taskRefs: []
     property var  _taskLinks: []
     property var  _external: []
@@ -1097,7 +1097,7 @@ Item {
 
         // ── The note's links (DG-072) ─────────────────────────────
         // Beside the note when there is room: the tasks it names, what links
-        // here, its links out of lowkey. Sheet order: bold leads with the
+        // here, its links out of Tabless. Sheet order: bold leads with the
         // tasks, quiet with the backlinks; an empty group is not drawn.
         Item {
             objectName: "notes-links-pane"
@@ -1239,7 +1239,7 @@ Item {
         }
     }
 
-    // Links out of lowkey, opened under the usual rules.
+    // Links out of Tabless, opened under the usual rules.
     Component {
         id: externalGroup
         ColumnLayout {

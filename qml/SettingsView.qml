@@ -2142,7 +2142,7 @@ Item {
         }
     }
 
-    // Подстраховка (sheet X·N-Set-CalNotif): how lowkey keeps the data.
+    // Подстраховка (sheet X·N-Set-CalNotif): how Tabless keeps the data.
     Component {
         id: sectionSafety
         ColumnLayout {
@@ -2507,13 +2507,13 @@ Item {
                 }
             }
             MoreBlock {
-                // Where lowkey cannot listen for the capture hotkey system-wide
+                // Where Tabless cannot listen for the capture hotkey system-wide
                 // (Wayland without the shortcuts portal), the desktop can run
-                // `lowkey --capture` instead (APP-171).
+                // `tabless --capture` instead (APP-171).
                 NoteRow {
                     objectName: "settings-capture-command-hint"
                     visible: Qt.platform.os === "linux" && AppController.globalHotkeyBackend() === "none"
-                    text: I18n.t("settings.shortcuts.captureCommand").arg("lowkey --capture")
+                    text: I18n.t("settings.shortcuts.captureCommand").arg("tabless --capture")
                 }
                 SwitchRow {
                     objectName: "settings-shortcut-hints"
@@ -3741,7 +3741,7 @@ Item {
                     // history stays on GitHub.
                     onTriggered: {
                         if (typeof settingsBus !== "undefined" && settingsBus.openWhatsNew && settingsBus.openWhatsNew()) return;
-                        Qt.openUrlExternally("https://github.com/sectapunterx/lowkey/releases");
+                        Qt.openUrlExternally("https://github.com/sectapunterx/tabless/releases");
                     }
                 }
                 ActRow {
@@ -3749,7 +3749,7 @@ Item {
                     label: I18n.t("settings.about.licenses")
                     hint: I18n.t("settings.about.licenses.hint")
                     actions: [ ({ value: "open", label: I18n.t("settings.help.open") }) ]
-                    onTriggered: Qt.openUrlExternally("https://github.com/sectapunterx/lowkey/blob/master/THIRD_PARTY_NOTICES.md")
+                    onTriggered: Qt.openUrlExternally("https://github.com/sectapunterx/tabless/blob/master/THIRD_PARTY_NOTICES.md")
                 }
             }
             MoreBlock {

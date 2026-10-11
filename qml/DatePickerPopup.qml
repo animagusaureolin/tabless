@@ -1,4 +1,4 @@
-// lowkey — a small themed calendar popup for picking a date (N/X-Dlg-Schedule).
+// Tabless — a small themed calendar popup for picking a date (N/X-Dlg-Schedule).
 //
 // Reused by the task editor (deadline), the event editor (event/sync date),
 // "go to date" and the schedule field. Its own grid, as many weeks as the month

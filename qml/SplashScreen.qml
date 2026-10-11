@@ -1,4 +1,4 @@
-// lowkey launch splash (N/X-Ntf-Focus "Запуск", R3-017): the wordmark and
+// Tabless launch splash (N/X-Ntf-Focus "Запуск", R3-017): the wordmark and
 // the version on the window background, nothing else. After an unclean exit
 // (R3-018, "Запуск после сбоя") it says so under the wordmark and waits for
 // an answer: "Посмотреть отчёт" opens the report form the person sends

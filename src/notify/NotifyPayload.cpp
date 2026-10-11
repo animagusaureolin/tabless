@@ -33,15 +33,24 @@ QString notifyUri(const QString& notificationId, const QString& actionId, const 
 
 bool isNotifyUri(const QString& arg) {
   const QString a = arg.trimmed();
-  return a.startsWith(QLatin1String(kUriScheme) + QStringLiteral("://notify"), Qt::CaseInsensitive) ||
-         a.startsWith(QLatin1String(kLegacyUriScheme) + QStringLiteral("://notify"), Qt::CaseInsensitive);
+  if(a.startsWith(QLatin1String(kUriScheme) + QStringLiteral("://notify"), Qt::CaseInsensitive)) {
+    return true;
+  }
+  for(const char* old : kLegacyUriSchemes) {
+    if(a.startsWith(QLatin1String(old) + QStringLiteral("://notify"), Qt::CaseInsensitive)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 NotifyUri parseNotifyUri(const QString& uri) {
   NotifyUri out;
   const QUrl url(uri.trimmed(), QUrl::StrictMode);
-  const bool ours = url.scheme().compare(QLatin1String(kUriScheme), Qt::CaseInsensitive) == 0 ||
-                    url.scheme().compare(QLatin1String(kLegacyUriScheme), Qt::CaseInsensitive) == 0;
+  bool ours = url.scheme().compare(QLatin1String(kUriScheme), Qt::CaseInsensitive) == 0;
+  for(const char* old : kLegacyUriSchemes) {
+    ours = ours || url.scheme().compare(QLatin1String(old), Qt::CaseInsensitive) == 0;
+  }
   if(!url.isValid() || !ours || url.host() != QStringLiteral("notify")) {
     return out;
   }

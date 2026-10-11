@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Tabless
+GenericName=Developer workday planner
+Comment=A developer's workday in one window — tickets, calendar, notes
+Exec=tabless
+Icon=tabless
+Terminal=false
+Categories=Office;ProjectManagement;Utility;
+Keywords=tasks;todo;kanban;calendar;notes;planner;tickets;lowkey;heap;
+StartupWMClass=Tabless

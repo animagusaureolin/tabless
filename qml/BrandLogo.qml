@@ -1,10 +1,11 @@
-// lowkey — the brand mark and wordmark, drawn with native QML primitives
-// (APP-280; owner's pick 2026-10-08, logo sheet LK-06 column C). No SVG: the
-// brand renders without Qt6::Svg or the qsvg plugin.
+// Tabless — the brand mark and wordmark, drawn with native QML primitives
+// (APP-280, renamed in APP-283). No SVG: the brand renders without Qt6::Svg
+// or the qsvg plugin.
 //
-//   mark      an "l" with a low lavender bar (the app icon's glyph)
-//   wordmark  "lowkey" in lowercase, Golos Text Medium, "low" underlined
-//             by the same lavender bar
+//   mark      a "T" whose crossbar is the lavender bar (the app icon's glyph,
+//             without the tile)
+//   wordmark  "Tabless", Golos Text Medium, "Tab" underlined by the same
+//             lavender bar, like the active tab
 //   lockup    mark + wordmark
 //
 // Usage:
@@ -24,12 +25,13 @@ Item {
     // for "mono" — the one colour of the whole logo (the tray, a print)
     property color monoColor: Brand.text
 
-    // Geometry of the production files (design/brand-export/lowkey,
-    // geometry.json): the icon's glyph spans 342 × 380 of its 1024 grid; the
-    // wordmark is 3141.9 × 925.8 font units (upem 1075), the bar sits 0.135 em
-    // under the baseline and is 0.075 em thick.
-    readonly property real markAspect: 342 / 380
-    readonly property real wordmarkAspect: 3.39
+    // Geometry of the production files (design/brand-export/tabless,
+    // geometry.json): the icon's "T" spans 420 × 420 of its 1024 grid, the
+    // crossbar 420 × 92 on top, the stem 92 × 420 centred, both fully
+    // rounded; the wordmark is 3414.25 × 925.75 font units (upem 1075), the
+    // bar sits 0.135 em under the baseline and is 0.075 em thick.
+    readonly property real markAspect: 1
+    readonly property real wordmarkAspect: 3.69
 
     readonly property int _px: Math.max(8, Math.round((height > 0 ? height : implicitHeight) / 0.95))
     readonly property color _ink: theme === "light" ? "#0c0e11" : theme === "mono" ? monoColor : "#e9edf2"
@@ -45,7 +47,7 @@ Item {
         return Math.round(h * markAspect) + Math.round(h * 0.4) + Math.ceil(word.contentWidth);
     }
 
-    // ── Mark: the stem and the low bar ──
+    // ── Mark: the stem in ink, the crossbar in lavender drawn over it ──
     Item {
         id: mark
         visible: root.variant !== "wordmark"
@@ -54,18 +56,20 @@ Item {
         height: root.height
         width: Math.round(height * root.markAspect)
 
+        readonly property int _thick: Math.max(1, Math.round(height * 92 / 420))
+
         Rectangle {   // stem
-            x: 0; y: 0
-            width: Math.max(1, Math.round(parent.width * 76 / 342))
+            width: mark._thick
             height: parent.height
+            x: Math.round((parent.width - width) / 2)
+            y: 0
             radius: width / 2
             color: root._ink
         }
-        Rectangle {   // bar
-            x: 0
-            height: Math.max(1, Math.round(parent.height * 76 / 380))
-            y: parent.height - height
+        Rectangle {   // crossbar
+            x: 0; y: 0
             width: parent.width
+            height: mark._thick
             radius: height / 2
             color: root._bar
         }
@@ -79,7 +83,7 @@ Item {
         anchors.left: mark.visible ? mark.right : parent.left
         anchors.leftMargin: mark.visible ? Math.round(root.height * 0.4) : 0
         anchors.verticalCenter: parent.verticalCenter
-        text: "lowkey"
+        text: "Tabless"
         color: root._ink
         font.family: Brand.fontSans
         font.weight: Font.Medium
@@ -90,14 +94,14 @@ Item {
         font.letterSpacing: -root._px * 0.035
 
         TextMetrics {
-            id: low
+            id: tab
             font: word.font
-            text: "low"
+            text: "Tab"
         }
 
-        Rectangle {   // the bar under "low"
+        Rectangle {   // the bar under "Tab"
             x: 0
-            width: low.advanceWidth + word.font.letterSpacing * 2
+            width: tab.advanceWidth + word.font.letterSpacing * 2
             height: Math.max(1, Math.round(word.font.pixelSize * 0.075))
             y: word.baselineOffset + Math.round(word.font.pixelSize * 0.135)
             radius: height / 2

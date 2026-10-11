@@ -1,7 +1,7 @@
 import QtQuick
 import TodoCpp
 
-// The lowkey underline motif (APP-280): a short lavender bar under the start
+// The Tabless underline motif (APP-280): a short lavender bar under the start
 // of a label — the active sidebar section, the active note, the keyboard
 // cursor on a card or row. Not a link underline (links are thin and grey)
 // and not a box. Place it under the text it marks:

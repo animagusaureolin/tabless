@@ -23,7 +23,7 @@ TestCase {
     function init() {
         savedSettings = AppController.appSettingsJson;
         savedTheme = AppController.theme;
-        // These start from Classic dark; the default dark is lowkey since 0.8.0.
+        // These start from Classic dark; the default dark is Tabless (heap-ink) since 0.8.0.
         AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-dark" } });
         AppController.theme = "dark";
     }

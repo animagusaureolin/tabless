@@ -5,7 +5,7 @@ import TodoCpp
 // Before a status write (X/N-Dlg-Conflict left, R3-147): only where the
 // user turned writes on for that tracker. "Отправить статус в Jira?", the
 // ticket, "from → to", and "don't ask again for Jira". "Send" is the main
-// button (Enter); "Only here" keeps the column in lowkey and sends nothing.
+// button (Enter); "Only here" keeps the column in Tabless and sends nothing.
 // Esc leaves the card marked "not sent", with its own send link.
 SmallDialog {
     id: root

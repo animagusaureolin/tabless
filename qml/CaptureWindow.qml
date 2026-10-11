@@ -20,7 +20,7 @@ Window {
     width: 680
     height: 520
     visible: false
-    title: "lowkey"
+    title: Brand.name
 
     // Screen the window opens on; the owner passes its own, which is where the
     // user last looked at heap.
