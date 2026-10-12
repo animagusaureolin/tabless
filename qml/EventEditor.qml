@@ -257,12 +257,22 @@ FocusScope {
                 // cut to the meeting's old length without a word.
                 const endDay = hasEnd ? new Date(r.end.getFullYear(), r.end.getMonth(), r.end.getDate()) : date;
                 const days = Math.round((endDay - date) / 86400000);
-                const e = hasEnd ? r.end.getHours() + r.end.getMinutes() / 60 : start + Math.max(0.25, len);
+                // A typed range says the whole meeting: "10:00-11:30" after
+                // "22:00-01:00" is one morning again, not Wed to Thu (REG-2).
+                // A lone time keeps the meeting's length, across midnight too.
+                const length = Math.max(0.25, span * 24 + len);
                 if (hasEnd && days > 0) {
                     span = days;
-                    end = e;
+                    end = r.end.getHours() + r.end.getMinutes() / 60;
+                } else if (hasEnd) {
+                    span = 0;
+                    end = r.end.getHours() + r.end.getMinutes() / 60;
+                } else if (start + length <= 24) {
+                    span = 0;
+                    end = start + length;
                 } else {
-                    end = e <= start ? Math.min(24, start + Math.max(0.25, len)) : e;
+                    span = Math.floor((start + length) / 24);
+                    end = start + length - span * 24;
                 }
             }
         }

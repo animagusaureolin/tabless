@@ -278,8 +278,9 @@ TaskMeta extractMeta(QStringView raw, bool keepTicketKey) {
   //    only: "covid-19" or "utf-8" in a sentence are not tickets. A key the
   //    caller cannot use as the id stays where it was typed: "APP-101 follow
   //    up" used to become "follow up" with the ticket gone (TASKS-22, audit
-  //    2026-09-30).
-  static const QRegularExpression keyRx(QStringLiteral("(?:^|[\\s,;(\\[])([A-Z][A-Z0-9]{1,9}-\\d{1,7})(?=$|[\\s,;:)\\]])"));
+  //    2026-09-30). "UTC-5" / "GMT-5" is a time zone said with a time
+  //    (A6-6), not a ticket.
+  static const QRegularExpression keyRx(QStringLiteral("(?:^|[\\s,;(\\[])((?!(?:UTC|GMT)-)[A-Z][A-Z0-9]{1,9}-\\d{1,7})(?=$|[\\s,;:)\\]])"));
   const auto km = keyRx.match(body);
   if(km.hasMatch()) {
     out.ticketKey = km.captured(1);

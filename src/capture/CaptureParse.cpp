@@ -47,7 +47,34 @@ struct BareEstimate {
   int minutes = 0;
 };
 
-BareEstimate bareEstimate(const QString& text) {
+// True when nothing but a date, a time or punctuation follows `from`: a bare
+// length ends the line ("Сверстать хедер 25 мин", "тест 25м завтра"). In the
+// middle of a title a number with a unit is part of what the task is called:
+// "Fix 2h timeout", "Increase 30 min cache TTL" (REG-1).
+bool onlyDatesFollow(const QString& text, int from, const heap::chrono::ChronoParser& chrono, const QDateTime& now) {
+  QString rest = text.mid(from);
+  for(const heap::chrono::ParseResult& r : chrono.parseAll(rest, now)) {
+    if(!r.ok || r.startOffset < 0 || r.endOffset <= r.startOffset) {
+      continue;
+    }
+    for(int i = r.startOffset; i < r.endOffset && i < rest.size(); ++i) {
+      rest[i] = QLatin1Char(' ');
+    }
+  }
+  static const QRegularExpression kWord(QStringLiteral(R"(\p{L}+)"), QRegularExpression::UseUnicodePropertiesOption);
+  for(auto it = kWord.globalMatch(rest); it.hasNext();) {
+    if(!deadlineWords().contains(it.next().captured().toLower())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+BareEstimate bareEstimate(const QString& text, const heap::chrono::ChronoParser& chrono, const QDateTime& now) {
+  // "оценка 2ч задача": a word that names the size makes the length one
+  // anywhere in the line.
+  static const QStringList kSizeWords = {
+      QStringLiteral("оценка"), QStringLiteral("оценкой"), QStringLiteral("est"), QStringLiteral("estimate"), QStringLiteral("estimated")};
   static const QRegularExpression kRe(
       QStringLiteral(R"((?<![\p{L}\d~:.,])(?:(за|на|for)\s+)?)"
                      R"((?:(\d+(?:[.,]\d+)?)(?:(h|ч)|\s*(час|часа|часов|hours?|hrs?)(?!\p{L}))(?:\s*(\d+)\s*(?:m|м|мин)(?!\p{L}))?)"
@@ -77,11 +104,13 @@ BareEstimate bareEstimate(const QString& text) {
     if(m.hasCaptured(9) && !m.hasCaptured(1)) {
       continue;
     }
-    if(!m.hasCaptured(1)) {
-      const auto before = kWordBefore.match(text.left(static_cast<int>(m.capturedStart())));
-      if(before.hasMatch() && kMomentBefore.contains(before.captured(1).toLower())) {
-        continue;
-      }
+    const auto before = kWordBefore.match(text.left(static_cast<int>(m.capturedStart())));
+    const QString wordBefore = before.hasMatch() ? before.captured(1).toLower() : QString();
+    if(!m.hasCaptured(1) && kMomentBefore.contains(wordBefore)) {
+      continue;
+    }
+    if(!kSizeWords.contains(wordBefore) && !onlyDatesFollow(text, static_cast<int>(m.capturedEnd()), chrono, now)) {
+      continue;
     }
     const auto after = kWordAfter.match(text.mid(static_cast<int>(m.capturedEnd())));
     if(after.hasMatch() && kMomentAfter.contains(after.captured(1).toLower())) {
@@ -187,7 +216,7 @@ Parsed parse(const QString& text, const heap::chrono::ChronoParser& chrono, cons
     break;
   }
   if(out.estimateMinutes == 0) {
-    const BareEstimate b = bareEstimate(text);
+    const BareEstimate b = bareEstimate(text, chrono, now);
     const QString words = b.minutes > 0 ? text.mid(b.start, b.end - b.start) : QString();
     if(b.minutes > 0 && !rejected.contains(words)) {
       out.estimateMinutes = b.minutes;

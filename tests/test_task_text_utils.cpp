@@ -412,6 +412,11 @@ TEST(ExtractMeta, TicketKeyLeavesTheTitle) {
   EXPECT_EQ(m.title, QStringLiteral("починить логин"));
   // Lower-case words with a dash and digits are not tickets.
   EXPECT_TRUE(extractMeta(QStringLiteral("обновить utf-8 и covid-19")).ticketKey.isEmpty());
+  // A6-6: a zone offset said with a time is not a ticket.
+  const auto z = extractMeta(QStringLiteral("call tue 15:00 UTC-5"));
+  EXPECT_TRUE(z.ticketKey.isEmpty());
+  EXPECT_EQ(z.title, QStringLiteral("call tue 15:00 UTC-5"));
+  EXPECT_TRUE(extractMeta(QStringLiteral("call 15:00 GMT-05:00")).ticketKey.isEmpty());
 }
 
 TEST(ExtractMeta, Priority) {

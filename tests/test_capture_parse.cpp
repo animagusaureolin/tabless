@@ -279,6 +279,16 @@ TEST(CaptureAcceptance, LengthsWithoutTheTilde) {
   EXPECT_EQ(r.when.time(), QTime(14, 0));
   EXPECT_EQ(at(QStringLiteral("созвон в 2 часа дня"), now).estimateMinutes, 0);
   EXPECT_EQ(at(QStringLiteral("с 2 до 3 часов дня"), now).estimateMinutes, 0);
+  // REG-1: a number with a unit inside a title is part of its name.
+  for(const char* title : {"Fix 2h timeout", "Increase 30 min cache TTL", "Fix 404 on 3m page", "Поднять лимит 5 мин для джобы"}) {
+    const QString text = QString::fromUtf8(title);
+    const Parsed w = at(text, now);
+    EXPECT_EQ(w.estimateMinutes, 0) << title;
+    EXPECT_EQ(w.title, text) << title;
+  }
+  r = at(QStringLiteral("Починить тест 25м завтра"), now);
+  EXPECT_EQ(r.estimateMinutes, 25);
+  EXPECT_EQ(r.title, QStringLiteral("Починить тест"));
 }
 
 // A3-2: the clock wins over the part of the day named with it.
@@ -340,6 +350,19 @@ TEST(CaptureAcceptance, AZoneSaidWithTheTime) {
   EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 16), QTime(19, 0), QTimeZone("America/New_York")));
   // Lower-case "est" is a word, not a zone.
   EXPECT_EQ(at(QStringLiteral("tomorrow 3pm est"), now).title, QStringLiteral("est"));
+  r = at(QStringLiteral("call tue 15:00 GMT-5"), now);
+  EXPECT_EQ(r.title, QStringLiteral("call"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(15, 0), QTimeZone(-5 * 3600)));
+  r = at(QStringLiteral("call tue 15:00 UTC-05:00"), now);
+  EXPECT_EQ(r.title, QStringLiteral("call"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(15, 0), QTimeZone(-5 * 3600)));
+  // "ET" / "PT" follow the season (EDT in October).
+  r = at(QStringLiteral("review tomorrow 3pm ET"), now);
+  EXPECT_EQ(r.title, QStringLiteral("review"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(15, 0), QTimeZone("America/New_York")));
+  r = at(QStringLiteral("review tomorrow 3pm PT"), now);
+  EXPECT_EQ(r.title, QStringLiteral("review"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(15, 0), QTimeZone("America/Los_Angeles")));
 }
 
 // A2-20, A5-4, A4-22: habitual repeats, and the ones the app has no rule
@@ -349,7 +372,15 @@ TEST(CaptureAcceptance, HabitualRepeats) {
   Parsed r = at(QStringLiteral("buy milk daily"), now);
   EXPECT_EQ(r.recurrence, QStringLiteral("every:day"));
   EXPECT_EQ(r.title, QStringLiteral("buy milk"));
-  EXPECT_EQ(at(QStringLiteral("weekly report"), now).recurrence, QStringLiteral("every:week"));
+  EXPECT_EQ(at(QStringLiteral("report weekly"), now).recurrence, QStringLiteral("every:week"));
+  EXPECT_EQ(at(QStringLiteral("standup daily at 10am"), now).recurrence, QStringLiteral("every:day"));
+  // REG-1: an adjective before a noun is part of the title.
+  for(const char* adjective : {"Fix daily standup bot", "Prepare daily standup notes", "weekly report", "Send monthly invoice"}) {
+    const QString text = QString::fromUtf8(adjective);
+    const Parsed w = at(text, now);
+    EXPECT_EQ(w.title, text) << adjective;
+    EXPECT_TRUE(w.recurrence.isEmpty()) << adjective;
+  }
   EXPECT_EQ(at(QStringLiteral("Проверить логи ежедневно"), now).recurrence, QStringLiteral("every:day"));
   EXPECT_EQ(at(QStringLiteral("отчёт еженедельно"), now).recurrence, QStringLiteral("every:week"));
   r = at(QStringLiteral("Бэкап раз в неделю"), now);

@@ -101,4 +101,32 @@ TestCase {
                "no meeting was booked: " + title);
         AppController.deleteTask(taskId);
     }
+
+    // A6-6: "UTC-5" is a zone said with the time, not a ticket key; the
+    // whole app path (meta first, then the date) moves 15:00 there to here.
+    function test_a_zone_offset_is_read_with_the_time() {
+        const ref = new Date(2026, 9, 12, 10, 0);
+        for (const zone of ["UTC-5", "GMT-5", "UTC-05:00"]) {
+            const p = AppController.captureParse("call tue 15:00 " + zone, ref, []);
+            compare(p.ticketKey, "", zone + " is not a ticket");
+            compare(p.title, "call", zone);
+            verify(p.whenHasTime, zone);
+            const utc = new Date(Date.UTC(2026, 9, 13, 20, 0));
+            compare(p.when.getTime(), utc.getTime(), zone + " is 20:00 UTC");
+        }
+        const et = AppController.captureParse("review tue 3pm ET", ref, []);
+        compare(et.title, "review");
+        compare(et.when.getTime(), new Date(Date.UTC(2026, 9, 13, 19, 0)).getTime(), "3pm EDT is 19:00 UTC");
+    }
+
+    // REG-1: lengths and "daily" inside an ordinary title stay in it.
+    function test_title_words_are_not_lengths_or_repeats() {
+        const ref = new Date(2026, 9, 12, 10, 0);
+        for (const text of ["Fix 2h timeout", "Increase 30 min cache TTL", "Fix daily standup bot"]) {
+            const p = AppController.captureParse(text, ref, []);
+            compare(p.title, text);
+            compare(p.estimateMinutes, 0, text);
+            compare(p.recurrence, "", text);
+        }
+    }
 }

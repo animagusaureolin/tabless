@@ -509,6 +509,18 @@ class ChronoParser::Impl {
       zone = QTimeZone(fixed.value() * 3600);
       return i;
     }
+    // "3pm ET", "10am PT": the US zones said without standard/daylight,
+    // which follow the season. Capitals only, like the short names above.
+    static const QHash<QString, QByteArray> kRegional = {
+        {QStringLiteral("ET"), "America/New_York"},
+        {QStringLiteral("CT"), "America/Chicago"},
+        {QStringLiteral("MT"), "America/Denver"},
+        {QStringLiteral("PT"), "America/Los_Angeles"},
+    };
+    if(const auto regional = kRegional.constFind(toks[i].text); regional != kRegional.cend()) {
+      zone = QTimeZone(regional.value());
+      return zone.isValid() ? i : -1;
+    }
     return -1;
   }
 
@@ -1432,6 +1444,24 @@ class ChronoParser::Impl {
     }
     if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
       return false;
+    }
+    // The English "daily" / "weekly" / "monthly" is an adjective before a
+    // noun ("Fix daily standup bot", "weekly report"): a repeat only at the
+    // end of the line, before a time or "at"/"on"/"from" (REG-1). The
+    // Russian adverbs ("ежедневно") are a repeat wherever they stand.
+    const bool englishAdjective =
+        toks[i].lower == QStringLiteral("daily") || toks[i].lower == QStringLiteral("weekly") || toks[i].lower == QStringLiteral("monthly");
+    if(englishAdjective && i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Word) {
+      static const QStringList kLeadIns = {QStringLiteral("at"),
+                                           QStringLiteral("on"),
+                                           QStringLiteral("from"),
+                                           QStringLiteral("in"),
+                                           QStringLiteral("until"),
+                                           QStringLiteral("till"),
+                                           QStringLiteral("starting")};
+      if(!kLeadIns.contains(toks[i + 1].lower)) {
+        return false;
+      }
     }
     // "monthly" / "ежемесячно": on this day of the month.
     if(toks[i].lower == QStringLiteral("monthly") || toks[i].lower == QString::fromUtf8("ежемесячно")) {

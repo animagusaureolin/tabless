@@ -216,6 +216,22 @@ TestCase {
         compare(saved.end, 1);
         compare(Qt.formatDate(saved.endDate, "yyyy-MM-dd"),
                 Qt.formatDate(new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1), "yyyy-MM-dd"));
+        // REG-2: a lone time keeps the 3 h across midnight; a same-day range
+        // typed after it is one morning again, not a 25-hour meeting.
+        compare(ed.applyWhen("23:00"), "");
+        compare(ed.startHour, 23);
+        compare(ed.endHour, 2);
+        compare(ed._spanDays(), 1);
+        compare(ed.applyWhen("10:00-11:30"), "");
+        compare(ed.startHour, 10);
+        compare(ed.endHour, 11.5);
+        compare(ed._spanDays(), 0, "the overnight end does not stick");
+        const oneDay = AppController.eventById(ev.id).endDate;
+        verify(!oneDay || !oneDay.getFullYear || Qt.formatDate(oneDay, "yyyy-MM-dd") === Qt.formatDate(day, "yyyy-MM-dd"),
+               "the saved meeting ends on its own day");
+        compare(ed.applyWhen("9:00"), "");
+        compare(ed.endHour, 10.5);
+        compare(ed._spanDays(), 0);
         ed.close();
         AppController.deleteEvent(ev.id);
     }
