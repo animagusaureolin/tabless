@@ -137,8 +137,11 @@ TestCase {
         const saved = AppController.language;
         const hc = make('import TodoCpp; HelpContent { width: 480 }');
         const banned = {
-            en: [/deadlines?/i, /knowledge/i, /who to write/i],
-            ru: [/дедлайн/i, /знани[яй]/i, /бэкап/i]
+            // Ctrl K is the command line; "palette" stays only for colours.
+            en: [/\bdeadlines?\b/i, /\bknowledge\b/i, /who to write/i, /command palette/i,
+                 /(opens|in) the palette/i, /the palette (has|searches)/i, /K — palette/i],
+            ru: [/дедлайн/i, /знани[яй]/i, /бэкап/i, /палитр[аы] команд/i,
+                 /открывает палитру/i, /в палитре/i, /— палитра/i, /путь к нему/i]
         };
         const bad = [];
         const walk = function (it, lang) {
@@ -157,8 +160,6 @@ TestCase {
                     if (rx.test(row.label)) bad.push(lang + " toc: " + row.label);
         }
         AppController.language = saved;
-        compare(bad.length, 0, "old terms in the guide:
-" + bad.join("
-"));
+        compare(bad.length, 0, "old terms in the guide:\n" + bad.join("\n"));
     }
 }

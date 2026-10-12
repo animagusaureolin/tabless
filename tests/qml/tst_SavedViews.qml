@@ -341,6 +341,9 @@ TestCase {
     // X-Menus-Other (DG-150): no Duplicate row; a copy is "Сохранить как
     // вид" on the open view. The menu still deletes the row it was opened on.
     function test_context_menu_duplicate_and_delete() {
+        // The copy's name is localized; the shared test profile may be left in ru.
+        const lang = AppController.language;
+        AppController.language = "en";
         const a = mkView("Alpha", "svprobe");
         mouseClick(railRow(0), 20, 10, Qt.RightButton);
         const menu = railMenu();
@@ -363,6 +366,7 @@ TestCase {
         tryVerify(function () { return AppController.savedViews.length === 1; });
         compare(AppController.savedViews[0].id, a, "the copy went, the original stayed");
         if (menu.opened) menu.close();
+        AppController.language = lang;
     }
     function railMenu() {
         let rail = byName("sidebar-views-head");
