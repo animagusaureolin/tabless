@@ -30,8 +30,9 @@ function _flush(cluster, map) {
         if (!placed) { e._col = colEnds.length; colEnds.push(e.end); }
     }
     const total = Math.max(1, colEnds.length);
+    const key = cluster[0].id;
     for (let k = 0; k < cluster.length; k++)
-        map[cluster[k].id] = { col: cluster[k]._col, cols: total };
+        map[cluster[k].id] = { col: cluster[k]._col, cols: total, cluster: key };
 }
 
 // `events` is [{ id, start, end }, …] for ONE day. Events from different days
@@ -71,26 +72,55 @@ function computeByDay(days) {
     return map;
 }
 
-// Where a slot from compute() goes across `avail` pixels: { x, w }.
+// Where a slot from compute() goes across `avail` pixels: { x, w, folded }.
 //
-// Tiled 1/cols each while a lane is at least `minW` wide. Past that a fourth
-// meeting in a 130px day left lanes ~30px wide, titles cut to two letters or
-// to the time alone (VISU-15). Then the lanes cascade instead: each keeps
-// `minW` (never more than the whole width) and steps right by an equal share
-// of what is left, the later column drawn over the earlier one. Clusters are
-// sorted by start, so an earlier event's top — where its title is — still
-// shows above the one that covers its right side.
-// The narrowest a lane gets before the lanes cascade (`minW` overrides).
+// Tiled 1/cols each while a lane is at least `minW` wide. Past that the
+// lanes used to cascade over each other: four meetings in a 106px day came
+// out as staircase slivers titled "S", "D", "1" and a task in the middle
+// lane sat under both its neighbours (A1-7, A2-12, A6-10, EYES-1). Now only
+// as many lanes as fit at `minW` are drawn, side by side; the rest are
+// `folded` - not drawn, counted on a "+N" chip that opens the day, and drawn
+// in the last lane while the keyboard cursor is on one of them.
+// The narrowest a lane gets (`minW` overrides): its title keeps ~6 letters.
 const MIN_LANE_W = 64;
 
-function lane(col, cols, avail, minW) {
+// How many lanes fit side by side.
+function capacity(avail, minW) {
     if (minW === undefined) minW = MIN_LANE_W;
+    return Math.max(1, Math.floor((avail + 1e-9) / minW));
+}
+
+function lane(col, cols, avail, minW) {
     const n = Math.max(1, cols);
-    const tile = avail / n;
-    if (n === 1 || tile >= minW) return { x: col * tile, w: tile };
-    const w = Math.min(avail, minW);
-    const stepX = (avail - w) / (n - 1);
-    return { x: col * stepX, w: w };
+    const fit = capacity(avail, minW);
+    if (n <= fit) {
+        const tile = avail / n;
+        return { x: col * tile, w: tile, folded: false };
+    }
+    const w = avail / fit;
+    if (col < fit - 1) return { x: col * w, w: w, folded: false };
+    // The last lane holds the first folded-over one's place: its own when
+    // it is in that lane, else drawn there only under the cursor.
+    return { x: (fit - 1) * w, w: w, folded: col > fit - 1 };
+}
+
+// The "+N" chips of one day: for every cluster wider than `fit` lanes, how
+// many are folded and from what hour. `items` is [{ id, start, end }] and
+// `slots` the compute() map.
+function folds(items, slots, fit) {
+    const byCluster = {};
+    for (let i = 0; i < items.length; i++) {
+        const s = slots[items[i].id];
+        if (!s || s.cols <= fit || s.col < fit) continue;
+        const k = s.cluster;
+        if (!byCluster[k]) byCluster[k] = { n: 0, start: items[i].start, ids: [] };
+        byCluster[k].n++;
+        byCluster[k].start = Math.min(byCluster[k].start, items[i].start);
+        byCluster[k].ids.push(items[i].id);
+    }
+    const out = [];
+    for (const k in byCluster) out.push(byCluster[k]);
+    return out;
 }
 
 // How tall an event is drawn in the week grid, and whether it gets two lines
