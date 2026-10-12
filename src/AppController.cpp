@@ -250,7 +250,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"update.ready", {"%1 downloaded, SHA-256 checksum verified", "%1 скачано, контрольная сумма SHA-256 проверена"}},
       {"update.upToDate", {"You're up to date", "У вас последняя версия"}},
       {"update.failed", {"Update check failed", "Не удалось проверить обновления"}},
-      {"task.recurs", {"Recurs: %1 due %2", "Повтор: %1 на %2"}},
+      {"task.recurs", {"next one %1", "следующая — %1"}},
+      {"timer.switched", {"Timer on %1 stopped · %2", "Таймер на %1 остановлен · %2"}},
+      {"dur.hm", {"%1 h %2 min", "%1 ч %2 мин"}},
+      {"dur.m", {"%1 min", "%1 мин"}},
       {"task.fromTemplate", {"Created from template: %1", "Создано по шаблону: %1"}},
       {"recovery.saved", {"Recovery log saved", "Журнал восстановления сохранён"}},
       {"recovery.empty", {"No recovery log to export", "Журнал восстановления пуст"}},
@@ -533,6 +536,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "Открывает выбранный (или под курсором) синхронизированный тикет в трекере."}},
       {"task.moveUndone", {"Move undone: %1", "Перемещение отменено: %1"}},
       {"task.archived", {"Archived: %1", "В архиве: %1"}},
+      {"task.archived.doneKey", {" · done is %1", " · готово — %1"}},
+      {"search.elsewhere", {"In other profiles: %1", "Есть в других профилях: %1"}},
+      {"search.elsewhere.one", {"%1 in %2", "%1 в «%2»"}},
       {"task.unarchived", {"Unarchived: %1", "Из архива: %1"}},
       {"task.archiveUndone", {"Restored: %1", "Восстановлено: %1"}},
       {"event.deleted", {"Deleted event: %1", "Удалено событие: %1"}},
@@ -735,9 +741,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.section.tasks.label", {"Go to Tasks", "Перейти в «Задачи»"}},
       {"shortcut.section.tasks.desc",
        {"Board, list or calendar, on the lens you left.", "Доска, список или календарь — на том виде, где вы остановились."}},
-      {"shortcut.section.knowledge.label", {"Go to Knowledge", "Перейти в «Знания»"}},
+      // The sidebar row is "Notes" (A1-31, A6-27): one name for one screen.
+      {"shortcut.section.knowledge.label", {"Go to Notes", "Перейти в «Заметки»"}},
       {"notes.wiki.missing", {"no such note", "нет такой"}},
-      {"shortcut.section.knowledge.desc", {"Notes and links.", "Заметки и ссылки."}},
+      {"shortcut.section.knowledge.desc", {"Your notes and the links between them.", "Ваши заметки и ссылки между ними."}},
       // ---- The 0.8.0 keymap (keymap.md, APP-272) ----
       {"shortcut.view.calendar.label", {"Go to Calendar", "Перейти к календарю"}},
       {"shortcut.view.calendar.desc", {"Week or month, the one used last.", "Неделя или месяц — какой был последним."}},
@@ -810,6 +817,16 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"keymap.was.savedView.1", {"free; your views are Ctrl 4… and g 1…", "свободна; «Мои виды» — Ctrl 4… и g 1…"}},
       {"keymap.was.savedView.2", {"free; your views are Ctrl 4… and g 1…", "свободна; «Мои виды» — Ctrl 4… и g 1…"}},
       {"keymap.was.savedView.3", {"free; your views are Ctrl 4… and g 1…", "свободна; «Мои виды» — Ctrl 4… и g 1…"}},
+      {"hotkeys.common", {"Everywhere else %1 means “%2”. Take it for this anyway?", "Везде %1 — это «%2». Всё равно занять?"}},
+      {"hotkeys.common.copy", {"copy", "копировать"}},
+      {"hotkeys.common.paste", {"paste", "вставить"}},
+      {"hotkeys.common.cut", {"cut", "вырезать"}},
+      {"hotkeys.common.save", {"save", "сохранить"}},
+      {"hotkeys.common.close", {"close", "закрыть"}},
+      {"hotkeys.common.quit", {"quit", "выйти"}},
+      {"hotkeys.common.selectAll", {"select all", "выделить всё"}},
+      {"hotkeys.common.undo", {"undo", "отменить"}},
+      {"hotkeys.common.erase", {"erase a character", "стереть символ"}},
       {"hotkeys.reserved.system", {"The system keeps this key", "Эту клавишу занимает система"}},
       {"hotkeys.prefixTaken", {"%1 cannot be bound: %2 (%3) starts the same way", "%1 нельзя назначить: так же начинается %2 («%3»)"}},
       {"hotkeys.reserved.navigation", {"Tab moves between fields in every dialog", "Tab переводит между полями во всех диалогах"}},
@@ -826,7 +843,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.view.week.desc", {"Seven-day planner.", "Семидневный планировщик."}},
       {"shortcut.view.month.label", {"Go to Month", "Перейти к месяцу"}},
       {"shortcut.view.month.desc", {"Month grid of deadlines and events.", "Сетка месяца: дедлайны и события."}},
-      {"shortcut.view.docs.label", {"Go to Docs", "Перейти к докам"}},
+      {"shortcut.view.docs.label", {"Go to Docs", "Перейти в «Доки»"}},
       {"shortcut.view.docs.desc", {"Specs, links, snippets, contacts.", "Спеки, ссылки, сниппеты, контакты."}},
       {"shortcut.view.notes.label", {"Go to Notes", "Перейти к заметкам"}},
       {"shortcut.view.notes.desc", {"Markdown canvas of the active profile.", "Markdown-канвас активного профиля."}},
@@ -2731,6 +2748,7 @@ QVariantMap AppController::toggleDone(const QStringList& ids) {
   int unchecked = 0;
   bool localOnly = false;
   QString lastTarget;
+  m_heldRecursNote.clear();
   {
     const UndoScope scope(this, allDone ? tr_(QStringLiteral("task.reopenUndone")) : tr_(QStringLiteral("task.doneUndone")));
     for(const QString& id : present) {
@@ -2779,6 +2797,7 @@ QVariantMap AppController::toggleDone(const QStringList& ids) {
   out[QStringLiteral("unchecked")] = unchecked;
   out[QStringLiteral("localOnly")] = localOnly;
   if(moved == 0) {
+    m_heldRecursNote.clear();
     return out;
   }
   const auto columnName = [this](const QString& id) {
@@ -2787,10 +2806,11 @@ QVariantMap AppController::toggleDone(const QStringList& ids) {
   };
   QString msg;
   if(allDone) {
-    msg = moved == 1 ? tr_(QStringLiteral("task.reopened.one")).arg(present.first(), columnName(lastTarget))
+    msg = moved == 1 ? tr_(QStringLiteral("task.reopened.one")).arg(displayKey(present.first()), columnName(lastTarget))
                      : tr_(QStringLiteral("task.reopened.many")).arg(moved);
   } else {
-    msg = moved == 1 ? tr_(QStringLiteral("task.done.one")).arg(present.first()) : tr_(QStringLiteral("task.done.many")).arg(moved);
+    msg = moved == 1 ? tr_(QStringLiteral("task.done.one")).arg(displayKey(present.first()))
+                     : tr_(QStringLiteral("task.done.many")).arg(moved);
     if(localOnly) {
       msg += tr_(QStringLiteral("task.done.localOnly"));
     }
@@ -2798,6 +2818,10 @@ QVariantMap AppController::toggleDone(const QStringList& ids) {
       msg += tr_(QStringLiteral("task.done.unchecked")).arg(unchecked);
     }
   }
+  if(!m_heldRecursNote.isEmpty()) {
+    msg += QStringLiteral(" · ") + m_heldRecursNote;
+  }
+  m_heldRecursNote.clear();
   emit undoableToast(msg, 5);
   return out;
 }
@@ -2941,18 +2965,59 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
       copy.assignee.clear();
       copy.externalMeta = {};
       m_tasks.upsert(copy);
-      recursNote = tr_("task.recurs").arg(newId, next.toString(Qt::ISODate));
+      // The day as everywhere else ("tomorrow, Tue, Oct 13"), not an ISO
+      // date and the copy's "-r1" id (A2-19); the copy is planned, not due.
+      recursNote = tr_("task.recurs").arg(dayWords_(next));
     }
   }
 
   // One toast: the move toast used to replace the recurrence one at once.
   if(m_bulkMoveDepth == 0 && !m_moveToastHeld) {
-    const QString moved = tr_("task.moved").arg(taskId, statusName);
+    const QString moved = tr_("task.moved").arg(displayKey(taskId), statusName);
     emit undoableToast(recursNote.isEmpty() ? moved : moved + QStringLiteral(" · ") + recursNote, 5);
+  } else if(!recursNote.isEmpty() && m_moveToastHeld) {
+    // toggleDone says it in its own toast (A2-18): a toast of its own here
+    // was replaced at once by "Done".
+    m_heldRecursNote = recursNote;
   } else if(!recursNote.isEmpty()) {
     emit toast(recursNote);
   }
   scheduleSave();
+}
+
+namespace {
+QString reminderPlace(const QString& location) {
+  // A meeting link is the Join action's business: the toast and the OS
+  // notification name only its host, not the whole URL (A6-20).
+  const QString loc = location.trimmed();
+  if(loc.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive) || loc.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive)) {
+    const QString host = QUrl(loc).host();
+    if(!host.isEmpty()) {
+      return host;
+    }
+  }
+  return loc;
+}
+}  // namespace
+
+QString AppController::dayWords_(const QDate& d) const {
+  const bool ru = m_language == QStringLiteral("ru");
+  const QLocale loc(ru ? QLocale::Russian : QLocale::English);
+  QString date = loc.toString(d, ru ? QStringLiteral("ddd, d MMM") : QStringLiteral("ddd, MMM d"));
+  date.remove(QLatin1Char('.'));
+  const qint64 k = QDate::currentDate().daysTo(d);
+  if(k == 0) {
+    return (ru ? QStringLiteral("сегодня, ") : QStringLiteral("today, ")) + date;
+  }
+  if(k == 1) {
+    return (ru ? QStringLiteral("завтра, ") : QStringLiteral("tomorrow, ")) + date;
+  }
+  return date;
+}
+
+QString AppController::durationWords_(int secs) const {
+  const int mins = qMax(0, secs) / 60;
+  return mins >= 60 ? tr_("dur.hm").arg(mins / 60).arg(mins % 60) : tr_("dur.m").arg(mins);
 }
 
 void AppController::completionSoundOnMove_(const QString& fromStatus, const QString& toStatus) {
@@ -3689,10 +3754,42 @@ QVariantMap AppController::newQuickTaskDraft(const QString& ticketKey) const {
   // now: the ticket the text names, or the profile prefix. A taken key must not
   // be reused — saveTask upserts, and upserting a taken id replaces that task.
   const QString key = ticketKey.trimmed();
-  if(!key.isEmpty() && m_tasks.indexOfId(key) < 0) {
+  if(!key.isEmpty() && !ticketKeyTaken(key)) {
     m["id"] = key;
   }
   return m;
+}
+
+QString AppController::taskIdForKey(const QString& key) const {
+  if(key.isEmpty()) {
+    return {};
+  }
+  if(m_tasks.indexOfId(key) >= 0) {
+    return key;
+  }
+  // A tracker card answers to its key too ("tabless done INC-100"): a local
+  // task given that id made two tasks answer to one key (A3-7).
+  for(const ::Task& t : m_tasks.items()) {
+    if(!t.externalId.isEmpty() && externalKeyOf(t).compare(key, Qt::CaseInsensitive) == 0) {
+      return t.id;
+    }
+  }
+  return {};
+}
+
+QString AppController::displayKey(const QString& id) const {
+  // The name a card shows: a tracker card's key, else its own id (A3-10).
+  // A deleted task is gone from the model; its id is all there is.
+  const int row = m_tasks.indexOfId(id);
+  if(row < 0) {
+    return id;
+  }
+  const QString key = externalKeyOf(m_tasks.items().at(row));
+  return key.isEmpty() ? id : key;
+}
+
+bool AppController::ticketKeyTaken(const QString& key) const {
+  return !taskIdForKey(key).isEmpty();
 }
 
 QVariantMap AppController::captureParse(const QString& raw, const QDateTime& reference, const QStringList& rejected) const {
@@ -3718,7 +3815,8 @@ QVariantMap AppController::captureParse(const QString& raw, const QDateTime& ref
   out["ticketKey"] = meta.ticketKey;
   // A key another task already holds stays in the title (TASKS-22); the
   // input offers to open that task instead (APP-266).
-  out["ticketTaken"] = !meta.ticketKey.isEmpty() && m_tasks.indexOfId(meta.ticketKey) >= 0;
+  out["ticketTakenId"] = taskIdForKey(meta.ticketKey);
+  out["ticketTaken"] = !out.value("ticketTakenId").toString().isEmpty();
   out["estimateMinutes"] = p.estimateMinutes;
   out["recurrence"] = p.recurrence;
   QVariantList spans;
@@ -3757,7 +3855,7 @@ QVariantMap AppController::quickTaskDraft(const QString& raw, const QDateTime& r
   // "APP-101 follow up with QA" used to lose its only link to the ticket
   // (TASKS-22, audit 2026-09-30).
   heap::text::TaskMeta meta = heap::text::extractMeta(raw);
-  if(!meta.ticketKey.isEmpty() && m_tasks.indexOfId(meta.ticketKey) >= 0) {
+  if(ticketKeyTaken(meta.ticketKey)) {
     meta = heap::text::extractMeta(raw, /*keepTicketKey=*/true);
   }
   QVariantMap draft = newQuickTaskDraft(meta.ticketKey);
@@ -4182,7 +4280,8 @@ void AppController::deleteTask(const QString& id) {
   // it never happened. Undo lifts the note again (applyUndoEntry).
   dismissExternalTask(removed.externalProvider, removed.externalId);
   m_tasks.removeById(id);
-  emit undoableToast(tr_("task.deleted").arg(id), 5);
+  const QString removedKey = externalKeyOf(removed);
+  emit undoableToast(tr_("task.deleted").arg(removedKey.isEmpty() ? id : removedKey), 5);
   scheduleSave();
 }
 
@@ -8059,6 +8158,36 @@ QVariantMap AppController::compileSearch(const QString& text) const {
   return out;
 }
 
+QString AppController::matchesElsewhere(const QString& text) const {
+  // A filter that finds nothing here says where it would (A3-13): a
+  // freelancer does not remember which client a task belongs to.
+  if(text.trimmed().isEmpty()) {
+    return {};
+  }
+  QStringList parts;
+  for(const Profile& p : m_profiles) {
+    if(p.id == m_activeProfileId) {
+      continue;
+    }
+    const heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today, p.statuses);
+    const QString free = q.freeText();
+    int n = 0;
+    for(const Task& t : p.tasks) {
+      if(t.archived) {
+        continue;
+      }
+      const QString hay = TaskModel::searchTextOf(t);
+      if(heap::query::textMatches(hay, free) && (!q.isQuery() || q.matches(t, hay))) {
+        ++n;
+      }
+    }
+    if(n > 0) {
+      parts << tr_("search.elsewhere.one").arg(n).arg(p.name);
+    }
+  }
+  return parts.isEmpty() ? QString() : tr_("search.elsewhere").arg(parts.join(QStringLiteral(", ")));
+}
+
 bool AppController::searchIsQuery(const QString& text) const {
   return heap::query::TaskQuery::compile(text, m_today, m_statuses).isQuery();
 }
@@ -8085,7 +8214,20 @@ QVariantMap AppController::commandLine(const QString& text, int limit) const {
   if(!cq.commandsOnly && (!cq.tokens.isEmpty() || !cq.text.isEmpty())) {
     const heap::query::TaskQuery q = heap::query::TaskQuery::compile(cq.query(), m_today, m_statuses, m_syncNewIds);
     const QString free = q.freeText();
-    const QString typedId = cq.text.trimmed();
+    QString typedId = cq.text.trimmed();
+    // "SD-105" alone is a ticket chip, not text: it is still the key asked for.
+    if(typedId.isEmpty()) {
+      int tickets = 0;
+      for(const heap::query::CommandToken& tok : cq.tokens) {
+        if(tok.kind == QLatin1String("ticket")) {
+          typedId = tok.value;
+          ++tickets;
+        }
+      }
+      if(tickets != 1) {
+        typedId.clear();
+      }
+    }
     QVector<int> exact;
     QVector<int> open;
     QVector<int> archived;
@@ -8093,14 +8235,16 @@ QVariantMap AppController::commandLine(const QString& text, int limit) const {
     for(int row = 0; row < items.size(); ++row) {
       const Task& t = items.at(row);
       const QString& hay = m_tasks.searchTextAt(row);
-      if(!free.isEmpty() && !hay.contains(free)) {
+      if(!heap::query::textMatches(hay, free)) {
         continue;
       }
       if(q.isQuery() && !q.matches(t, hay)) {
         continue;
       }
       ++total;
-      if(!typedId.isEmpty() && t.id.compare(typedId, Qt::CaseInsensitive) == 0) {
+      // The key typed whole comes first, by id or by tracker key (A3-23).
+      if(!typedId.isEmpty() && (t.id.compare(typedId, Qt::CaseInsensitive) == 0 ||
+                                (!t.externalId.isEmpty() && externalKeyOf(t).compare(typedId, Qt::CaseInsensitive) == 0))) {
         exact << row;
       } else if(t.archived) {
         archived << row;
@@ -8120,7 +8264,11 @@ QVariantMap AppController::commandLine(const QString& text, int limit) const {
             statusName = v.toMap().value(QStringLiteral("name")).toString();
           }
         }
+        const QString key = externalKeyOf(t);
         tasks.append(QVariantMap{{"id", t.id},
+                                 // The name the card shows: the tracker key where
+                                 // there is one (A3-10).
+                                 {"key", key.isEmpty() ? t.id : key},
                                  {"title", t.title},
                                  {"status", t.status},
                                  {"statusName", statusName},
@@ -8676,11 +8824,31 @@ void AppController::startTaskTimer(const QString& id) {
   if(m_tasks.indexOfId(id) < 0) {
     return;
   }
-  const UndoScope scope(this, tr_("undo.timer").arg(id));
-  // Only one task tracks at a time, across profiles too (IDIOT-CAL-6): a timer
-  // left running in another profile double-counted the hours.
-  stopTimersInOtherProfiles_();
-  m_tasks.startTiming(id);
+  // The timer this one replaces, said out loud (A1-14): a 6-hour timer
+  // ended without a word.
+  QString stoppedKey;
+  int stoppedSecs = 0;
+  const QDateTime now = QDateTime::currentDateTime();
+  for(const Profile& p : std::as_const(m_profiles)) {
+    const QVector<Task>& tasks = p.id == m_activeProfileId ? m_tasks.items() : p.tasks;
+    for(const Task& t : tasks) {
+      if(t.id != id && t.timerStartedAt.isValid()) {
+        const QString key = externalKeyOf(t);
+        stoppedKey = key.isEmpty() ? t.id : key;
+        stoppedSecs = static_cast<int>(t.timerStartedAt.secsTo(now));
+      }
+    }
+  }
+  {
+    const UndoScope scope(this, tr_("undo.timer").arg(id));
+    // Only one task tracks at a time, across profiles too (IDIOT-CAL-6): a timer
+    // left running in another profile double-counted the hours.
+    stopTimersInOtherProfiles_();
+    m_tasks.startTiming(id);
+  }
+  if(!stoppedKey.isEmpty()) {
+    emit undoableToast(tr_("timer.switched").arg(stoppedKey, durationWords_(stoppedSecs)), 6);
+  }
   scheduleSave();
   refreshTray();
 }
@@ -8816,6 +8984,7 @@ QString AppController::openExample() {
   const QString id = QString::fromLatin1(kExampleProfileId);
   if(!hasExample()) {
     snapshotActiveProfile();
+    parkWorkspaceUndo(m_activeProfileId);
     clearPendingUndo();  // undo is scoped to the active workspace
     QVector<CalEvent> events;
     Profile p = buildExampleProfile(&events);
@@ -8957,8 +9126,17 @@ void AppController::resetToFirstRun() {
   // 1. Remove persisted state so a crash mid-reset can't half-recover and the
   //    next launch sees a genuine first run. Backups + quarantined corrupt
   //    snapshots must go too, or loadStateOnStart would resurrect old data.
+  // A pending debounced write lands first, so it cannot recreate anything
+  // after the wipe.
+  if(m_saver) {
+    m_saver->flush();
+  }
   QFile::remove(stateFilePath());
   QDir(backupDirPath()).removeRecursively();
+  // The time machine's snapshots are the same data, compressed, and the
+  // attachments are its files: the dialog promises every copy goes (A5-6).
+  QDir(historyDirPath()).removeRecursively();
+  QDir(attachmentsDir()).removeRecursively();
   {
     const QDir dir(dataDir());
     const QStringList corrupt = dir.entryList(QStringList{"state.corrupt-*.json"}, QDir::Files);
@@ -8969,6 +9147,7 @@ void AppController::resetToFirstRun() {
 
   // 2. Drop transient UI state that points at rows we're about to delete.
   m_undo.clear();
+  m_parkedUndo.clear();
   emit pendingUndoChanged();
   clearSelection();
   m_focusedStatus.clear();
@@ -9402,6 +9581,35 @@ void AppController::clearWorkspaceUndo() {
   if(m_undo.clearKeepingProfileRemoval()) {
     emit pendingUndoChanged();
   }
+}
+
+void AppController::parkWorkspaceUndo(const QString& profileId) {
+  if(profileId.isEmpty()) {
+    return;
+  }
+  const heap::undo::UndoStack part = m_undo.workspacePart();
+  if(part.isEmpty()) {
+    m_parkedUndo.remove(profileId);
+  } else {
+    m_parkedUndo.insert(profileId, part);
+  }
+}
+
+void AppController::restoreWorkspaceUndo(const QString& profileId) {
+  const auto it = m_parkedUndo.constFind(profileId);
+  if(it == m_parkedUndo.constEnd()) {
+    return;
+  }
+  const heap::undo::UndoStack parked = *it;
+  m_parkedUndo.remove(profileId);
+  // Only onto the workspace the stack left: a CLI write or a restore while it
+  // was away makes its diffs describe something else, and then it goes.
+  const heap::undo::Entry* top = parked.peekUndo();
+  if(top != nullptr && !(heap::undo::untouchedSince(m_tasks, top->tasks) && heap::undo::untouchedSince(m_events, top->events))) {
+    return;
+  }
+  m_undo.adopt(parked);
+  emit pendingUndoChanged();
 }
 
 void AppController::clearPendingUndo() {
@@ -12397,6 +12605,21 @@ void AppController::applyProfileToModels(const Profile& p) {
   // Imports and hand-edited files may still carry rank ties (see Rank.h).
   QVector<Task> tasks = p.tasks;
   heap::board::spreadTiedRanks(tasks);
+  // A card whose column is gone (an import, a hand-edited or older file) was
+  // drawn by no column and still counted (A2-2): it goes to the first column,
+  // as saveTask files an unknown status (R3-138). A "done" card stays done.
+  if(!p.statuses.isEmpty()) {
+    QSet<QString> columns;
+    for(const QVariant& v : p.statuses) {
+      columns.insert(v.toMap().value(QStringLiteral("id")).toString());
+    }
+    const QString first = p.statuses.constFirst().toMap().value(QStringLiteral("id")).toString();
+    for(Task& t : tasks) {
+      if(!columns.contains(t.status) && t.status != QLatin1String("done") && !first.isEmpty()) {
+        t.status = first;
+      }
+    }
+  }
   m_tasks.reset(tasks);
   m_people.reset(p.people);
   m_statuses = p.statuses;
@@ -13019,6 +13242,7 @@ void AppController::reloadStateFromDisk() {
   }
   // Whatever the stack held describes the state being replaced (PLAT-15).
   m_undo.clear();
+  m_parkedUndo.clear();
   emit pendingUndoChanged();
   clearSelection();
   emit aboutToChangeActiveNote();
@@ -13234,6 +13458,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       };
       const QString prev = s.value(QStringLiteral("lastRunVersion")).toString();
       m_whatsNewDue = prev.isEmpty() ? onDiskSchema < 12 : lineOf(prev) != lineOf(appVersion());
+      // A patch release of the same line passes without the dialog, but
+      // not without a word (A5-19): 0.8.2 → 0.8.9 renamed the app.
+      m_updatedFrom = !m_whatsNewDue && !prev.isEmpty() && prev != appVersion() ? prev : QString();
     }
     if(s.contains("theme")) {
       m_theme = s["theme"].toString();
@@ -13528,10 +13755,13 @@ void AppController::setActiveProfileId(const QString& id) {
   // Undo is scoped to the workspace it was recorded in (PLAT-15/TASKS-1): the
   // entries are diffs of the active models, and replaying one onto another
   // profile's models deleted or duplicated that profile's tasks. A deleted
-  // profile stays restorable (IDIOT-SHELL-2).
+  // profile stays restorable (IDIOT-SHELL-2). The workspace's own history is
+  // parked, not dropped, and comes back with it (A3-14, A5-7).
+  parkWorkspaceUndo(m_activeProfileId);
   clearWorkspaceUndo();
   m_activeProfileId = id;
   applyProfileToModels(m_profiles[next]);
+  restoreWorkspaceUndo(id);
   emit activeProfileChanged();
   scheduleSave();
 }
@@ -13570,6 +13800,7 @@ QString AppController::createProfile(const QString& rawName, const QString& colo
   }
   // Snapshot current active before creating so we don't lose unsaved edits.
   snapshotActiveProfile();
+  parkWorkspaceUndo(m_activeProfileId);
   clearWorkspaceUndo();  // undo is scoped to the active workspace
   Profile p = makeStartingProfile(name.trimmed(), color);
   p.id = makeProfileId(name.trimmed());
@@ -13636,6 +13867,7 @@ void AppController::deleteProfile(const QString& id) {
   if(id == m_activeProfileId) {
     m_undo.clear();
   }
+  m_parkedUndo.remove(id);
   // Events that were attributed to this profile become "unassigned"
   // (still visible in the calendar, but with no feature dot). Their ids go
   // into the entry so the undo can give them back.
@@ -13829,6 +14061,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   }
   reissueSharedTaskIds(copy, &events);  // the copy's tasks are new tasks (PLAT-9)
   addEventsAsCopies(events, copy.id);
+  parkWorkspaceUndo(m_activeProfileId);
   clearPendingUndo();  // undo is scoped to the active workspace
   m_profiles.push_back(copy);
   m_activeProfileId = copy.id;
@@ -14104,7 +14337,52 @@ QVariantList AppController::searchFullText(const QString& query, int limit) cons
   return out;
 }
 
+namespace {
+// The same keys in the other keyboard layout, ЙЦУКЕН ↔ QWERTY: "cjpdjy" is
+// "созвон" typed with the wrong layout on (A4-20). Empty when nothing swaps.
+QString swapKeyboardLayout(const QString& text) {
+  static const QString kLat = QStringLiteral("`qwertyuiop[]asdfghjkl;'zxcvbnm,");
+  static const QString kCyr = QStringLiteral("ёйцукенгшщзхъфывапролджэячсмитьб");
+  int latin = 0;
+  int cyr = 0;
+  for(const QChar c : text) {
+    const QChar l = c.toLower();
+    latin += l >= QLatin1Char('a') && l <= QLatin1Char('z') ? 1 : 0;
+    cyr += kCyr.contains(l) ? 1 : 0;
+  }
+  if(latin == 0 && cyr == 0) {
+    return {};
+  }
+  const QString& from = latin >= cyr ? kLat : kCyr;
+  const QString& to = latin >= cyr ? kCyr : kLat;
+  QString out;
+  out.reserve(text.size());
+  for(const QChar c : text) {
+    const QChar l = c.toLower();
+    const qsizetype at = from.indexOf(l);
+    if(at < 0) {
+      out.append(c);
+      continue;
+    }
+    out.append(c == l ? to.at(at) : to.at(at).toUpper());
+  }
+  return out == text ? QString() : out;
+}
+}  // namespace
+
 QStringList AppController::notesMatching(const QString& query) const {
+  QStringList out = notesMatchingExactly_(query);
+  // Nothing: perhaps the right words in the wrong layout (A4-20).
+  if(out.isEmpty()) {
+    const QString swapped = swapKeyboardLayout(query);
+    if(!swapped.isEmpty()) {
+      out = notesMatchingExactly_(swapped);
+    }
+  }
+  return out;
+}
+
+QStringList AppController::notesMatchingExactly_(const QString& query) const {
   // Title, folder and the whole body, every word required. The list filter
   // used to look at the title and a one-line excerpt only, so a word from the
   // middle of a note found nothing.
@@ -14225,12 +14503,18 @@ QVariantList AppController::commandPaletteEntries() const {
     for(const Task& t : p.tasks) {
       QVariantMap m;
       m["kind"] = "task";
-      m["label"] = QString("%1 · %2").arg(t.id, t.title);
-      m["sub"] = QString("%1 · %2").arg(p.name, statusName(p.statuses, t.status).toUpper());
-      // A mirrored ticket is looked for by its tracker key ("PROJ-123", "#42"),
-      // which is not its heap id. The palette scores label + sub.
+      // A mirrored ticket is named by its tracker key ("PROJ-123", "#42"),
+      // as its card names it; its local id is only a lookup (A3-10).
+      const QString key = externalKeyOf(t);
+      m["label"] = QString("%1 · %2").arg(key.isEmpty() ? t.id : key, t.title);
+      // The column as the board names it, not its raw id (A1-16).
+      QString column = statusName(p.statuses, t.status);
+      if(column == t.status) {
+        column = statusName(m_statuses, t.status);
+      }
+      m["sub"] = QString("%1 · %2").arg(p.name, column);
       if(!t.externalProvider.isEmpty()) {
-        m["sub"] = QString("%1 · %2 %3").arg(m["sub"].toString(), providerDisplayName(t.externalProvider), externalKeyOf(t));
+        m["sub"] = QString("%1 · %2").arg(m["sub"].toString(), providerDisplayName(t.externalProvider));
       }
       m["body"] = cap(t.desc);
       m["profileId"] = p.id;
@@ -14507,6 +14791,7 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   addEventsAsCopies(importedEvents, imported.id);
 
   if(activate) {
+    parkWorkspaceUndo(m_activeProfileId);
     clearPendingUndo();  // undo is scoped to the active workspace
     m_activeProfileId = imported.id;
     applyProfileToModels(imported);
@@ -14768,7 +15053,8 @@ void AppController::seedShortcutCatalog() {
   add("view.week", "Z, W");
   add("view.month", "Z, M");
   add("view.archive", "");
-  add("view.docs", "");
+  // Docs is a sidebar row like the others, with a key like them (A7-10).
+  add("view.docs", "G, D");
   add("view.notes", "");
   add("view.settings", "Ctrl+,");
   // Interface scale (APP-168) from the keyboard, as in a browser. Ctrl++,
@@ -15101,6 +15387,23 @@ QString AppController::keyChord(int key, int modifiers, const QString& text, qui
   const QInputMethod* im = QGuiApplication::inputMethod();
   const QLocale::Script script = im != nullptr ? im->locale().script() : QLocale::LatinScript;
   return heap::keys::chordFor(in, native, script == QLocale::LatinScript || script == QLocale::AnyScript);
+}
+
+QString AppController::commonShortcutWarning(const QString& id, const QString& sequence) const {
+  const QString seq = normalizeSequence(sequence);
+  const QString why = heap::keys::commonReason(seq);
+  if(why.isEmpty()) {
+    return {};
+  }
+  // The action's own default ("undo" on Ctrl+Z) is not a surprise.
+  const int i = shortcutIndexOf(id);
+  if(i >= 0) {
+    const QString def = m_shortcuts[i].toMap().value(QStringLiteral("defaultSequence")).toString();
+    if(heap::keys::chordsOf(def).contains(seq)) {
+      return {};
+    }
+  }
+  return tr_(QStringLiteral("hotkeys.common")).arg(keyText(seq), tr_(QStringLiteral("hotkeys.common.") + why));
 }
 
 QString AppController::reservedShortcutReason(const QString& sequence) const {
@@ -15631,7 +15934,13 @@ void AppController::setArchived(const QString& taskId, bool archived) {
     dropFutureFocusBlocks(taskId);
   }
 
-  emit undoableToast(tr_(archived ? "task.archived" : "task.unarchived").arg(taskId), 5);
+  QString msg = tr_(archived ? "task.archived" : "task.unarchived").arg(displayKey(taskId));
+  // e is "complete" in Todoist: the toast names the key for done (A5-20).
+  const QString doneKey = shortcutText(QStringLiteral("task.done"));
+  if(archived && !doneKey.isEmpty()) {
+    msg += tr_("task.archived.doneKey").arg(doneKey);
+  }
+  emit undoableToast(msg, 5);
   scheduleSave();
 }
 
@@ -16272,7 +16581,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
       QString body = QStringLiteral("%1–%2").arg(heap::text::formatTime(heap::cal::hourToTime(due.start), twelveHourClock()),
                                                  heap::text::formatTime(heap::cal::hourToTime(due.end), twelveHourClock()));
       if(!due.location.trimmed().isEmpty()) {
-        body += QStringLiteral(" · ") + due.location.trimmed();
+        body += QStringLiteral(" · ") + reminderPlace(due.location);
       }
       // The key ends in the occurrence's start: "Open" goes to that day.
       const QString routeId = heap::notify::routingId(QStringLiteral("meeting"), due.eventId);
@@ -16286,13 +16595,13 @@ void AppController::runAutomationAt(const QDateTime& now) {
     const QVariantMap cal = s.value("calendar").toMap();
     const QTime standup = heap::cal::clockTime(cal.value("standupTime", "10:00").toString());
     const int lead = qMax(0, notif.value("meetingLead", 5).toInt());
-    // A standup on the calendar near that time has its own reminder; a second
-    // "Standup soon" in the same minute was noise (IDIOT-CAL-9).
+    // A standup on the calendar that day has its own reminder; a second
+    // "Standup soon" was noise (IDIOT-CAL-9) — and at its own hour, when the
+    // real one is at 02:00 for a team in New York, it was wrong (A6-19).
     bool onCalendar = false;
     if(standup.isValid()) {
-      const double at = standup.hour() + (standup.minute() / 60.0);
       for(const CalEvent& e : heap::cal::expandedEvents(m_events.items(), today, today)) {
-        if(e.type == QStringLiteral("standup") && !e.allDay && e.date == today && qAbs(e.start - at) <= 0.25) {
+        if(e.type == QStringLiteral("standup") && !e.allDay && e.date == today) {
           onCalendar = true;
           break;
         }

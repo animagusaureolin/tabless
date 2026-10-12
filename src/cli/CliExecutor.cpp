@@ -299,6 +299,23 @@ Response saveField(AppController& c, const Request& req, const QString& id, cons
   if(!saved) {
     return failure(kExitData, QStringLiteral("could not change %1: %2").arg(id, reasons(toasts, QStringLiteral("refused"))));
   }
+  // Someday files a task under Backlog, and taking it back leaves it there:
+  // the line says where it is rather than leave that to be found (A3-18).
+  if(req.verb == Verb::Someday) {
+    const QString was = draft.value(QStringLiteral("status")).toString();
+    const QString is = c.taskById(id).value(QStringLiteral("status")).toString();
+    QString name = is;
+    for(const QVariant& v : c.statuses()) {
+      if(v.toMap().value(QStringLiteral("id")).toString() == is) {
+        name = v.toMap().value(QStringLiteral("name")).toString();
+      }
+    }
+    if(is != was) {
+      line += cliText(QStringLiteral("column"), language).arg(name);
+    } else if(req.value == QLatin1String("off") && is == QLatin1String("backlog")) {
+      line += cliText(QStringLiteral("stays"), language).arg(name);
+    }
+  }
   return changeResult(c, id, line, true, req.json, now);
 }
 

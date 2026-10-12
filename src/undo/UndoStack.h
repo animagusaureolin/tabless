@@ -773,6 +773,38 @@ class UndoStack {
     return true;
   }
 
+  // The workspace's own entries, without a profile removal at the bottom:
+  // what a profile switch parks so the workspace's undo comes back with it
+  // (A3-14). The removal stays with the live stack (clearKeepingProfileRemoval).
+  UndoStack workspacePart() const {
+    UndoStack out;
+    const int skip = !m_entries.isEmpty() && m_entries.at(0).profileRemoved ? 1 : 0;
+    out.m_entries = m_entries.mid(skip);
+    out.m_cursor = qMax(0, m_cursor - skip);
+    return out;
+  }
+
+  // Puts a parked workspace's entries back on top of what is undoable now
+  // (at most a profile removal), keeping their own redo tail.
+  void adopt(const UndoStack& parked) {
+    if(parked.m_entries.isEmpty()) {
+      return;
+    }
+    m_entries.resize(m_cursor);
+    const int base = m_cursor;
+    m_entries.append(parked.m_entries);
+    m_cursor = base + parked.m_cursor;
+    if(m_entries.size() > kMaxDepth) {
+      const int drop = static_cast<int>(m_entries.size()) - kMaxDepth;
+      m_entries.remove(0, drop);
+      m_cursor = qMax(0, m_cursor - drop);
+    }
+  }
+
+  bool isEmpty() const {
+    return m_entries.isEmpty();
+  }
+
   // The undoable entry recorded under `serial`, or nullptr when it has been
   // undone already, fell off the bottom of the stack or never existed.
   const Entry* findUndoable(quint64 serial) const {

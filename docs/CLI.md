@@ -22,7 +22,7 @@ tabless help
 Each change answers with one line of fact in the app's language (`--json` gives the task instead).
 
 `tabless now` prints nothing and exits 0 when there is no current task, so it fits a shell prompt.
-`--format` takes `{id} {title} {status} {priority} {profile} {source} {elapsed}`:
+`--format` takes `{id} {key} {title} {status} {priority} {profile} {source} {elapsed}`:
 
 ```toml
 # starship.toml

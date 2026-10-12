@@ -90,7 +90,7 @@ QString helpText() {
              "                                          timer, else the one the git branch of the\n"
              "                                          current directory names; prints nothing\n"
              "                                          when there is none. Format fields: {id}\n"
-             "                                          {title} {status} {priority} {profile}\n"
+             "                                          {key} {title} {status} {priority} {profile}\n"
              "                                          {source} {elapsed}\n"
              "  list [--profile <p>] [--status <s>] [--json]\n"
              "                                          tasks in board order (archived left out)\n"
@@ -733,9 +733,18 @@ QVector<int> todayTasks(const ProfileData& p, const QDate& today) {
 
 // ── Output ─────────────────────────────────────────────────────────────────
 
+namespace {
+// The name the app shows a task by: a tracker card's key, else its id (A3-10).
+QString shownKey(const Task& t) {
+  const QString key = externalKeyOf(t);
+  return key.isEmpty() ? t.id : key;
+}
+}  // namespace
+
 QJsonObject taskJson(const ProfileData& p, const Task& t, const QDateTime& now) {
   QJsonObject o;
   o.insert(QStringLiteral("id"), t.id);
+  o.insert(QStringLiteral("key"), shownKey(t));
   o.insert(QStringLiteral("title"), t.title);
   o.insert(QStringLiteral("status"), t.status);
   o.insert(QStringLiteral("statusName"), statusName(p.statuses, t.status));
@@ -769,13 +778,13 @@ QString taskLines(const ProfileData& p, const QVector<int>& rows) {
   qsizetype idWidth = 0;
   qsizetype statusWidth = 0;
   for(const int r : rows) {
-    idWidth = std::max(idWidth, p.tasks.at(r).id.size());
+    idWidth = std::max(idWidth, shownKey(p.tasks.at(r)).size());
     statusWidth = std::max(statusWidth, statusName(p.statuses, p.tasks.at(r).status).size() + 2);
   }
   QString out;
   for(const int r : rows) {
     const Task& t = p.tasks.at(r);
-    QString line = t.id.leftJustified(idWidth) + QStringLiteral("  ") +
+    QString line = shownKey(t).leftJustified(idWidth) + QStringLiteral("  ") +
                    (QChar('[') + statusName(p.statuses, t.status) + QChar(']')).leftJustified(statusWidth) + QStringLiteral("  ") +
                    heap::local::effectivePriority(t).leftJustified(2) + QStringLiteral("  ") + t.title;
     if(heap::local::effectiveDueAt(t).isValid()) {
@@ -793,6 +802,7 @@ QString formatNow(const QString& format, const ProfileData& p, const Task& t, co
   // One pass, left to right, so a title containing "{id}" stays as typed.
   const QVector<QPair<QString, QString>> fields = {
       {QStringLiteral("{id}"), t.id},
+      {QStringLiteral("{key}"), shownKey(t)},
       {QStringLiteral("{title}"), t.title},
       {QStringLiteral("{status}"), statusName(p.statuses, t.status)},
       {QStringLiteral("{priority}"), heap::local::effectivePriority(t)},
@@ -941,6 +951,8 @@ QString cliText(const QString& key, const QString& language) {
       {QStringLiteral("estCleared"), {"%1: estimate removed", "%1: оценка снята"}},
       {QStringLiteral("someday"), {"%1: someday", "%1: когда-нибудь"}},
       {QStringLiteral("somedayOff"), {"%1: no longer someday", "%1: больше не «когда-нибудь»"}},
+      {QStringLiteral("column"), {" → %1", " → %1"}},
+      {QStringLiteral("stays"), {" (stays in %1)", " (остаётся в «%1»)"}},
       {QStringLiteral("unchanged"), {"%1: already so", "%1: уже так"}},
   };
   const auto it = kTable.constFind(key);

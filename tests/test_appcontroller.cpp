@@ -3525,6 +3525,96 @@ TEST_F(AppControllerTest, CarryToWindowsLinesTheSelectionUp) {
       << "the second one does not stack on the first, nor run past the working day";
 }
 
+// ─── 0.9 acceptance (APP-221, batch B4) ───
+
+namespace {
+Task trackerCard(const QString& id, const QString& key) {
+  Task t = mkTask(id, QStringLiteral("incident"));
+  t.externalId = key;
+  t.externalProvider = QStringLiteral("jira");
+  t.externalUrl = QStringLiteral("https://jira.example.com/browse/") + key;
+  return t;
+}
+}  // namespace
+
+TEST_F(AppControllerTest, ATrackerKeyIsNotGivenToANewLocalTask) {
+  // A3-7: INC-100 is OPS-1's Jira key; "INC-100 follow up" must not become a
+  // second task answering to INC-100.
+  app_->tasks()->reset({trackerCard(QStringLiteral("OPS-1"), QStringLiteral("INC-100"))});
+  const QVariantMap draft = app_->quickTaskDraft(QStringLiteral("INC-100 follow up"));
+  EXPECT_NE(draft.value("id").toString(), QStringLiteral("INC-100"));
+  EXPECT_TRUE(draft.value("title").toString().contains(QStringLiteral("INC-100")));
+  const QVariantMap parse = app_->captureParse(QStringLiteral("INC-100 follow up"));
+  EXPECT_TRUE(parse.value("ticketTaken").toBool());
+  EXPECT_EQ(parse.value("ticketTakenId").toString(), QStringLiteral("OPS-1"));
+}
+
+TEST_F(AppControllerTest, TheCommandLineNamesATicketByItsKeyAndPutsTheExactKeyFirst) {
+  // A3-10, A3-23: rows read the key the card shows; SD-105 is not SD-1050.
+  app_->tasks()->reset(
+      {trackerCard(QStringLiteral("SUP-1"), QStringLiteral("SD-1050")), trackerCard(QStringLiteral("SUP-2"), QStringLiteral("SD-105"))});
+  const QVariantMap r = app_->commandLine(QStringLiteral("SD-105"), 10);
+  const QVariantList tasks = r.value("tasks").toList();
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_EQ(tasks.first().toMap().value("id").toString(), QStringLiteral("SUP-2"));
+  EXPECT_EQ(tasks.first().toMap().value("key").toString(), QStringLiteral("SD-105"));
+  EXPECT_EQ(app_->displayKey(QStringLiteral("SUP-1")), QStringLiteral("SD-1050"));
+}
+
+TEST_F(AppControllerTest, StartingASecondTimerSaysTheFirstOneStopped) {
+  // A1-14: a 6-hour timer ended without a word.
+  app_->tasks()->reset({mkTask(QStringLiteral("FE-26"), QStringLiteral("a")), mkTask(QStringLiteral("FE-3"), QStringLiteral("b"))});
+  app_->startTaskTimer(QStringLiteral("FE-26"));
+  QSignalSpy undoable(app_.get(), &AppController::undoableToast);
+  app_->startTaskTimer(QStringLiteral("FE-3"));
+  ASSERT_EQ(undoable.count(), 1);
+  EXPECT_TRUE(undoable.first().first().toString().contains(QStringLiteral("FE-26")));
+  EXPECT_TRUE(undoable.first().first().toString().contains(QStringLiteral("stopped")));
+}
+
+TEST_F(AppControllerTest, DoneOnARecurringTaskIsOneToastWithTheNextDay) {
+  // A2-18, A2-19: the note on the next copy was replaced at once by "Done",
+  // and it read an ISO date and the copy's "-r1" id.
+  Task t = mkTask(QStringLiteral("DBA-21"), QStringLiteral("check backups"));
+  t.recurrence = QStringLiteral("every:day");
+  t.scheduledAt = QDateTime(QDate::currentDate(), QTime(9, 0));
+  app_->tasks()->reset({t});
+  QSignalSpy plain(app_.get(), &AppController::toast);
+  QSignalSpy undoable(app_.get(), &AppController::undoableToast);
+  app_->toggleDone({QStringLiteral("DBA-21")});
+  ASSERT_EQ(undoable.count(), 1);
+  const QString msg = undoable.first().first().toString();
+  EXPECT_TRUE(msg.contains(QStringLiteral("Done: DBA-21"))) << msg.toStdString();
+  EXPECT_TRUE(msg.contains(QStringLiteral("next one tomorrow"))) << msg.toStdString();
+  EXPECT_FALSE(msg.contains(QStringLiteral("-r1"))) << msg.toStdString();
+  EXPECT_FALSE(msg.contains(QDate::currentDate().addDays(1).toString(Qt::ISODate))) << msg.toStdString();
+  for(const QList<QVariant>& args : plain) {
+    EXPECT_FALSE(args.first().toString().contains(QStringLiteral("next one"))) << "said once, in the Done toast";
+  }
+}
+
+TEST_F(AppControllerTest, ArchivingNamesTheKeyForDone) {
+  // A5-20: e is "complete" in Todoist; here it archives — and says what d is.
+  app_->tasks()->reset({mkTask(QStringLiteral("MOB-3"), QStringLiteral("a"))});
+  QSignalSpy undoable(app_.get(), &AppController::undoableToast);
+  app_->setArchived(QStringLiteral("MOB-3"), true);
+  ASSERT_EQ(undoable.count(), 1);
+  EXPECT_TRUE(undoable.first().first().toString().contains(QStringLiteral("done is"))) << undoable.first().first().toString().toStdString();
+}
+
+TEST_F(AppControllerTest, ACommonKeyAsksBeforeItIsTaken) {
+  // A7-9: Ctrl+C copies everywhere else; binding it asks first.
+  EXPECT_FALSE(app_->commonShortcutWarning(QStringLiteral("task.copyId"), QStringLiteral("Ctrl+C")).isEmpty());
+  EXPECT_FALSE(app_->commonShortcutWarning(QStringLiteral("task.copyId"), QStringLiteral("Backspace")).isEmpty());
+  EXPECT_TRUE(app_->commonShortcutWarning(QStringLiteral("task.copyId"), QStringLiteral("Ctrl+K")).isEmpty());
+}
+
+TEST_F(AppControllerTest, NotesAndDocsAreNamedAsTheSidebarNamesThem) {
+  // A1-31, A6-27, A7-10: "Go to Notes", and Docs has a key.
+  EXPECT_EQ(app_->shortcutLabel(QStringLiteral("section.knowledge")), QStringLiteral("Go to Notes"));
+  EXPECT_FALSE(app_->shortcutText(QStringLiteral("view.docs")).isEmpty());
+}
+
 TEST_F(AppControllerTest, CarryWithAnUnknownModeDoesNothing) {
   app_->tasks()->reset({leftover(QStringLiteral("T-1"), QDateTime(QDate(2026, 10, 8), QTime(10, 0)), true)});
   EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1")}, QStringLiteral("auto"), QDateTime(QDate(2026, 10, 8), QTime(9, 0))), 0);

@@ -404,6 +404,32 @@ QString reservedReason(const QString& seq) {
   return {};
 }
 
+QString commonReason(const QString& portable) {
+  const QStringList chords = chordsOf(portable);
+  if(chords.size() != 1) {
+    return {};  // a sequence ("G, C") is no app's copy
+  }
+  const Chord c = parseChord(chords.first());
+  if(c.meta || c.alt) {
+    return {};
+  }
+  if(!c.ctrl) {
+    return !c.shift && c.key == QLatin1String("Backspace") ? QStringLiteral("erase") : QString();
+  }
+  if(c.shift) {
+    return {};
+  }
+  static const QHash<QString, QString> kCtrl = {{QStringLiteral("C"), QStringLiteral("copy")},
+                                                {QStringLiteral("V"), QStringLiteral("paste")},
+                                                {QStringLiteral("X"), QStringLiteral("cut")},
+                                                {QStringLiteral("S"), QStringLiteral("save")},
+                                                {QStringLiteral("W"), QStringLiteral("close")},
+                                                {QStringLiteral("Q"), QStringLiteral("quit")},
+                                                {QStringLiteral("A"), QStringLiteral("selectAll")},
+                                                {QStringLiteral("Z"), QStringLiteral("undo")}};
+  return kCtrl.value(c.key);
+}
+
 bool isRepeatableAction(const QString& id) {
   // A bare u is undone once per press (IDIOT-TASKS-4); Ctrl+Z repeats as
   // every editor's does.

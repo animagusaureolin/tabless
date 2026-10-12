@@ -135,6 +135,18 @@ TEST(KeyReserved, SystemAndNavigationKeys) {
   EXPECT_TRUE(reservedReason(QStringLiteral("G, B")).isEmpty());
 }
 
+// A7-9: keys every app uses for one thing are bindable after a question.
+TEST(KeyCommon, EditingKeysAreNamed) {
+  EXPECT_EQ(commonReason(QStringLiteral("Ctrl+C")), QStringLiteral("copy"));
+  EXPECT_EQ(commonReason(QStringLiteral("Ctrl+V")), QStringLiteral("paste"));
+  EXPECT_EQ(commonReason(QStringLiteral("Ctrl+Q")), QStringLiteral("quit"));
+  EXPECT_EQ(commonReason(QStringLiteral("Backspace")), QStringLiteral("erase"));
+  EXPECT_TRUE(commonReason(QStringLiteral("Ctrl+K")).isEmpty());
+  EXPECT_TRUE(commonReason(QStringLiteral("Ctrl+Shift+C")).isEmpty());
+  EXPECT_TRUE(commonReason(QStringLiteral("G, C")).isEmpty());
+  EXPECT_TRUE(reservedReason(QStringLiteral("Ctrl+C")).isEmpty()) << "a question, not a refusal";
+}
+
 // Held keys (IDIOT-TASKS-2/18): walking repeats, acting on a task does not.
 TEST(KeyRepeat, OnlyMovesRepeat) {
   EXPECT_TRUE(isRepeatableAction(QStringLiteral("board.cursorDown")));
