@@ -16,7 +16,7 @@ TestCase {
     // резервная копия, not бэкап (A5-26).
     readonly property var allowed: []
     readonly property var banned: ({
-        en: [/\bpalette\b/i, /\btweaks?\b/i, /\bsave view\b/i, /\bdeadlines?\b/i, /\bknowledge\b/i],
+        en: [/\bpalette\b/i, /\btweaks?\b/i, /\bsave view\b/i, /\bdeadlines?\b/i, /\bknowledge\b/i, /who to write/i],
         ru: [/палитр/i, /твик/i, /сохранить вид\b/i, /дедлайн/i, /знани[яй]/i, /бэкап/i]
     })
 

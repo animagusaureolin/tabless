@@ -418,9 +418,13 @@ TestCase {
         const line = find(tc.win.contentItem, function (it) { return it.objectName === "sidebar-views-empty"; });
         verify(line !== null);
         compare(line.visible, AppController.welcomeSeen, "shown only once the first run is over");
+        // The "My views" head goes with it: no bare heading on the first run.
+        const head = byName("sidebar-views-head");
+        compare(head.visible, AppController.welcomeSeen, "a bare head over nothing on the first run");
         // Past the first run (as tst_TodayView does): the line is there.
         AppController.markWelcomeSeen();
         tryVerify(function () { return line.visible; }, 1000, "no empty line");
+        verify(head.visible, "the head is back past the first run");
         compare(line.text, I18n.t("sidebar.myViews.empty"));
         compare(I18n.dict.en["sidebar.myViews.empty"], "Saved views appear here");
     }

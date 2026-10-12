@@ -1187,7 +1187,7 @@ QtObject {
             "savedview.dialog.query": "Query",
             "profile.fact": "Its own tasks, columns and views; meetings are shared.",
             "editor.person.title": "Person",
-            "editor.person.fact": "For “Who to write to” and @mentions.",
+            "editor.person.fact": "For “Who to message” and @mentions.",
             "schedule.keys.due": "“no” takes the due date off",
             "eod.fact.closed": "Closed %1",
             "eod.fact.timer": "on the timer %1",

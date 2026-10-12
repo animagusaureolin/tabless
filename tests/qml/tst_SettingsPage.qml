@@ -84,6 +84,17 @@ TestCase {
         verify(block(sv, "git").visible);
     }
 
+    // A5-26: the UI says "резервная копия" now, but "бэкап" (the word people
+    // type) still finds the backups rows in Data, in either language.
+    function test_search_finds_backups_by_the_old_word() {
+        const sv = make();
+        sv.searchText = "бэкап";
+        verify(sv.searchMatches.some((m) => m.key === "settings.data.backups"), "бэкап finds nothing");
+        verify(block(sv, "data").visible);
+        verify(!sv.searchEmpty);
+        sv.searchText = "";
+    }
+
     function test_old_tweaks_values_read_the_same() {
         AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: true, cursorColor: "#d97706" } });
         AppController.theme = "light";
