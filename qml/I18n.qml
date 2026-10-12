@@ -1648,7 +1648,7 @@ QtObject {
             "bulkDelete.bodyTracked": "Tracker tickets go from here only: nothing is written to the tracker.",
             "bulkDelete.bodyUndo": "%1 brings them back.",
             "taskmenu.resolveConflict": "Resolve the conflict…",
-            "carry.clearDue": "Clear the deadline",
+            "carry.clearDue": "Clear the due date",
             "palette.cmd.someday": "→ Someday",
             "palette.cmd.someday.words": "someday later park когда-нибудь отложить",
             "palette.cmd.someday.none": "No task under the cursor to park",
