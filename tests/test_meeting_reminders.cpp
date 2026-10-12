@@ -107,6 +107,16 @@ TEST(MeetingWindow, AFocusBlockIsNotAMeeting) {
   EXPECT_TRUE(due.isEmpty());
 }
 
+// A2-17: a lead the user picked for a focus block by hand is kept.
+TEST(MeetingWindow, AFocusBlockWithItsOwnLeadReminds) {
+  CalEvent e = at(QStringLiteral("a"), 10.0 + 5.0 / 60.0, QStringLiteral("focus"));
+  e.reminderMinutes = 30;
+  const auto due = dueMeetingReminders({e}, kNow, 10);
+
+  ASSERT_EQ(due.size(), 1);
+  EXPECT_EQ(due.first().eventId, QStringLiteral("a"));
+}
+
 TEST(MeetingWindow, TwoEventsInTheWindowAreBothDue) {
   const QVector<CalEvent> events{at(QStringLiteral("a"), 10.0 + 3.0 / 60.0), at(QStringLiteral("b"), 10.0 + 6.0 / 60.0)};
   const auto due = dueMeetingReminders(events, kNow, 10);

@@ -55,8 +55,10 @@ inline QString meetingReminderKey(const QString& eventId, const QDateTime& start
 // Occurrences (already expanded, in the viewer's clock) whose reminder is
 // due at `now` and not yet in `sent`.
 //
-// A focus block is excluded: it is the user's own time, put there on purpose,
-// and they are already in it. An all-day event is excluded too — it has no
+// A focus block is left out by default: it is the user's own time, put there
+// on purpose, and they are already in it. A lead chosen for it by hand is kept
+// (A2-17): the editor offered "30 min before" and nothing ever came. An
+// all-day event is excluded too — it has no
 // start to count down to. An event's own lead (CalEvent::reminderMinutes)
 // beats `defaultLead`; kReminderOff silences it.
 inline QVector<DueReminder> dueMeetingReminders(const QVector<CalEvent>& occurrences,
@@ -68,7 +70,7 @@ inline QVector<DueReminder> dueMeetingReminders(const QVector<CalEvent>& occurre
     return out;
   }
   for(const CalEvent& e : occurrences) {
-    if(e.allDay || !e.date.isValid() || e.type == QStringLiteral("focus")) {
+    if(e.allDay || !e.date.isValid() || (e.type == QStringLiteral("focus") && e.reminderMinutes < 0)) {
       continue;
     }
     if(e.reminderMinutes == CalEvent::kReminderOff) {
