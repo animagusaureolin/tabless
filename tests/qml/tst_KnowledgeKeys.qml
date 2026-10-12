@@ -13,6 +13,11 @@
 //       in another folder.
 // A4-17 (the board, same batch) Esc lets go of words typed with "/" while
 //       they still find cards.
+// VB5-R1 arriving (or a link followed) after a Tab stop had the keyboard
+//       lands on the drawn note, not that stop; a letter on a stop is not
+//       text; a bare u with nothing of the note's own types nothing.
+// VB5-R2 the F6 frame goes once the keyboard leaves the links column.
+// VB5-R3 Return on a "linked from" row: the keyboard goes on to that note.
 import QtQuick
 import QtTest
 import TodoCpp
@@ -182,7 +187,117 @@ TestCase {
         keyClick(Qt.Key_U);
         wait(200);
         compare(String(AppController.taskById(t).priority), now, "u did not undo the board's change");
+        compare(AppController.noteBody(id), "# Undo scope probe
+
+text", "u was not typed into the note");
+        verify(!tc.win._typing, "u left the caret out of the text, " + focusName());
         AppController.deleteTask(t);
+    }
+
+    function test_arriving_after_a_tab_stop_lands_on_the_note() {
+        const body = "# Stale stop probe
+
+```
+let x = 1;
+```
+";
+        const id = note("Stale stop probe", body);
+        openNote(id);
+        let hit = false;
+        for (let i = 0; i < 40 && !hit; i++) {
+            keyClick(Qt.Key_Tab);
+            hit = focusName() === "mdCodeCopyButton";
+        }
+        verify(hit, "Tab never reached the code block's Copy");
+        // A letter on the button is not text for the note.
+        chord(Qt.Key_G, Qt.Key_T);
+        compare(AppController.noteBody(id), body, "g t on Copy wrote into the note");
+        // Esc on the button: back on the drawn note.
+        keyClick(Qt.Key_Escape); wait(100);
+        verify(inside("notes-live") && focusName() !== "mdCodeCopyButton" && !tc.win._typing,
+               "Esc on Copy: the drawn note, " + focusName());
+        // Away and back: the drawn note, not the button it had last.
+        for (let i = 0; i < 40 && focusName() !== "mdCodeCopyButton"; i++) keyClick(Qt.Key_Tab);
+        compare(focusName(), "mdCodeCopyButton");
+        AppController.currentView = "today";
+        wait(300);
+        tc.win.focusActiveView();
+        wait(100);
+        chord(Qt.Key_G, Qt.Key_N);
+        tryCompare(AppController, "currentView", "notes");
+        wait(300);
+        verify(inside("notes-live") && focusName() !== "mdCodeCopyButton" && !tc.win._typing,
+               "arrived on the stop it had last: " + focusName());
+        chord(Qt.Key_G, Qt.Key_T);
+        tryCompare(AppController, "currentView", "today");
+        compare(AppController.noteBody(id), body, "nothing typed into the note");
+    }
+
+    function test_a_link_followed_then_g_t_writes_nothing() {
+        const target = note("Follow target B5", "# Follow target B5
+
+back to [[Follow source B5]]");
+        const id = note("Follow source B5", "# Follow source B5
+
+see [[Follow target B5]] now");
+        openNote(id);
+        let hit = false;
+        for (let i = 0; i < 40 && !hit; i++) {
+            keyClick(Qt.Key_Tab);
+            hit = focusName() === "mdLinkStop";
+        }
+        verify(hit, "Tab never reached the [[link]]");
+        keyClick(Qt.Key_Return);
+        tryCompare(AppController, "activeNoteId", target);
+        tryVerify(function () { return inside("notes-live") && focusName() !== "mdLinkStop" && !tc.win._typing; }, 2000,
+                  "the keyboard stayed on a link: " + focusName());
+        chord(Qt.Key_G, Qt.Key_T);
+        tryCompare(AppController, "currentView", "today");
+        compare(AppController.noteBody(target), "# Follow target B5
+
+back to [[Follow source B5]]", "g t wrote into the note");
+    }
+
+    function test_a_linked_from_row_hands_the_keyboard_to_its_note() {
+        const target = note("Incoming target B5", "# Incoming target B5
+
+x");
+        const id = note("Incoming source B5", "# Incoming source B5
+
+see [[Incoming target B5]]");
+        openNote(target);
+        keyClick(Qt.Key_F6); wait(100);
+        verify(inside("notes-links-pane"), "document → links, " + focusName());
+        verify(tc.win.regionShown.length > 0, "F6 framed the links");
+        for (let i = 0; i < 10 && !inside("incoming-" + id); i++) keyClick(Qt.Key_Tab);
+        verify(inside("incoming-" + id), "the row is a stop, " + focusName());
+        keyClick(Qt.Key_Return);
+        tryCompare(AppController, "activeNoteId", id);
+        tryVerify(function () { return inside("notes-live") && !tc.win._typing; }, 2000,
+                  "the keyboard did not go on to the note: " + focusName());
+        compare(tc.win.regionShown, "", "the F6 frame stayed on the links column");
+    }
+
+    function test_the_f6_frame_goes_when_the_keyboard_leaves_the_links() {
+        const target = note("Frame target B5", "# Frame target B5
+
+x");
+        const id = note("Frame source B5", "# Frame source B5
+
+see [[Frame target B5]]");
+        verify(id.length > 0);
+        openNote(target);
+        keyClick(Qt.Key_F6); wait(100);
+        verify(inside("notes-links-pane"));
+        verify(tc.win.regionShown.length > 0, "F6 framed the links");
+        keyClick(Qt.Key_Escape); wait(100);
+        verify(!inside("notes-links-pane"), "Esc left the links, " + focusName());
+        compare(tc.win.regionShown, "", "the frame stayed after Esc");
+        keyClick(Qt.Key_F6); wait(100);
+        verify(tc.win.regionShown.length > 0);
+        tc.win.width = 1000;
+        wait(200);
+        compare(tc.win.regionShown, "", "the frame stayed after a resize hid the column");
     }
 
     function test_f6_walks_the_parts_of_knowledge() {

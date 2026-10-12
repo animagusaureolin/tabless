@@ -129,10 +129,26 @@ Item {
         }
         root._leave(true);
         view.forceActiveFocus();
+        // The view is a focus scope: it handed the keyboard back to the stop
+        // that had it last (a [[link]] followed with Return, the code block's
+        // Copy), where g t typed "gt" into the note and Esc did nothing
+        // (VB5-R1). The stop lets go, so the document itself holds it.
+        for (let i = 0; i < 4 && root._onStop(); i++) {
+            const f = root.Window.activeFocusItem;
+            if (!f) break;
+            f.focus = false;
+            view.forceActiveFocus();
+        }
     }
-    // The drawn document holds the keyboard (not a block, not a link on it).
-    readonly property bool documentFocused: view.activeFocus && !root.editing
-                                            && !(root.Window.activeFocusItem && root.Window.activeFocusItem.objectName === "mdLinkStop")
+    // The keyboard is on a Tab stop drawn in the document (a link, a box,
+    // Copy), not on the document itself.
+    function _onStop() {
+        for (let p = root.Window.activeFocusItem; p && p !== view; p = p.parent)
+            if (p.activeFocusOnTab === true) return true;
+        return false;
+    }
+    // The drawn document holds the keyboard (not a block, not a stop on it).
+    readonly property bool documentFocused: view.activeFocus && !root.editing && !root._onStop()
     // Its own undo, for the keymap's bare "u" on the drawn document.
     readonly property bool canUndoHere: !root.readOnly && src.canUndo
     function undoHere() {
@@ -605,6 +621,9 @@ Item {
             return;
         }
         if (!root.typeToEdit || root.readOnly || root.editing || !root.visible) return;
+        // A letter on a link or a button is not text for the note: g t on a
+        // [[link]] wrote "gt" into it (VB5-R1).
+        if (root._onStop()) return;
         const mods = event.modifiers & ~(Qt.ShiftModifier | Qt.KeypadModifier);
         const c = event.text.length > 0 ? event.text.charCodeAt(0) : 0;
         if (mods !== Qt.NoModifier || c < 32 || c === 127) return;

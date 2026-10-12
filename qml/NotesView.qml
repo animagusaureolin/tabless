@@ -547,10 +547,28 @@ Item {
         if (ed && ed.documentFocused && ed.canUndoHere) return true;
         return AppController.hasPendingUndo && AppController.undoIsKnowledgeOnly();
     }
+    // On the drawn note the bare key is always the note's: with nothing of
+    // its own to take back and a change elsewhere on top, "u" was typed into
+    // the note as a letter (VB5-R1). It stays a key, and says so.
+    function undoKeyOwned() {
+        const ed = root._shownLive();
+        return !!ed && ed.documentFocused && !ed.readOnly;
+    }
+    // False when nothing was taken back (Main says why).
     function undoKey() {
         const ed = root._shownLive();
-        if (ed && ed.documentFocused && ed.undoHere()) return;
+        if (ed && ed.documentFocused && ed.undoHere()) return true;
+        if (!AppController.hasPendingUndo || !AppController.undoIsKnowledgeOnly()) return false;
         AppController.undo();
+        return true;
+    }
+    // A row of the links column followed: the note opens and the keyboard
+    // goes on to it. Done here, not in the row: the row is rebuilt for the
+    // note opened and its own code had no `root` left to call (VB5-R3).
+    function _openLinkedNote(noteId) {
+        root._flushPending();
+        AppController.activeNoteId = noteId;
+        Qt.callLater(root.takeFocus);
     }
     // F6 walks the parts of the screen (Main asks, A4-27): the list, the
     // document, the links beside it. `entering`: F6 has just come in from
@@ -1525,13 +1543,8 @@ Item {
                     objectName: "incoming-" + modelData.noteId
                     text: modelData.title
                     tip: modelData.title + " — " + modelData.text
-                    onActivated: {
-                        root._flushPending();
-                        AppController.activeNoteId = modelData.noteId;
-                        // The row is rebuilt for the note opened: the keyboard
-                        // goes on to that note (A4-7).
-                        Qt.callLater(root.takeFocus);
-                    }
+                    // The keyboard goes on to the note opened (A4-7).
+                    onActivated: root._openLinkedNote(modelData.noteId)
                 }
             }
             Repeater {

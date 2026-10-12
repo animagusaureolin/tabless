@@ -188,8 +188,16 @@ ApplicationWindow {
 
     onXChanged: if (win._geometryRestored) geometrySaveTimer.restart()
     onYChanged: if (win._geometryRestored) geometrySaveTimer.restart()
-    onWidthChanged: if (win._geometryRestored) geometrySaveTimer.restart()
-    onHeightChanged: if (win._geometryRestored) geometrySaveTimer.restart()
+    // The F6 frame is drawn where its region was: a resize moves that, so
+    // the frame goes (VB5-R2).
+    onWidthChanged: {
+        win.regionShown = "";
+        if (win._geometryRestored) geometrySaveTimer.restart();
+    }
+    onHeightChanged: {
+        win.regionShown = "";
+        if (win._geometryRestored) geometrySaveTimer.restart();
+    }
     onVisibilityChanged: if (win._geometryRestored) geometrySaveTimer.restart()
     // Ends with the display name, so the OS title bar does not append it a
     // second time ("heap. — Work, in one place. - heap.").
@@ -600,7 +608,11 @@ ApplicationWindow {
         const it = win.activeFocusItem;
         if (!it) return;
         // The region frame (APP-277) goes once the keyboard leaves the region.
-        if (win.regionShown.length > 0 && win._regionOf(it) !== win.regionShown) win.regionShown = "";
+        // A part of a view (Knowledge's links column) is left as the region
+        // is: the frame stayed on the column after Esc (VB5-R2).
+        if (win.regionShown.length > 0 && (win._regionOf(it) !== win.regionShown
+                                           || (win._regionPart && !win._isWithin(it, win._regionPart))))
+            win.regionShown = "";
         // Walked here, not read from _focusInPopup: that binding is stale at
         // this moment, and the popup's own item became the place to go back
         // to (IDIOT-DOC-4).
@@ -1586,8 +1598,8 @@ ApplicationWindow {
         return !!v && v.nothingFound === true;
     }
     // Words typed with "/" are still on the board after Enter: Esc lets go of
-    // them as it does when they find nothing (A4-17). The cursor and a
-    // selection take the earlier Esc presses.
+    // them as it does when they find nothing (A4-17). A selection keeps its
+    // own Esc first; the words go before the board cursor does.
     readonly property bool _taskFilterTyped: AppController.currentSection === "tasks"
                                              && String(win.searchText || "").trim() !== win.defaultQuery("", false)
     Shortcut {
@@ -2192,7 +2204,9 @@ ApplicationWindow {
         // A view may keep the bare key to what it shows (Knowledge: the
         // note's own edit, never a change on a screen not in sight).
         case "undo":
-            if (routed && b && typeof b.undoKeyLive === "function") return b.undoKeyLive() && !win._overlayOpen && !win._typing;
+            if (routed && b && typeof b.undoKeyLive === "function")
+                return (b.undoKeyLive() || (typeof b.undoKeyOwned === "function" && b.undoKeyOwned()))
+                    && !win._overlayOpen && !win._typing;
             return AppController.hasPendingUndo && !win._overlayOpen && !win._typing;
         case "redo": return AppController.canRedo && !win._overlayOpen && !win._typing;
         case "focus.immersion": return !!(AppController.safety && AppController.safety.immersion);
@@ -2447,7 +2461,9 @@ ApplicationWindow {
         case "cal.taskTimeLater": win._moveViewTask(0, 1); return;
         case "undo":
             if (taskDoc.opened && win._focusInPanel) taskDoc.undo();
-            else if (b && typeof b.undoKey === "function") b.undoKey();
+            else if (b && typeof b.undoKey === "function") {
+                if (!b.undoKey()) toast.show(I18n.t("notes.undoNotHere"), "info");
+            }
             else AppController.undo();
             return;
         case "redo": AppController.redo(); return;
@@ -3106,12 +3122,12 @@ ApplicationWindow {
         const parts = !!v && typeof v.stepRegion === "function";
         if (parts && list[i] === "content" && !win._panelOpen) {
             const part = v.stepRegion(dir, false);
-            if (part) { win._showRegion("content", part); return; }
+            if (part) { win._showRegion("content", part, true); return; }
         }
         const next = list[(i + dir + list.length) % list.length];
         if (next === "content" && parts && !win._panelOpen) {
             const part = v.stepRegion(dir, true);
-            if (part) { win._showRegion("content", part); return; }
+            if (part) { win._showRegion("content", part, true); return; }
         }
         if (next === "content") win.focusActiveView();
         else if (next === "sidebar") rail.takeFocus();
@@ -3123,7 +3139,15 @@ ApplicationWindow {
         }
         win._showRegion(next, win._regionItem(next));
     }
-    function _showRegion(name, r) {
+    // The view part F6 framed (null for a whole region).
+    property Item _regionPart: null
+    function _isWithin(it, box) {
+        for (let p = it; p; p = p.parent)
+            if (p === box) return true;
+        return false;
+    }
+    function _showRegion(name, r, part) {
+        win._regionPart = part ? r : null;
         win.regionShown = name;
         const pos = r.mapToItem(win.contentItem, 0, 0);
         regionFrame.x = pos.x;
@@ -3136,7 +3160,8 @@ ApplicationWindow {
         objectName: "region-frame"
         parent: win.contentItem
         z: 900
-        visible: win.regionShown.length > 0
+        // Drawn where F6 put it: a resize moves what it framed (VB5-R2).
+        visible: win.regionShown.length > 0 && (!win._regionPart || win._regionPart.visible)
         color: "transparent"
         border.color: Theme.focusRing
         border.width: 1
