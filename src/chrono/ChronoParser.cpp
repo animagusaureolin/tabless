@@ -589,10 +589,13 @@ class ChronoParser::Impl {
     r.recurrence = m.recurrence;
     r.hasTime = m.hasTime;
     r.start = QDateTime(m.date, m.hasTime ? m.start : QTime(0, 0));
-    if(m.hasTime && m.hasRange && m.end != m.start) {
-      // "22:00-01:00" ends the next morning; it used to end before it began
-      // and the editor quietly made it an hour long (IDIOT-CAL-11).
-      r.end = QDateTime(m.end < m.start ? m.date.addDays(1) : m.date, m.end);
+    // "22:00-01:00" ends the next morning; it used to end before it began
+    // and the editor quietly made it an hour long (IDIOT-CAL-11). An end more
+    // than half a day "after" that way ("11:00-10:00") is a slip, not an
+    // overnight meeting: no end is read, and the length stays.
+    const bool overnight = m.end < m.start && m.start.secsTo(m.end) + 24 * 3600 <= 12 * 3600;
+    if(m.hasTime && m.hasRange && m.end != m.start && (m.end > m.start || overnight)) {
+      r.end = QDateTime(overnight ? m.date.addDays(1) : m.date, m.end);
     }
 
     // Consumed span = union of the date and time halves. B (the time or the

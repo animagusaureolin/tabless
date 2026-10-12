@@ -316,6 +316,8 @@ TEST(CaptureAcceptance, RangesWithTwoMeridiems) {
   r = at(QStringLiteral("call 11-1pm"), now);
   EXPECT_EQ(r.when.time(), QTime(11, 0));
   EXPECT_EQ(r.whenEnd.time(), QTime(13, 0));
+  // A backwards slip is not a 23-hour meeting.
+  EXPECT_FALSE(at(QStringLiteral("call 11:00-10:00"), now).whenEnd.isValid());
   r = at(QStringLiteral("late sync 23:30-00:30"), now);
   EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 12), QTime(23, 30)));
   EXPECT_EQ(r.whenEnd, QDateTime(QDate(2026, 10, 13), QTime(0, 30)));
