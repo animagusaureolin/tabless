@@ -29,7 +29,7 @@ body:
     attributes:
       label: Version
       description: Settings → About.
-      placeholder: "0.8.5"
+      placeholder: "0.8.6"
     validations:
       required: true
   - type: dropdown
