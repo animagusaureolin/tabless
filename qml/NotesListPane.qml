@@ -55,21 +55,27 @@ Rectangle {
     // pinned at the top, the doc pages and the snippets below the notes.
     signal refActivated(string url)
     signal pageActivated(string id)
-    // A snippet or a link is shown in the document pane (APP-290): its code,
-    // its description; open and copy are there and in the row menu.
+    // A snippet is shown in the document pane (APP-290), its code to read;
+    // a link has nothing inside but its address, so it opens.
     signal itemShown(var row)
-    // "snippet:<idx>" or "ref:<sec>:<item>": the row the document shows.
+    // "snippet:<idx>": the row the document shows.
     property string shownKey: ""
     signal contactActivated(string handle)
 
     // The Docs catalogue, read as it is stored: nothing is moved or copied,
     // so nothing of it can be lost on the way to Knowledge.
-    // A snippet's code, a link's address — with the toast saying what.
+    // What a row holds, copied — a double click on any row (APP-290): a
+    // page's text, a snippet's code, a link's address, a contact's handle.
     function copyItem(r) {
         if (!r) return;
-        const text = r.kind === "snippet" ? String(r.code || "") : String(r.url || "");
+        let text = "", what = "";
+        if (r.kind === "page") { text = AppController.docPageBody(r.id); what = r.name || r.title || ""; }
+        else if (r.kind === "snippet") { text = String(r.code || ""); what = r.title || r.lang || ""; }
+        else if (r.kind === "ref") { text = String(r.url || ""); what = text; }
+        else if (r.kind === "contact") { text = String(r.handle || ""); what = text; }
+        if (text.length === 0) return;
         AppController.copyToClipboard(text);
-        AppController.showToast(I18n.t("docs.toast.copied").arg(r.kind === "snippet" ? (r.title || r.lang || "") : text));
+        AppController.showToast(I18n.t("docs.toast.copied").arg(what));
     }
     function editItem(kind, data) { docDialog.openFor(kind, data); }
 
@@ -706,7 +712,6 @@ Rectangle {
                         const r = drow.rowData;
                         if (r.kind === "page") return r.id === root.openPageId;
                         if (r.kind === "snippet") return root.shownKey === "snippet:" + r.idx;
-                        if (r.kind === "ref") return root.shownKey === "ref:" + r.sec + ":" + r.item;
                         return false;
                     }
                     // Quiet draws no tag chip: a reference reads "RFC 9110 · title".
@@ -751,16 +756,31 @@ Rectangle {
                             }
                         }
                     }
+                    // A click opens what has an inside (a page, a snippet) in
+                    // the document, opens a link, copies a contact's handle; a
+                    // double click copies what the row holds. A link waits out
+                    // the double-click time, so copying it does not open it.
                     ClickArea {
                         id: drowCA
                         label: drow.rowData.title || ""
                         role: Accessible.Link
                         onActivated: {
                             const r = drow.rowData;
-                            if (r.kind === "ref" || r.kind === "snippet") root.itemShown(r);
+                            if (r.kind === "snippet") root.itemShown(r);
                             else if (r.kind === "page") root.pageActivated(r.id);
                             else if (r.kind === "contact") root.contactActivated(r.handle);
+                            else if (r.kind === "ref") refOpen.restart();
                         }
+                        onDoubleActivated: {
+                            refOpen.stop();
+                            // The contact's first click copied it already.
+                            if (drow.rowData.kind !== "contact") root.copyItem(drow.rowData);
+                        }
+                    }
+                    Timer {
+                        id: refOpen
+                        interval: Qt.styleHints.mouseDoubleClickInterval
+                        onTriggered: root.refActivated(drow.rowData.url)
                     }
                     // Right-click: pin a reference, rename or delete a page,
                     // edit or delete a snippet, a link or a contact.
@@ -781,7 +801,7 @@ Rectangle {
                         }
                         AppMenuItem {
                             objectName: "knowledge-item-copy"
-                            visible: drow.rowData.kind === "ref" || drow.rowData.kind === "snippet"
+                            visible: drow.rowData.kind !== undefined
                             height: visible ? implicitHeight : 0
                             text: I18n.t("docs.copy")
                             onTriggered: root.copyItem(drow.rowData)
