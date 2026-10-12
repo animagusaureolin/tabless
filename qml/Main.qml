@@ -429,6 +429,14 @@ ApplicationWindow {
         Qt.callLater(damagedFile.showIfNeeded);
         // Once after an update to a new release line (R2-054).
         Qt.callLater(whatsNew.showIfUpdated);
+        // A patch release: one quiet line, with the changelog a key away (A5-19).
+        Qt.callLater(win._showUpdatedFrom);
+    }
+    function _showUpdatedFrom() {
+        const from = AppController.takeUpdatedFrom();
+        if (from.length === 0) return;
+        toast.showWithAction(I18n.t("update.patched").arg(from).arg(AppController.appVersion),
+                             I18n.t("update.line.whatsNew"), 10, function () { whatsNew.showNow(); }, "info", "", true);
     }
     function _showShellNotice() {
         const msg = AppController.shellNotice;
@@ -1213,7 +1221,12 @@ ApplicationWindow {
                 onLeaveRequested: win.focusActiveView()
                 onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
                 resultCount: section === "tasks" ? filterBar._fc.total : -1
-                onSaveViewRequested: savedViewsHost.openSave()
+                // Ctrl S in the field (A6-25): the typed filter applies first.
+                onSaveViewRequested: {
+                    searchApply.stop();
+                    win.searchText = topBar.searchText;
+                    savedViewsHost.openSave();
+                }
                 profileName: rail.profileSwitcher.active.name || ""
                 onProfileChipClicked: rail.profileSwitcher.openMenu()
             }
@@ -2056,7 +2069,7 @@ ApplicationWindow {
         topBar.focusSearch();
     }
 
-    // Saved views: the active one, applying one, Alt+1…9, the name dialog.
+    // Saved views: the active one, applying one, Ctrl 4… / g 1…, the name dialog.
     SavedViewsHost {
         id: savedViewsHost
         objectName: "saved-views-host"
@@ -2071,11 +2084,11 @@ ApplicationWindow {
         // filter shown in Tasks or saved as a view, nothing found → a task.
         contextProvider: function () { return win._keyTaskIds(); }
         onQueryRequested: (query, mode) => {
-            // Saving keeps the lens the person is on: on the Board it threw
-            // them to the List and stored a List view (A2-6).
-            const lens = mode === "board" || (mode === "save" && AppController.currentView === "board") ? "board" : "list";
-            win.showQuery(query, lens);
-            if (mode === "save") Qt.callLater(savedViewsHost.openSave);
+            // Saving keeps the lens and the filter the user is on: Ctrl S on
+            // the board threw them to the list and replaced their filter with
+            // the palette's text, even when the dialog was cancelled (A3-15).
+            if (mode === "save") { Qt.callLater(savedViewsHost.openSaveQuery, query); return; }
+            win.showQuery(query, mode === "board" ? "board" : "list");
         }
         onCreateRequested: (text) => quickCapture.openWithText(text)
         onOpenTask: (taskId) => win.showTask(AppController.taskById(taskId))
@@ -2087,6 +2100,7 @@ ApplicationWindow {
         onNavigateToContacts: (text) => notesBridge.requestedFilter = text
         onNavigateToNoteLine: (line) => notesBridge.requestedLine = line
         onNavigateToDocPage: (pageId) => notesBridge.requestedPage = pageId
+        onSearchNotes: (text) => notesBridge.requestedFilter = text
     }
 
     // A search hit sets the line it wants, NotesView watches and puts the
@@ -3666,8 +3680,8 @@ ApplicationWindow {
         areaWidth: mainColumn.width
         anchors.bottom: parent.bottom
         // Above the "g …" bar while it waits: it covered the toast's Undo
-        // (A1-32).
-        anchors.bottomMargin: 24 + win._selectionBarSpace
+        // (A1-32); above the task document's Done bar too.
+        anchors.bottomMargin: 24 + win._selectionBarSpace + taskDoc.toastLift
                               + (keyPendingBar.visible ? keyPendingBar.height + Theme.spMd : 0)
         z: 100
     }

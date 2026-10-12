@@ -65,6 +65,12 @@ QString displayKeys(const QString& portable, bool mac);
 // Returns a stable code ("system", "navigation"), not text.
 QString reservedReason(const QString& portable);
 
+// A key every app uses for one thing — Ctrl+C copies, Backspace erases — that
+// may still be bound, after a question (A7-9). Returns a stable code ("copy",
+// "paste", "cut", "save", "close", "quit", "selectAll", "undo", "erase"),
+// empty when the key means nothing in particular.
+QString commonReason(const QString& portable);
+
 // Whether holding the key of a catalogue action may run it again and again:
 // walking, moving, growing a selection, paging. Everything else runs once per
 // press — a held e archived a whole column, a held Del every saved view

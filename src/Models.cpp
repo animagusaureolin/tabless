@@ -185,7 +185,11 @@ QString TaskModel::searchTextOf(const Task& t) {
     parts.append(t.branch);
     parts.append(QString(t.branch).replace(kBranchSeparators, QStringLiteral(" ")));
   }
-  return parts.join(QChar(' ')).toLower();
+  // Folded as heap::query::foldSearch folds the typed words: «ё» reads as «е»
+  // (A3-11). Spelled out here so the model does not depend on the query code.
+  QString hay = parts.join(QChar(' ')).toLower();
+  hay.replace(QChar(0x0451), QChar(0x0435));
+  return hay;
 }
 
 const QString& TaskModel::searchTextAt(int row) const {

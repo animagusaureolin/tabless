@@ -73,11 +73,12 @@ Keys go to the innermost thing that holds the keyboard:
 | Tasks · List | `G, L` |
 | Tasks · Calendar | `G, C` |
 | Notes | `G, N` or `Ctrl+3` |
+| Docs | `G, D` |
 | My view 1 … 9 | `G, 1` `G, 2` `G, 3` `G, 4` `G, 5` `G, 6` `G, 7` `G, 8` `G, 9`; also `Ctrl+4` `Ctrl+5` `Ctrl+6` `Ctrl+7` `Ctrl+8` `Ctrl+9` for the first six |
 | Open the task in its tracker | `G, X` |
 | Back / forward through where you have been | `Ctrl+O` / `Ctrl+I` |
 
-The other views (archive, docs, notes) have no key of their own and can be
+The archive has no key of its own (it is the `is:archived` filter) and can be
 given one.
 
 ## Command line

@@ -80,8 +80,15 @@ TestCase {
         wait(50);
         const ids = groups(s.contentItem, []).filter(g => g.visible).map(g => String(g.objectName).replace("key-sheet-group-", ""));
         compare(ids.sort(), ["changed", "copy", "find", "go", "move", "moveTask", "select", "task", "view"]);
+        // Docs has a key now (g d, A7-10) and its row in "Go to"; the archive
+        // still has none.
+        let docsRow = false;
         for (const g of s.groups)
-            for (const r of g.rows) verify(r.ids.indexOf("view.archive") < 0 && r.ids.indexOf("view.docs") < 0);
+            for (const r of g.rows) {
+                verify(r.ids.indexOf("view.archive") < 0);
+                docsRow = docsRow || r.ids.indexOf("view.docs") >= 0;
+            }
+        verify(docsRow, "no Docs row in the sheet");
         s.close();
     }
 

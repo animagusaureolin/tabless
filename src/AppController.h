@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 class QNetworkAccessManager;
@@ -370,6 +371,8 @@ class AppController : public QObject {
   // identifier (e.g. "task.created"); returns the EN form as a last-resort
   // fallback if the key is missing in the active table.
   Q_INVOKABLE QString tr_(const QString& key) const;
+  // The name a task goes by on screen: its tracker key, else its id (A3-10).
+  Q_INVOKABLE QString displayKey(const QString& id) const;
 
   QString currentView() const {
     return m_currentView;
@@ -805,6 +808,12 @@ class AppController : public QObject {
 
   bool whatsNewDue() const {
     return m_whatsNewDue;
+  }
+
+  // The version this data last ran on when it was an earlier patch of the
+  // same line (A5-19): said once, quietly; "" otherwise. Cleared on read.
+  Q_INVOKABLE QString takeUpdatedFrom() {
+    return std::exchange(m_updatedFrom, QString());
   }
 
   Q_INVOKABLE void ackWhatsNew() {
@@ -1775,6 +1784,10 @@ class AppController : public QObject {
   // Ids of the active profile's notes / doc pages whose title, folder or body
   // contain every word of `query` — what the list filters show.
   Q_INVOKABLE QStringList notesMatching(const QString& query) const;
+  // "In other profiles: 6 in Personal" for a filter that finds nothing here;
+  // "" when no other profile has a match either (A3-13).
+  Q_INVOKABLE QString matchesElsewhere(const QString& text) const;
+  QStringList notesMatchingExactly_(const QString& query) const;
   Q_INVOKABLE QStringList docPagesMatching(const QString& query) const;
 
   // ---- Backups ----
@@ -1836,6 +1849,9 @@ class AppController : public QObject {
   Q_INVOKABLE QString shortcutText(const QString& id) const;
   // Why a key cannot be bound (the system keeps it, Tab drives dialogs); "".
   Q_INVOKABLE QString reservedShortcutReason(const QString& sequence) const;
+  // A key every app uses for one thing (Ctrl+C, Backspace…): bindable, after
+  // a question; empty when it is free or the action's own default (A7-9).
+  Q_INVOKABLE QString commonShortcutWarning(const QString& id, const QString& sequence) const;
   // The action whose sequence starts with `sequence`, or that `sequence`
   // starts with (g and g b): such a key is refused, not swapped; "" when none.
   Q_INVOKABLE QString prefixShortcutConflict(const QString& id, const QString& sequence) const;
@@ -2237,6 +2253,12 @@ class AppController : public QObject {
   // toggleDone() says "Done: X" itself; the move's own "X → Done" would be a
   // second toast for the same action (DG-140).
   bool m_moveToastHeld = false;
+  // The recurrence note a held move toast leaves for toggleDone (A2-18).
+  QString m_heldRecursNote;
+  // "tomorrow, Tue, Oct 13" / "завтра, вт, 13 окт" for a toast.
+  QString dayWords_(const QDate& d) const;
+  // "6 h 10 min" / "6 ч 10 мин".
+  QString durationWords_(int secs) const;
   // Sound palette (APP-177): muted for CLI requests; a bulk move plays one
   // sound when the loop ends, not one per card — "done" if anything closed,
   // else "refuse" if a card was refused. -1: nothing pending.
@@ -2545,6 +2567,7 @@ class AppController : public QObject {
   QJsonObject buildStateHead();
   QVariantMap m_keychainProblem;
   bool m_whatsNewDue = false;
+  QString m_updatedFrom;
   void setStorageState(const QString& state, const QString& message);
   // state.json exists but could not be read: show the newest backup (or an
   // empty workspace) read-only and never write over the file.
@@ -2677,6 +2700,15 @@ class AppController : public QObject {
   // Drops the undo history of the workspace being left; a profile removal
   // stays (IDIOT-SHELL-2).
   void clearWorkspaceUndo();
+  // Each profile keeps its undo history while another one is active (A3-14,
+  // A5-7): a stray Ctrl ] must not make a delete final. Parked on leaving a
+  // workspace, put back on returning to it.
+  QHash<QString, heap::undo::UndoStack> m_parkedUndo;
+  void parkWorkspaceUndo(const QString& profileId);
+  // Is `key` some task's id or a tracker card's key in this workspace?
+  bool ticketKeyTaken(const QString& key) const;
+  QString taskIdForKey(const QString& key) const;
+  void restoreWorkspaceUndo(const QString& profileId);
 
   // Selection state
   QSet<QString> m_selectedTaskIds;

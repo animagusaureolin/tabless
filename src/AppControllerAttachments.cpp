@@ -416,8 +416,9 @@ QSet<QString> AppController::referencedAttachmentIds() const {
   }
   collectText(m_notesState, &ids);
   collectText(m_docsState, &ids);
-  // Undo and redo can bring back anything they hold.
-  m_undo.forEachEntry([&](const heap::undo::Entry& e) {
+  // Undo and redo can bring back anything they hold, the other profiles'
+  // parked stacks included (A3-14).
+  const auto collectEntry = [&](const heap::undo::Entry& e) {
     for(const auto& x : e.tasks) {
       collectTask(x.before, &ids);
       collectTask(x.after, &ids);
@@ -435,7 +436,11 @@ QSet<QString> AppController::referencedAttachmentIds() const {
     if(e.profileRemoved) {
       collectProfile(e.profile, &ids);
     }
-  });
+  };
+  m_undo.forEachEntry(collectEntry);
+  for(const heap::undo::UndoStack& parked : std::as_const(m_parkedUndo)) {
+    parked.forEachEntry(collectEntry);
+  }
   // A backup holds only state.json, so a file it names is gone for good once
   // cleaned up, and restoring it brings back a broken attachment (TASKS-16,
   // audit 2026-09-30). An id is a hash plus extension, which no other text in

@@ -20,6 +20,8 @@ FocusScope {
     // The open task's id; empty = closed.
     property string taskId: ""
     property bool full: false
+    // How far a toast rises so it does not sit on the bottom Done (A2-34).
+    readonly property real toastLift: root.opened && doneBottom.visible ? doneBottom.height + Theme.sp2xl : 0
     readonly property bool opened: root.taskId.length > 0
     visible: root.opened
     // Slides in from the right edge (APP-175).
@@ -402,6 +404,34 @@ FocusScope {
     // sidebar behind the scrim, where Esc no longer closed it (VERIFY-A-1).
     Keys.onTabPressed: (e) => { root._tabWithin(true); e.accepted = true; }
     Keys.onBacktabPressed: (e) => { root._tabWithin(false); e.accepted = true; }
+    // "каждый месяц, 1-го", "по понедельникам": the rule as it is, its day
+    // included (A2-22); the chip used to drop the ":1".
+    function _recurLabel(r) {
+        const rule = String(r || "");
+        if (rule.length === 0) return "";
+        const monthly = /^every:month:(\d+)$/.exec(rule);
+        if (monthly) {
+            const l = I18n.t("editor.recur.monthlyOn").arg(monthly[1]);
+            return l.charAt(0).toLowerCase() + l.slice(1);
+        }
+        const key = "taskdoc.repeat." + rule.replace("every:", "");
+        const t = I18n.t(key);
+        return t === key ? rule : t;
+    }
+    // The menu's rules: the five plain ones, the weekday and the day of the
+    // month the task's own date gives, and the current rule when it is none
+    // of these — so it is marked and picking it keeps it (A2-22).
+    readonly property var _recurOptions: {
+        const out = ["", "every:day", "every:weekday", "every:week", "every:month"];
+        const at = root._valid(root.task.scheduledAt) ? new Date(root.task.scheduledAt)
+                 : root._valid(root.task.dueAt) ? new Date(root.task.dueAt) : new Date();
+        const dows = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+        out.push("every:" + dows[at.getDay()]);
+        out.push("every:month:" + at.getDate());
+        const cur = String(root.task.recurrence || "");
+        if (cur.length > 0 && out.indexOf(cur) < 0) out.push(cur);
+        return out;
+    }
     function _tabWithin(forward) {
         let next = (root.Window.activeFocusItem || root).nextItemInFocusChain(forward);
         for (let n = 0; n < 200 && next; n++) {
@@ -476,7 +506,9 @@ FocusScope {
                     font.pixelSize: Theme.fsSm
                 }
                 Text {
-                    text: root.taskId
+                    // The name the card shows: the tracker key (A3-10, A1-29).
+                    objectName: "task-doc-crumb-id"
+                    text: root.task.externalKey || root.taskId
                     color: Theme.textMuted
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsSm
@@ -713,7 +745,7 @@ FocusScope {
                     objectName: "task-doc-recurrence"
                     visible: root._visible("recurrence")
                     key: root._key(I18n.t("taskdoc.prop.repeat"))
-                    value: String(root.task.recurrence || "").length > 0 ? I18n.t("taskdoc.repeat." + String(root.task.recurrence).replace("every:", "").split(":")[0]) : ""
+                    value: root._recurLabel(root.task.recurrence)
                     onClicked: recurMenu.popup(recurChip, 0, recurChip.height + Theme.spXs)
                 }
                 TextChip {
@@ -736,6 +768,55 @@ FocusScope {
                     value: I18n.t("taskdoc.addProp")
                     onClicked: addMenu.popup(addChip, 0, addChip.height + Theme.spXs)
                 }
+            }
+
+            // With the meta column folded away, what it would say about the
+            // tracker and the notes still shows (A1-29, A4-13).
+            RowLayout {
+                objectName: "task-doc-inline-meta"
+                Layout.fillWidth: true
+                Layout.bottomMargin: Theme.spLg
+                visible: !sideCol.visible && (root._isTicket || inlineMentions.count > 0)
+                spacing: Theme.spMd
+                Text {
+                    objectName: "task-doc-tracker-inline"
+                    visible: root._isTicket
+                    text: root._trackerLabel
+                    color: trackerInlineCA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    font.underline: trackerInlineCA.hovered
+                    ClickArea {
+                        id: trackerInlineCA
+                        label: parent.text
+                        enabled: String(root.task.externalUrl || "").length > 0
+                        onActivated: AppController.openTaskExternal(root.taskId)
+                    }
+                }
+                Text {
+                    objectName: "task-doc-local-only"
+                    visible: root._isTicket && !AppController.trackerWriteEnabled(root._ticket.provider || "")
+                    text: "· " + I18n.t("taskdoc.localOnly").arg(root._badge.name || root._ticket.provider || "")
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                }
+                Text {
+                    id: inlineMentions
+                    objectName: "task-doc-mentions-inline"
+                    readonly property int count: root._rev >= 0 && root.opened ? AppController.notesMentioningTask(root.taskId).length : 0
+                    visible: count > 0
+                    text: (root._isTicket ? "· " : "") + I18n.t("taskdoc.mentionedIn").arg(count)
+                    color: mentionsCA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    font.underline: mentionsCA.hovered
+                    // The whole document has room for the meta column.
+                    ClickArea { id: mentionsCA; label: parent.text; onActivated: root.full = true }
+                }
+                Item { Layout.fillWidth: true }
             }
 
             // Mine over the tracker's (APP-238): what the tracker says, said
@@ -864,6 +945,16 @@ FocusScope {
                 }
             }
 
+            // The body is a Tab stop of its own, after the chips and before
+            // Done (A4-14): this stop hands the caret to it.
+            Item {
+                objectName: "task-doc-body-stop"
+                Layout.preferredHeight: 0
+                Layout.preferredWidth: 0
+                activeFocusOnTab: true
+                onActiveFocusChanged: if (activeFocus) body.focusEditor()
+            }
+
             // The body, then my plan under it and the slash hint (DG-062),
             // all in one scroll.
             MdBlockEditor {
@@ -888,6 +979,7 @@ FocusScope {
 
             // Done, under the text while the meta column is folded away.
             DoneButton {
+                id: doneBottom
                 objectName: "task-doc-done-bottom"
                 visible: !sideCol.visible
                 Layout.bottomMargin: Theme.sp2xl
@@ -1188,10 +1280,10 @@ FocusScope {
     AppMenu {
         id: recurMenu
         Instantiator {
-            model: ["", "every:day", "every:weekday", "every:week", "every:month"]
+            model: root._recurOptions
             delegate: AppMenuItem {
                 required property string modelData
-                text: modelData === "" ? I18n.t("taskdoc.repeat.none") : I18n.t("taskdoc.repeat." + modelData.replace("every:", ""))
+                text: modelData === "" ? I18n.t("taskdoc.repeat.none") : root._recurLabel(modelData)
                 marked: String(root.task.recurrence || "") === modelData
                 onTriggered: root._setField("recurrence", modelData)
             }

@@ -28,8 +28,8 @@ var notes = {
               body: { en: "“Bold” by default, “Quiet” in Settings → Appearance",
                       ru: "«Насыщенный» по умолчанию, «Тихий» — в Настройки → Внешний вид" } }
         ],
-        moved: { en: "“Focus” and “Saved views” → “My views” · Timeline, Week, Month → Tasks · Docs + Notes → Knowledge · Tweaks → Settings",
-                 ru: "«Фокус» и «Сохранённые виды» → «Мои виды» · Лента, Неделя, Месяц → Задачи · Доки + Заметки → Знания · Твики → Настройки" }
+        moved: { en: "“Focus” and “Saved views” → “My views” · Timeline, Week, Month → Tasks · Tweaks → Settings",
+                 ru: "«Фокус» и «Сохранённые виды» → «Мои виды» · Лента, Неделя, Месяц → Задачи · Твики → Настройки" }
     }
 };
 

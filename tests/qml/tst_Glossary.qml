@@ -11,6 +11,9 @@ TestCase {
     name: "Glossary"
 
     readonly property var retired: ["welcome.", "siderail.", "tweaks."]
+    // Search keywords are what people type, never shown: "бэкап" has to find
+    // the time machine (A5-5) even though the screens say резервная копия.
+    readonly property var searchOnly: ["palette.kw."]
     // Nothing says where the old things went any more: a new user never saw
     // them (A7-12). Due, not deadline (A1-5); Notes, not Knowledge (A7-7);
     // резервная копия, not бэкап (A5-26).
@@ -23,6 +26,7 @@ TestCase {
     function live(key) {
         if (allowed.indexOf(key) >= 0) return false;
         for (const p of retired) if (key.indexOf(p) === 0) return false;
+        for (const p of searchOnly) if (key.indexOf(p) === 0) return false;
         return true;
     }
 
