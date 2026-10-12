@@ -2701,53 +2701,55 @@ Item {
             EdgeChip {
                 objectName: "week-more-earlier"
                 anchors.top: hourScroll.top
-                anchors.topMargin: Theme.spXs
+                // Between the first two hour labels, not on one.
+                anchors.topMargin: Math.round((root.hourH - height) / 2)
                 items: parent.offView.above
-                arrow: "↑ "
+                up: true
                 countKey: "week.moreEarlier"
                 onActivated: (it) => parent._scrollTo(it)
             }
             EdgeChip {
                 objectName: "week-more-later"
                 anchors.bottom: hourScroll.bottom
-                anchors.bottomMargin: Theme.spXs
+                anchors.bottomMargin: Math.round((root.hourH - height) / 2)
                 items: parent.offView.below
-                arrow: "↓ "
+                up: false
                 countKey: "week.moreLater"
                 onActivated: (it) => parent._scrollTo(it)
             }
         }
     }
 
-    // An edge chip of the hour grid: "↑ 2 earlier · 07:00 Early sync".
+    // An edge chip of the hour grid, in the hour gutter so it never covers a
+    // block: "↑2"; the tooltip and the label say "2 earlier · 07:00 Early sync".
     component EdgeChip: Rectangle {
         id: ec
         property var items: []
-        property string arrow: ""
+        property bool up: true
         property string countKey: ""
         signal activated(var it)
-        readonly property var first: ec.items.length > 0 ? (ec.arrow.indexOf("↑") === 0 ? ec.items[ec.items.length - 1] : ec.items[0]) : null
+        readonly property var first: ec.items.length > 0 ? (ec.up ? ec.items[ec.items.length - 1] : ec.items[0]) : null
+        readonly property string fullText: ec.first ? I18n.t(ec.countKey).arg(ec.items.length) + " · " + Theme.fmtHour(ec.first.start) + " " + (ec.first.title || "") : ""
         visible: ec.items.length > 0
-        anchors.horizontalCenter: hourScroll.horizontalCenter
+        x: hourScroll.x + Theme.sp2xs
         z: 9
-        width: Math.min(ecText.implicitWidth + 2 * Theme.spMd, hourScroll.width - 2 * Theme.spMd)
-        height: ecText.implicitHeight + 2 * Theme.spXs
+        width: gridHost.gutterW - 2 * Theme.sp2xs
+        height: ecText.implicitHeight + 2 * Theme.sp2xs
         radius: height / 2
         color: Theme.panel2
-        border.color: Theme.border
+        border.color: Theme.borderStrong
         border.width: 1
         Text {
             id: ecText
             anchors.centerIn: parent
-            width: Math.min(implicitWidth, parent.width - 2 * Theme.spMd)
-            text: ec.first ? ec.arrow + I18n.t(ec.countKey).arg(ec.items.length) + " · " + Theme.fmtHour(ec.first.start) + " " + (ec.first.title || "") : ""
-            elide: Text.ElideRight
-            color: Theme.textMuted
+            text: (ec.up ? "↑" : "↓") + ec.items.length
+            color: Theme.text
             font.family: Theme.fontUi
             font.features: Theme.tabularNums
-            font.pixelSize: Theme.fsSm
+            font.pixelSize: Theme.fsXs
+            font.weight: Theme.fwHeading
         }
-        ClickArea { label: ecText.text; onActivated: ec.activated(ec.first) }
+        ClickArea { label: ec.fullText; onActivated: ec.activated(ec.first) }
     }
 
     // Empty-week hint — shown only when the week has no tasks and no events, so
