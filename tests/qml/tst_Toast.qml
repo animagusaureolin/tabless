@@ -122,6 +122,27 @@ TestCase {
         compare(t._items[0].key, "");
     }
 
+    // A1-21: Ctrl+Z took back the action an Undo toast names; the toast
+    // goes, and the notice waiting behind it shows.
+    function test_an_undone_action_takes_its_toast_away() {
+        const t = make();
+        t.showUndo("RD-21: Tue 14:30", "Undo", 10, function () {}, "success", "Ctrl Z", 7);
+        t.show("waiting", "info");
+        compare(t._queue.length, 1, "a plain notice waits behind the Undo");
+        t.retireUndone(7);
+        compare(t.message, "RD-21: Tue 14:30", "still the newest entry: it stays");
+        t.retireUndone(6);
+        compare(t.message, "waiting", "undone: the waiting notice shows instead");
+        compare(t._queue.length, 0);
+    }
+
+    // The default serial is the newest history entry's, read when it shows.
+    function test_undo_toast_remembers_the_entry_it_names() {
+        const t = make();
+        t.showUndo("Moved", "Undo", 10, function () {});
+        compare(t._items[0].serial, Number(AppController.undoSerialForToast()));
+    }
+
     function test_width_is_capped_and_long_text_wraps() {
         const t = make();
         let longText = "";
