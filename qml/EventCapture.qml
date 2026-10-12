@@ -109,6 +109,22 @@ Popup {
         }
         return out;
     }
+    // A meeting already there at that time, as a fact, never a refusal: the
+    // schedule field says it for a task, this line said nothing (A1-8).
+    function clashWith(r) {
+        if (!r || !r.date || !root._valid(r.date)) return "";
+        const day = new Date(r.date.getFullYear(), r.date.getMonth(), r.date.getDate());
+        const a = r.start;
+        const b = r.endDate ? 24 : r.end;
+        const occ = AppController.eventOccurrences(day, day);
+        for (let i = 0; i < occ.length; i++) {
+            const e = occ[i];
+            if (e.allDay) continue;
+            if (e.start < b && e.end > a) return String(e.title || "");
+        }
+        return "";
+    }
+    readonly property string _clash: root.visible ? root.clashWith(root.parsed) : ""
     function whenText(r) {
         return I18n.fmtDate(r.date, "weekdayDay") + " · " + AppController.eventHourLabel(r.start)
                + "–" + (r.endDate ? I18n.fmtDate(r.endDate, "weekdayDay") + " · " : "") + AppController.eventHourLabel(r.end);
@@ -197,6 +213,16 @@ Popup {
                 objectName: "event-capture-when"
                 label: I18n.t("event.capture.when")
                 value: root.whenText(root.parsed)
+            }
+            Text {
+                objectName: "event-capture-clash"
+                visible: root._clash.length > 0
+                height: Theme.chipH
+                verticalAlignment: Text.AlignVCenter
+                text: I18n.t("schedule.clash").arg(root._clash)
+                color: Style.urgency ? Theme.warning : Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
             }
             Chip {
                 objectName: "event-capture-repeat"

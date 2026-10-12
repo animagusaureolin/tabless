@@ -1458,8 +1458,10 @@ class AppController : public QObject {
   Q_INVOKABLE bool placeTaskAt(const QString& taskId, const QDate& date, double start);
   // Carrying leftovers on by hand (APP-248). `mode`: "tomorrow" (keeps the
   // time it had), "window" (the nearest free window from now on), "someday"
-  // or "clear" (no "when"). The deadline is never touched. One undo step and
-  // one toast for the whole selection; returns how many tasks changed.
+  // or "clear" (no "when"); the deadline is touched only by "clearDue", which
+  // removes it and nothing else. One undo step and one toast for the whole
+  // selection (it says when nothing changed, or when a deadline keeps a task
+  // overdue); returns how many tasks changed.
   Q_INVOKABLE int carryTasks(const QStringList& ids, const QString& mode);
   int carryTasksAt(const QStringList& ids, const QString& mode, const QDateTime& now);
   // Drag-to-reschedule in Week, Month and Timeline (APP-249), and the keys

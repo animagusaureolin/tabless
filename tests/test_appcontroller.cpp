@@ -3525,6 +3525,45 @@ TEST_F(AppControllerTest, CarryToWindowsLinesTheSelectionUp) {
       << "the second one does not stack on the first, nor run past the working day";
 }
 
+// A5-8: carrying overdue tasks moves the plan date only; the toast says the
+// deadline keeps them overdue, "clear" with nothing to clear says so, and
+// "clearDue" removes a local deadline by name (never a tracker's).
+TEST_F(AppControllerTest, CarryOverdueByDeadlineSaysSo) {
+  const QDateTime now(QDate(2026, 10, 8), QTime(18, 0));
+  Task a = mkTask(QStringLiteral("T-1"), QStringLiteral("T-1"));
+  a.dueAt = QDateTime(QDate(2026, 10, 1), QTime(0, 0));
+  Task b = mkTask(QStringLiteral("T-2"), QStringLiteral("T-2"));
+  b.dueAt = QDateTime(QDate(2026, 10, 2), QTime(0, 0));
+  b.externalId = QStringLiteral("9");
+  b.externalProvider = QStringLiteral("jira");
+  app_->tasks()->reset({a, b});
+  QStringList toasts;
+  QObject::connect(app_.get(), &AppController::undoableToast, [&](const QString& m, int) {
+    toasts << m;
+  });
+  QObject::connect(app_.get(), &AppController::toast, [&](const QString& m, const QString&) {
+    toasts << m;
+  });
+
+  EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1"), QStringLiteral("T-2")}, QStringLiteral("tomorrow"), now), 2);
+  ASSERT_FALSE(toasts.isEmpty());
+  EXPECT_TRUE(toasts.last().contains(QStringLiteral("2 still overdue"))) << toasts.last().toStdString();
+  EXPECT_TRUE(app_->tasks()->items().at(0).dueAt.isValid()) << "carrying never touches the deadline";
+
+  app_->undo();
+  toasts.clear();
+  EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1"), QStringLiteral("T-2")}, QStringLiteral("clear"), now), 0);
+  ASSERT_EQ(toasts.size(), 1) << "nothing changed is said, not silent";
+  EXPECT_TRUE(toasts.first().contains(QStringLiteral("deadline")));
+
+  toasts.clear();
+  EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1"), QStringLiteral("T-2")}, QStringLiteral("clearDue"), now), 1);
+  EXPECT_FALSE(app_->tasks()->items().at(0).dueAt.isValid());
+  EXPECT_TRUE(app_->tasks()->items().at(1).dueAt.isValid()) << "a tracker's deadline stays the tracker's";
+  app_->undo();
+  EXPECT_TRUE(app_->tasks()->items().at(0).dueAt.isValid()) << "one undo step";
+}
+
 TEST_F(AppControllerTest, CarryWithAnUnknownModeDoesNothing) {
   app_->tasks()->reset({leftover(QStringLiteral("T-1"), QDateTime(QDate(2026, 10, 8), QTime(10, 0)), true)});
   EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1")}, QStringLiteral("auto"), QDateTime(QDate(2026, 10, 8), QTime(9, 0))), 0);

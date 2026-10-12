@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
 import TodoCpp
 import "Reschedule.js" as Resched
+import "TaskDates.js" as TaskDates
 
 // Today (heap 2, APP-260): the start screen. The date and one line of facts;
 // the day by the hours — meetings and tasks with their status, the line of
@@ -119,6 +120,11 @@ FocusScope {
         } else {
             if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.withSelf") : I18n.t("event.kind.meeting"));
             else parts.push(b.id, I18n.t("today.plannedByYou"));
+        }
+        // A repeating task is marked as one (A2-25).
+        if (kind === "task") {
+            const rec = String(AppController.taskById(b.id).recurrence || "");
+            if (rec.length > 0) parts.push("↻ " + TaskDates.repeatText(rec));
         }
         // A focus block is "with yourself"; its people field is a note.
         if (meeting && b.attendees && b.eventType !== "focus") parts.push(b.attendees);

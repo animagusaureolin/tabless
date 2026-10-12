@@ -230,6 +230,9 @@ ApplicationWindow {
     }
 
     property string searchText: ""
+    // How long a command letter on the board waits to see whether a word is
+    // being typed (KeyRouter.typingHoldMs, A4-3); tests set 0.
+    property int typeAheadHoldMs: 250
     property var prioritiesFilter: ({})
 
     // No right panel (DG-002): the sheets have none. The day is on Today
@@ -744,7 +747,7 @@ ApplicationWindow {
     // A view-local key (board cursor, calendar paging, Esc on the selection,
     // Delete, the bare-letter shortcuts) stands down while any of this holds.
     readonly property bool _viewKeysBlocked: hotkeys.isCapturing || _overlayOpen || _typing || _focusInPopup || _dimmerShown
-                                             || _focusOnControl || _panelOpen
+                                             || _focusOnControl || _panelOpen || splash.waiting
     // A side panel — the task document or a meeting — is open over the view.
     // The view behind it is under a scrim and takes no keys: Delete deleted
     // the open task, e archived it, Ctrl+A then Delete took every card, and
@@ -771,6 +774,8 @@ ApplicationWindow {
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || eventCapture.opened || cheatSheet.opened
         || closeAsk.opened || goToDatePopup.opened || eventLog.opened
         || (_focusInPopup && !_focusInPopover) || _dimmerShown
+        // The crash card waits for an answer over the whole window (A7-2).
+        || splash.waiting
     readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
 
     // Esc in the header search with nothing left to clear hands the keyboard
@@ -869,8 +874,20 @@ ApplicationWindow {
 
     // Focus mode (APP-160) on the task in front of the user: the one open in
     // the editor, else whatever AppController picks (selection, branch).
+    // The task in front of the user is the one open (document or editor),
+    // else the one under the cursor, else the one whose timer runs: focus
+    // mode said "no task chosen" with the cursor on a task (A1-24).
     function toggleImmersion() {
-        AppController.toggleImmersion(taskEditor.opened ? taskEditor._originalId : "");
+        AppController.toggleImmersion(win._immersionTaskId());
+    }
+    function _immersionTaskId() {
+        if (taskDoc.opened && taskDoc.taskId) return taskDoc.taskId;
+        if (taskEditor.opened && taskEditor._originalId) return taskEditor._originalId;
+        if (AppController.selectionCount === 1) return AppController.selectedTaskIds[0];
+        const cur = win._cursorTaskId();
+        if (cur) return cur;
+        const timer = AppController.runningTimer();
+        return timer && timer.id ? String(timer.id) : "";
     }
 
     // The tasks a safety-net notice is about: one opens in the editor, several
@@ -1493,6 +1510,8 @@ ApplicationWindow {
                             AppController.currentView = "day";
                         }
                         onTaskCaptureRequested: (text) => quickCapture.openWithText(text)
+                        // A block's "Запланировать…" and s on a tray row
+                        // (A1-19): the "when" field.
                         onScheduleRequested: (id) => schedulePopup.openFor([id], "scheduled")
                         onResetFilterRequested: win.resetTaskFilter()
                     }
@@ -1838,6 +1857,9 @@ ApplicationWindow {
         if (KeyRules.isRepeatedDone(key, now, win._lastDoneKey, win._lastDoneAt)) return;
         win._lastDoneKey = key;
         win._lastDoneAt = now;
+        const v = win.activeViewItem();
+        if (ids.length === 1 && AppController.currentView === "board" && v && typeof v.stepCursorOff === "function")
+            v.stepCursorOff(ids[0]);
         AppController.toggleDone(ids);
     }
     // The cheat sheet ("?", Ctrl+/); changing keys is the Hotkeys panel.
@@ -1856,7 +1878,9 @@ ApplicationWindow {
         const undo = { label: I18n.t("undo.action"), fn: function () { AppController.undoEntry(serial); } };
         const seen = AppController.taskInCurrentFilter(taskId) || AppController.currentSection !== "tasks";
         const msg = seen ? line : I18n.t("capture.done.hidden").arg(taskId);
-        toast.showWithActions(msg, [open, undo], 8);
+        // It carries an Undo: the next action's Undo replaces it. A "Готово"
+        // after three captures waited many seconds behind them (A2-28).
+        toast.showWithActions(msg, [open, undo], 8, "info", 1);
     }
     // The calendar lens opens on the calendar last used (week or month).
     property string _calendarView: "week"
@@ -1874,6 +1898,11 @@ ApplicationWindow {
         else AppController.currentView = id;
     }
     function runCommand(id) {
+        // The selection bar's "Удалить": the same question as Del (A1-28).
+        if (id === "selection.deleteSel") {
+            win.deleteSelectedAsk();
+            return;
+        }
         // The calendar lens is week or month, the one used last (APP-272 g c).
         if (id === "view.calendar") {
             win.openLens("calendar");
@@ -1905,6 +1934,12 @@ ApplicationWindow {
         }
         // The selection's label and carry-on, off the bar since DG-026.
         if (id === "selection.label") { if (AppController.selectionCount > 0) selectionBar.openLabel(); return; }
+        if (id === "task.someday") {
+            const ids = win._keyTaskIds();
+            if (ids.length === 0) win.notice(I18n.t("palette.cmd.someday.none"), "info");
+            else AppController.carryTasks(ids, "someday");
+            return;
+        }
         if (id === "selection.carry") { if (AppController.selectionCount > 0) selectionBar.openCarry(); return; }
         // Off the profile menu since DG-151: the profile's import / export
         // and duplicate live in the command line.
@@ -2035,7 +2070,10 @@ ApplicationWindow {
         // filter shown in Tasks or saved as a view, nothing found → a task.
         contextProvider: function () { return win._keyTaskIds(); }
         onQueryRequested: (query, mode) => {
-            win.showQuery(query, mode === "board" ? "board" : "list");
+            // Saving keeps the lens the person is on: on the Board it threw
+            // them to the List and stored a List view (A2-6).
+            const lens = mode === "board" || (mode === "save" && AppController.currentView === "board") ? "board" : "list";
+            win.showQuery(query, lens);
             if (mode === "save") Qt.callLater(savedViewsHost.openSave);
         }
         onCreateRequested: (text) => quickCapture.openWithText(text)
@@ -2135,8 +2173,17 @@ ApplicationWindow {
     // Whether the action of `id` means something where the person is now.
     // A bare key stands down while anything takes typed text or a popup is
     // up; a Ctrl chord only behind a modal.
+    // The focused item that gives a keymap action its own meaning (a
+    // checklist row: d ticks the item, j / k walk the items), or null.
+    function _keyClaimant(base) {
+        for (let p = win.activeFocusItem; p; p = p.parent)
+            if (p.claimedKeys !== undefined && p.claimedKeys !== null && p.claimedKeys.indexOf(base) >= 0) return p;
+        return null;
+    }
     function _keyLive(id) {
         if (hotkeys.isCapturing || win._captureActive) return false;
+        if (KeyRules.isRouterSequence(AppController.shortcutFor(id)) && win._keyClaimant(KeyRules.baseId(id)))
+            return !win._typing && !win._focusInPopup && !win._overlayOpen && !win._modalOpen;
         // F6 leaves a text field too: that is how one gets out of it.
         if (id === "region.next" || id === "region.prev") return !win._modalOpen;
         const routed = KeyRules.isRouterSequence(AppController.shortcutFor(id));
@@ -2237,7 +2284,68 @@ ApplicationWindow {
             if (!id) return;
             AppController.setSelectedTaskIds([id]);
         }
-        AppController.deleteSelectedTasks();
+        win.deleteSelectedAsk();
+    }
+    // A bulk delete asks once when it takes 10 or more tasks or any tracker
+    // ticket (A1-28: Ctrl+A, Del took 121 tasks, 73 of them Jira's, with no
+    // question). One task, or a few local ones, still go at once with Undo.
+    // A ticket is only ever removed here: nothing is written to its tracker.
+    function deleteSelectedAsk() {
+        const ids = AppController.selectedTaskIds;
+        const n = ids.length;
+        if (n === 0) return;
+        let tracked = 0;
+        const providers = [];
+        for (let i = 0; i < n; i++) {
+            const t = AppController.taskById(ids[i]);
+            if (!t || !t.externalProvider) continue;
+            tracked++;
+            if (providers.indexOf(t.externalProvider) < 0) providers.push(t.externalProvider);
+        }
+        if (n < 2 || (n < 10 && tracked === 0)) {
+            AppController.deleteSelectedTasks();
+            return;
+        }
+        bulkDeleteDialog.count = n;
+        bulkDeleteDialog.tracked = tracked;
+        bulkDeleteDialog.trackerName = providers.length === 1
+            ? String((AppController.providerBadges[providers[0]] || {}).name || providers[0])
+            : I18n.t("bulkDelete.trackers");
+        bulkDeleteDialog.open();
+    }
+    SmallDialog {
+        id: bulkDeleteDialog
+        objectName: "bulk-delete-dialog"
+        property int count: 0
+        property int tracked: 0
+        property string trackerName: ""
+        title: I18n.count(bulkDeleteDialog.count, "bulkDelete.title")
+               + (bulkDeleteDialog.tracked > 0
+                  ? ", " + I18n.t("bulkDelete.fromTracker").arg(bulkDeleteDialog.tracked).arg(bulkDeleteDialog.trackerName)
+                  : "") + "?"
+        fact: (bulkDeleteDialog.tracked > 0 ? I18n.t("bulkDelete.bodyTracked") + " " : "")
+              + I18n.t("bulkDelete.bodyUndo").arg(AppController.shortcutText("undo"))
+        // Enter = delete (the focused, main button), Esc = cancel.
+        onOpened: bulkDeleteConfirm.forceActiveFocus(Qt.TabFocusReason)
+        onAccepted: bulkDeleteConfirm.clicked()
+        onClosed: Qt.callLater(win.focusActiveView)
+        buttons: [
+            PillButton {
+                objectName: "bulk-delete-cancel"
+                text: I18n.t("common.cancel")
+                onClicked: bulkDeleteDialog.close()
+            },
+            PillButton {
+                id: bulkDeleteConfirm
+                objectName: "bulk-delete-confirm"
+                text: I18n.t("common.delete")
+                danger: true
+                onClicked: {
+                    bulkDeleteDialog.close();
+                    AppController.deleteSelectedTasks();
+                }
+            }
+        ]
     }
     // s / Shift S (APP-278): the small field; on an empty day of the
     // calendar, s goes to a date instead.
@@ -2328,6 +2436,8 @@ ApplicationWindow {
     // key came in.
     function runShortcut(id) {
         const base = KeyRules.baseId(id);
+        const claimant = win._keyClaimant(base);
+        if (claimant && typeof claimant.runClaimed === "function" && claimant.runClaimed(base)) return;
         const b = win.activeViewItem();
         const call = function (name) {
             if (b && typeof b[name] === "function") b[name].apply(b, Array.prototype.slice.call(arguments, 1));
@@ -2475,10 +2585,15 @@ ApplicationWindow {
         id: keyRouter
         objectName: "key-router"
         window: win
-        enabled: !hotkeys.isCapturing && !win._captureActive
+        enabled: !hotkeys.isCapturing && !win._captureActive && !splash.waiting
         bindings: AppController.shortcuts
         qtOwned: win._qtOwned
         holdUnlive: boardTypeAhead.enabled
+        // A card's command letter waits a moment where type-to-search is
+        // live: "deploy" typed on the board searched "ploy" and marked the
+        // card under the cursor done (A4-3).
+        typingHoldMs: win.typeAheadHoldMs
+        onTypedText: (text) => topBar.typeAhead(text)
         handler: function (ids, dry) { return win._routeKey(ids, dry); }
         // The old keys of 0.7 say once where their action went (APP-281 A4).
         onChordPressed: (chord) => { if (AppController.hasKeymapNotice()) AppController.noteKeyPressed(chord); }
@@ -2828,7 +2943,7 @@ ApplicationWindow {
         // Not with a panel open: the panel's own Esc below takes it, and two
         // enabled Escape shortcuts are ambiguous to Qt — neither ran (VERIFY-A-1).
         enabled: win._focusOnControl && !win._typing && !win._focusInPopup && !win._overlayOpen && !win._panelOpen
-                 && !hotkeys.isCapturing
+                 && !hotkeys.isCapturing && !splash.waiting
         onActivated: win.focusActiveView()
     }
     // A panel is open and the keyboard is somewhere else, with nothing on
@@ -2838,7 +2953,7 @@ ApplicationWindow {
         sequence: "Escape"
         context: Qt.ApplicationShortcut
         enabled: win._panelOpen && !win._focusInPanel && !win._typing && !win._focusInPopup && !win._overlayOpen
-                 && !win._dimmerShown && !hotkeys.isCapturing
+                 && !win._dimmerShown && !hotkeys.isCapturing && !splash.waiting
         onActivated: win.focusActiveView()
     }
     Shortcut {
@@ -3061,7 +3176,12 @@ ApplicationWindow {
         id: syncPopover
         onSignInRequested: win.runCommand("settings:integrations")
     }
-    WhatsNewDialog { id: whatsNew }
+    WhatsNewDialog {
+        id: whatsNew
+        // Esc left the keyboard on the window root, and / j k did nothing
+        // until a click (A3-5): the view takes it back, as after any dialog.
+        onClosed: Qt.callLater(win.focusActiveView)
+    }
     // The day's summary (APP-190): closed, carrying over, timers. Read-only.
     EndOfDayDialog {
         id: endOfDay
@@ -3080,8 +3200,29 @@ ApplicationWindow {
     // long Tab through every control. The region it lands in is framed until
     // the keyboard leaves it.
     property string regionShown: ""
+    // The calendar's "Без даты" tray, when the view shows one: a region of
+    // its own, so "pick one and press s" needs no 47 Tabs (A1-18).
+    function _trayItem() {
+        // The calendar lens hands its inner grid to activeViewItem(); the
+        // tray sits beside that grid, so look from the lens itself.
+        const outer = viewLoader.item;
+        const inner = win.activeViewItem();
+        const v = outer && outer.objectName === "calendar-view" && outer["calendarView"] === inner ? outer : inner;
+        if (!v) return null;
+        const stack = [v];
+        while (stack.length > 0) {
+            const it = stack.pop();
+            if (!it || !it.visible) continue;
+            if (it.objectName === "undated-tray") return it.width > 0 ? it : null;
+            const kids = it.children;
+            for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+        }
+        return null;
+    }
     function _regionOf(it) {
+        const tray = win._trayItem();
         for (let p = it; p; p = p.parent) {
+            if (tray && p === tray) return "tray";
             if (p === rail) return "sidebar";
             if (p === topBar) return "header";
             if (p === taskDoc) return "panel";
@@ -3092,13 +3233,14 @@ ApplicationWindow {
         const out = [];
         if (rail.visible && rail.width > 0) out.push("sidebar");
         out.push("content");
+        if (win._trayItem()) out.push("tray");
         if (taskDoc.opened) out.push("panel");
         if (topBar.visible) out.push("header");
         return out;
     }
     function _regionItem(r) {
         return r === "sidebar" ? rail : r === "header" ? topBar
-             : r === "panel" ? taskDoc : viewArea;
+             : r === "panel" ? taskDoc : r === "tray" ? (win._trayItem() || viewArea) : viewArea;
     }
     function _firstTabStop(it) {
         const kids = it ? it.children : [];
@@ -3504,7 +3646,9 @@ ApplicationWindow {
 
     // "g …": the first key of a sequence waits for its second (keymap rule 3).
     KeyPendingBar {
+        id: keyPendingBar
         objectName: "key-pending-bar"
+        maxWidth: mainColumn.width - 2 * Theme.spXl
         pending: keyRouter.pending
         isLive: function (id) { return win._keyLive(id); }
         x: mainColumn.x + Math.round((mainColumn.width - width) / 2)
@@ -3520,7 +3664,10 @@ ApplicationWindow {
         width: mainColumn.width
         areaWidth: mainColumn.width
         anchors.bottom: parent.bottom
+        // Above the "g …" bar while it waits: it covered the toast's Undo
+        // (A1-32).
         anchors.bottomMargin: 24 + win._selectionBarSpace
+                              + (keyPendingBar.visible ? keyPendingBar.height + Theme.spMd : 0)
         z: 100
     }
 

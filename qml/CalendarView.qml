@@ -88,6 +88,7 @@ Item {
             visible: tray.count > 0 && root.width > Theme.px(720)
             searchText: root.searchText
             onTaskOpened: (id) => root.taskClicked(id)
+            onScheduleRequested: (id) => root.scheduleRequested(id)
         }
     }
 

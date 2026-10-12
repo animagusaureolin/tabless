@@ -19,6 +19,22 @@ Item {
     property bool boardKeys: false
 
     signal openRequested()
+    // "Решить конфликт…": the here-vs-tracker dialog, from the keyboard too;
+    // the mark's "решить" link was the only way in (A3-9). Made on first use.
+    Loader {
+        id: conflictLoader
+        active: false
+        sourceComponent: SyncConflictDialog {
+            onClosed: Qt.callLater(() => { conflictLoader.active = false; })
+        }
+    }
+    function openConflict() {
+        const t = host.taskId ? AppController.taskById(host.taskId) : host._t;
+        if (!t || !t.id) return;
+        conflictLoader.active = true;
+        const dlg = conflictLoader.item as SyncConflictDialog;
+        if (dlg) dlg.showFor(t);
+    }
     signal statusPicked(string statusId)
 
     readonly property var _t: host.task ? host.task : (host.taskId ? AppController.taskById(host.taskId) : null)
@@ -270,6 +286,13 @@ Item {
             height: visible ? implicitHeight : 0
             text: I18n.t("taskmenu.refreshFrom").arg(host._badge.name || host._ticket.provider || "")
             onTriggered: AppController.syncProvider(String(host._ticket.provider || ""))
+        }
+        AppMenuItem {
+            objectName: "tc-menu-resolve"
+            visible: host._isTicket && !!host._ticket.conflict
+            height: visible ? implicitHeight : 0
+            text: I18n.t("taskmenu.resolveConflict")
+            onTriggered: host.openConflict()
         }
         // A move that never reached the tracker: send it (after Tabless checks
         // the issue) or drop it and keep the column here only (APP-243).

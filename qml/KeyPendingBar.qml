@@ -46,9 +46,13 @@ Rectangle {
         return out;
     }
 
+    // The widest the bar may be; past it the entries wrap onto a second
+    // line instead of running off the window ("Esc — отме…", A1-32).
+    property real maxWidth: 0
+
     visible: root.pending.length > 0
-    implicitWidth: row.implicitWidth + 2 * Theme.spXl
-    implicitHeight: row.implicitHeight + 2 * Theme.spMd
+    implicitWidth: row.childrenRect.width + 2 * Theme.spXl
+    implicitHeight: row.childrenRect.height + 2 * Theme.spMd
     width: implicitWidth
     height: implicitHeight
     radius: Theme.radiusLg
@@ -56,13 +60,14 @@ Rectangle {
     border.color: Theme.border
     border.width: 1
 
-    Row {
+    Flow {
         id: row
-        anchors.centerIn: parent
+        x: Theme.spXl
+        y: Theme.spMd
+        width: root.maxWidth > 0 ? Math.max(0, root.maxWidth - 2 * Theme.spXl) : 100000
         spacing: Theme.spXl
         Text {
             objectName: "key-pending-prefix"
-            anchors.verticalCenter: parent.verticalCenter
             text: AppController.keyText(root.pending) + " …"
             color: Theme.text
             font.family: Theme.fontMono
@@ -74,7 +79,6 @@ Rectangle {
             delegate: Row {
                 id: hint
                 required property var modelData
-                anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.spSm
                 KeyHint {
                     always: true
@@ -90,7 +94,6 @@ Rectangle {
             }
         }
         Text {
-            anchors.verticalCenter: parent.verticalCenter
             text: I18n.t("keys.pending.esc")
             color: Theme.textDim
             font.family: Theme.fontUi

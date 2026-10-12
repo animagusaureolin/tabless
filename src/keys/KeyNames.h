@@ -71,4 +71,8 @@ QString reservedReason(const QString& portable);
 // (IDIOT-TASKS-2/3/18).
 bool isRepeatableAction(const QString& id);
 
+// Whether a catalogue action only moves the keyboard cursor (j/k/h/l, gg, G):
+// it changes nothing, so it never waits to see whether a word is typed.
+bool isCursorMove(const QString& id);
+
 }  // namespace heap::keys

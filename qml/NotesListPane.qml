@@ -660,8 +660,8 @@ Rectangle {
             // note's menu — pin and delete had no keyboard path.
             activeFocusOnTab: true
             // The view's own keyboard surface, not a stray control (Main's
-            // _focusOnControl): the keymap works here — u brings back a note
-            // just deleted from this list, g t goes to Today (A4-9).
+            // _focusOnControl): g t, ?, :, / and u work here as on any view
+            // (A4-5) - u brings back a note just deleted from this list (A4-9).
             readonly property bool viewSurface: true
             Accessible.role: Accessible.List
             Keys.onUpPressed: { root.step(-1); Qt.callLater(root._activeRowItem); }
