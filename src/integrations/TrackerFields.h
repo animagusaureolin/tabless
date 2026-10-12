@@ -4,6 +4,7 @@
 #include <QDateTime>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QUrl>
@@ -50,6 +51,14 @@ QString joinObjectField(const QJsonValue& array, const QString& key);
 // "Closes #12", "fixes group/app#7", "Resolves: #3, #4". Each as written
 // ("#12", "group/app#7"), in order, without repeats.
 QStringList closingReferences(const QString& body);
+
+// The tracker issue a merge / pull request is about (APP-293), as one of
+// `knownKeys` (upper-case "PROJ-123"), or empty. Strongest first: the key in
+// the source branch ("feature/proj-123-login"), then in the title, then in
+// the description — there only after a closing verb or as a /browse/ link,
+// since a description mentions other issues in passing. A key that names
+// no known issue is not a match.
+QString linkedIssueKey(const QString& sourceBranch, const QString& title, const QString& body, const QSet<QString>& knownKeys);
 
 // ── Paging and backoff (pure; the walk itself lives in RestIssueProvider) ──
 

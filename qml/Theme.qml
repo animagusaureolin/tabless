@@ -516,18 +516,20 @@ QtObject {
     // a toy. All 0 with "Reduce motion" on. QML outside this file never
     // writes a duration or an Easing literal (ui_tokens_check.py).
     readonly property int durTap:  reducedMotion ? 0 : 90
-    readonly property int durPop:  reducedMotion ? 0 : 140
-    readonly property int durMove: reducedMotion ? 0 : 220
+    // APP-294: 140/220 ms on OutQuint was over before the eye caught it;
+    // longer, on a softer curve, the arrivals read as motion.
+    readonly property int durPop:  reducedMotion ? 0 : 180
+    readonly property int durMove: reducedMotion ? 0 : 280
     readonly property int durTapOut:  durTap / 2
     readonly property int durPopOut:  durPop / 2
     readonly property int durMoveOut: durMove / 2
-    readonly property int easeEnter: Easing.OutQuint
+    readonly property int easeEnter: Easing.OutCubic
     readonly property int easeExit:  Easing.InCubic
     // Distances the moves cover, all 0 (or 1 for a scale) with "Reduce
     // motion" on: a dialog grows in from just under its size, a side panel
     // slides the last stretch in from the edge it lives on.
-    readonly property real dialogScaleFrom: 1 - 0.03 * motion
-    readonly property int  panelShift: Math.round(sp3xl * motion)
+    readonly property real dialogScaleFrom: 1 - 0.06 * motion
+    readonly property int  panelShift: Math.round(2 * sp3xl * motion)
     // The one big move (APP-176): a task marked done folds into a bar where
     // its card stood, then lays itself on the stack over the Done column,
     // like a bar in the heap mark. One curve (easeEnter) for both halves;
