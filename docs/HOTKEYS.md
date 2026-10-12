@@ -351,13 +351,16 @@ Every one of these is a single undo step.
 
 - **Quick-capture** opens a popup that parses your text as you type
   — see [TUTORIAL.md](TUTORIAL.md#quick-capture-syntax) for the syntax.
-  `Ctrl+Return` adds and closes, `Ctrl+Shift+Return` adds and stays open for
-  the next item; `Return` and `Shift+Return` start a new line (the lines after
-  the first are the description). `Tab` (or the arrows, then `Return`) takes a
-  suggestion. The quick note is the same: `Ctrl+Return` saves, `Return` is a
-  new line, `Esc` closes it and keeps the text as a draft for next time. From
+  `Return` (or `Ctrl+Return`) adds and closes, `Ctrl+Shift+Return` adds and
+  stays open for the next item; `Shift+Return` starts a new line (the lines
+  after the first are the description). `Ctrl+M` makes a task with a time a
+  calendar meeting too. `Tab` opens what was typed in the task document; while
+  suggestions are open, `Tab` (or the arrows, then `Return`) takes one. The
+  quick note: `Ctrl+Return` saves, `Return` is a new line, `Esc` closes it and
+  keeps the text as a draft for next time. From
   another app it comes up on its own, without the main window, and a
   notification confirms what was created.
-- **Task editor:** `Ctrl+Return` saves. `Esc` (or a click on the backdrop) closes
+- **Task editor:** `Ctrl+Return` saves; in a new task's title `Return` creates
+  it. `Esc` (or a click on the backdrop) closes
   a task with no changes; with changes it asks — `Return` saves, `D` discards,
   `Esc` keeps editing.
