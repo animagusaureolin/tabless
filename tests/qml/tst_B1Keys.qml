@@ -407,4 +407,26 @@ TestCase {
         tryVerify(function () { return AppController.taskById("BK-1").someday === true; }, 1000);
         tc.win.typeAheadHoldMs = 250;
     }
+
+    // A1-8: a new meeting over one already there says so.
+    function test_event_capture_names_an_overlap() {
+        const day = AppController.today;
+        const d = AppController.newEventDraft(8, day);
+        d.title = "bkprobe deep work";
+        d.start = 8; d.end = 11;
+        AppController.saveEvent(d);
+        const cap = popups().filter(p => p.objectName === "event-capture")[0];
+        verify(cap !== undefined);
+        cap.openAt({ date: day, start: 14, end: 15 });
+        tryCompare(cap, "opened", true);
+        const input = find(cap.contentItem, it => it.objectName === "event-capture-input");
+        const clash = find(cap.contentItem, it => it.objectName === "event-capture-clash");
+        verify(input !== null && clash !== null);
+        verify(!clash.visible, "14:00 is free");
+        input.text = "bkprobe intro 9:00";
+        tryVerify(() => clash.visible, 1000, "9:00 sits on the 8–11 meeting");
+        verify(clash.text.indexOf("bkprobe deep work") >= 0, clash.text);
+        cap.close();
+        AppController.deleteEvent(d.id);
+    }
 }
