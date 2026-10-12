@@ -412,10 +412,17 @@ TestCase {
     }
 
     // heap 2 (APP-258): nothing saved is one grey line, not a button.
+    // EYES-3: a sentence with a subject, and not on the first run next to
+    // the hero.
     function test_empty_list_says_where_views_come_from() {
-        const line = byName("sidebar-views-empty");
-        verify(line !== null && line.visible, "no empty line");
+        const line = find(tc.win.contentItem, function (it) { return it.objectName === "sidebar-views-empty"; });
+        verify(line !== null);
+        compare(line.visible, AppController.welcomeSeen, "shown only once the first run is over");
+        // Past the first run (as tst_TodayView does): the line is there.
+        AppController.markWelcomeSeen();
+        tryVerify(function () { return line.visible; }, 1000, "no empty line");
         compare(line.text, I18n.t("sidebar.myViews.empty"));
+        compare(I18n.dict.en["sidebar.myViews.empty"], "Saved views appear here");
     }
 
     function test_profile_switch_leaves_the_view() {

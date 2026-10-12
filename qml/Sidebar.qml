@@ -466,7 +466,9 @@ Rectangle {
         }
         Text {
             objectName: "sidebar-views-empty"
-            visible: root._savedViews.length === 0 && root.expanded && !Style.plainRows
+            // Not on the first run, next to the hero: no explainer for a
+            // feature not used yet (EYES-3).
+            visible: root._savedViews.length === 0 && root.expanded && !Style.plainRows && AppController.welcomeSeen
             Layout.fillWidth: true
             Layout.leftMargin: Theme.spMd
             text: I18n.t("sidebar.myViews.empty")
