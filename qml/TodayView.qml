@@ -145,6 +145,11 @@ FocusScope {
         const s = ty.length > 0 && ty !== "none" ? I18n.t("event.type." + ty) : I18n.t("event.kind.meeting");
         return lower && s.length > 0 ? s.charAt(0).toLowerCase() + s.slice(1) : s;
     }
+    // The type, unless the title already is that word ("Sync · sync").
+    function _typeWord(b, lower) {
+        const s = root._typeName(b, lower);
+        return s.toLowerCase() === String(b.title || "").trim().toLowerCase() ? "" : s;
+    }
     // m:ss, h:mm:ss past an hour, as the sidebar and the focus mode (A1-13).
     function _timer(id, tick) {
         const s = tick >= 0 ? AppController.elapsedSecondsFor(id) : 0;
@@ -160,19 +165,19 @@ FocusScope {
         // with no type is not called a meeting (an on-call duty is not one).
         const typed = String(b.eventType || "").length > 0 && b.eventType !== "none";
         if (kind === "allday" && b.dayCount > 1) {
-            if (typed) parts.push(root._typeName(b, root.plain));
+            if (typed && root._typeWord(b, root.plain)) parts.push(root._typeWord(b, root.plain));
             parts.push(I18n.fmtDate(new Date(b.firstDay), "dayMonth") + "–" + I18n.fmtDate(new Date(b.lastDay), "dayMonth"));
             parts.push(I18n.t("today.dayOfSpan").arg(b.dayNo).arg(b.dayCount));
         } else if (kind === "allday" && !typed) {
             // the title says it
         } else if (root.plain) {
             // "встреча · 30 мин · Zoom", "APP-105 · 1 ч"
-            if (meeting) parts.push(root._typeName(b, true));
+            if (meeting && root._typeWord(b, true)) parts.push(root._typeWord(b, true));
             else parts.push(b.id);
             if (kind !== "allday" && !b.dayOnly) parts.push(root._rowLen(b));
             if (!meeting && b.waiting) parts.push(I18n.t("today.waitingOn").arg(b.waiting));
         } else {
-            if (meeting) parts.push(root._typeName(b, false));
+            if (meeting && root._typeWord(b, false)) parts.push(root._typeWord(b, false));
             else parts.push(b.id, I18n.t("today.plannedByYou"));
         }
         // A focus block is "with yourself"; its people field is a note.
@@ -528,6 +533,31 @@ FocusScope {
                     font.pixelSize: Theme.fsMd
                     font.underline: emptyUndCA.hovered
                     ClickArea { id: emptyUndCA; label: parent.text; role: Accessible.Link; onActivated: root.undatedRequested() }
+                }
+
+                // "N more above" (A2-10): a band of its own over the rows,
+                // never over the first one's title.
+                Rectangle {
+                    objectName: "today-more-above"
+                    visible: root.hiddenAbove > 0 && !root.stacked
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: root.plain ? 0 : Theme.spSm
+                    Layout.bottomMargin: Theme.spXs
+                    implicitWidth: aboveT.implicitWidth + 2 * Theme.spMd
+                    implicitHeight: aboveT.implicitHeight + Theme.spXs * 2
+                    radius: height / 2
+                    color: Theme.panel2
+                    border.color: Theme.border
+                    border.width: 1
+                    Text {
+                        id: aboveT
+                        anchors.centerIn: parent
+                        text: "↑ " + I18n.t("today.moreAbove").arg(root.hiddenAbove)
+                        color: Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
+                    }
+                    ClickArea { label: aboveT.text; onActivated: dayList.positionViewAtBeginning() }
                 }
 
                 ListView {
@@ -964,30 +994,6 @@ FocusScope {
         }
         return n;
     }
-    Rectangle {
-        objectName: "today-more-above"
-        parent: dayList
-        visible: root.hiddenAbove > 0 && !root.stacked
-        anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
-        z: 3
-        implicitWidth: aboveT.implicitWidth + 2 * Theme.spMd
-        implicitHeight: aboveT.implicitHeight + Theme.spXs * 2
-        radius: height / 2
-        color: Theme.panel2
-        border.color: Theme.border
-        border.width: 1
-        Text {
-            id: aboveT
-            anchors.centerIn: parent
-            text: "↑ " + I18n.t("today.moreAbove").arg(root.hiddenAbove)
-            color: Theme.textMuted
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSm
-        }
-        ClickArea { label: aboveT.text; onActivated: dayList.positionViewAtBeginning() }
-    }
-
     // ‹ ›: a box in bold, a bare chevron in quiet.
     component NavBtn: Rectangle {
         id: nb

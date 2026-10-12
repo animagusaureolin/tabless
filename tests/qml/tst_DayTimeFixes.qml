@@ -137,6 +137,59 @@ TestCase {
         verify(sub.indexOf(Theme.fmtHour(19) + " New York") >= 0, sub);
     }
 
+    // A6-4 (verify): Today opens a single meeting as the week does, from
+    // its occurrence, which alone carries the zone it is kept in.
+    function test_today_opens_a_single_meeting_as_the_week_does() {
+        const day = tc.probeDay();
+        const id = tc.addEvent("single meeting probe", day, 15, 16);
+        const comp = Qt.createComponent("qrc:/qt/qml/TodoCpp/qml/Main.qml");
+        tryCompare(comp, "status", Component.Ready, 5000);
+        const win = comp.createObject(null);
+        try {
+            const o = win._occurrenceOf(id, Qt.formatDate(day, "yyyy-MM-dd"));
+            verify(o, "the occurrence of a meeting that does not repeat");
+            compare(o.id, id);
+            verify(o.srcTz !== undefined, "the zone fields come with it");
+            win.openEvent(id, Qt.formatDate(day, "yyyy-MM-dd"));
+            const ed = findChild(win.contentItem, "event-zone");
+            verify(ed !== null);
+            verify(!ed.visible, "a local meeting shows no zone");
+        } finally {
+            win.destroy();
+        }
+    }
+
+    // A3-20 (verify): a meeting titled as its type does not say it twice.
+    function test_a_title_that_is_its_type_is_not_repeated() {
+        const day = tc.probeDay();
+        const word = I18n.t("event.type.sync");
+        tc.addEvent(word, day, 10, 11, { type: "sync" });
+        AppController.selectedDate = day;
+        const v = tc.today();
+        const b = v.dayData.blocks.filter(x => x.title === word)[0];
+        verify(b);
+        const sub = v._sub("meeting", b);
+        verify(sub.toLowerCase().indexOf(word.toLowerCase()) < 0, sub);
+    }
+
+    // A2-10 (verify): "N more above" has a band of its own, never over the
+    // first visible row's title.
+    function test_more_above_does_not_cover_a_row() {
+        const day = tc.probeDay();
+        for (let i = 0; i < 30; i++) tc.addTask("above probe " + i, { scheduledAt: day });
+        AppController.selectedDate = day;
+        const v = tc.today();
+        const list = findChild(v, "today-day");
+        tryVerify(() => list.contentHeight > list.height, 2000, "the day scrolls");
+        list.contentY = list.originY + 6 * Theme.px(40);
+        const cue = findChild(v, "today-more-above");
+        tryVerify(() => v.hiddenAbove > 0 && cue.visible, 1000);
+        wait(50);
+        const cueBottom = cue.mapToItem(v, 0, cue.height).y;
+        const listTop = list.mapToItem(v, 0, 0).y;
+        verify(cueBottom <= listTop + 0.5, "cue " + cueBottom + " over the rows from " + listTop);
+    }
+
     // A6-17: a multi-day all-day block says which days and which of them.
     function test_a_multi_day_block_says_its_span() {
         const day = tc.probeDay();
@@ -215,6 +268,28 @@ TestCase {
         for (let i = 0; i < d.carryRows.length; i++) keyClick(Qt.Key_J);
         compare(d.cursor, d.carryRows.length - 1);
         verify(flick.contentY > 0, "scrolled to the last row");
+        // Enter on a pill Tab reached is that pill, not the cursor row's
+        // task opened (B3 verify).
+        let opened = 0;
+        d.taskActivated.connect(() => opened++);
+        d.cursor = 0;
+        const other = d.carryRows.findIndex((r, i) => i > 0 && ids.indexOf(r.id) >= 0 && d.carried[r.id] === undefined);
+        verify(other > 0);
+        const otherId = d.carryRows[other].id;
+        const pills = [];
+        const walk = (it) => {
+            if (!it) return;
+            if (it.objectName === "end-of-day-carry-tomorrow") pills.push(it);
+            for (let i = 0; i < (it.children || []).length; i++) walk(it.children[i]);
+        };
+        walk(d.contentItem);
+        const pill = pills.filter(p => p.parent && p.parent.objectName === "end-of-day-carry-" + otherId)[0];
+        verify(pill, pills.length + " pills");
+        pill.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        compare(opened, 0, "no task opened");
+        verify(d.opened, "the dialog stays");
+        compare(d.carried[otherId], "tomorrow");
         d.close();
     }
 
@@ -258,7 +333,12 @@ TestCase {
         const holder = createTemporaryQmlObject('import QtQuick; Item { width: 1200; height: 600 }', host);
         const wv = createTemporaryQmlObject('import TodoCpp; WeekView { anchors.fill: parent }', holder);
         const flick = findChild(wv, "week-hour-scroll").contentItem;
-        tryVerify(() => flick.contentY > 0, 2000, "opened on the working day");
+        // Opened on the working day, or on the hour before now past
+        // midnight: told by a pure rule, never by the clock of the run.
+        compare(wv.workdayFirstHour(0), 0);
+        compare(wv.workdayFirstHour(14), Math.max(0, wv.workStart - wv.hoursStart));
+        tryVerify(() => wv.scrollToWorkday(), 2000, "the grid is laid out");
+        wait(100);   // the opening scroll has stopped trying
         flick.contentY = 9 * wv.hourH;
         const chip = findChild(wv, "week-more-earlier");
         tryVerify(() => chip.visible, 1000);

@@ -406,11 +406,15 @@ Item {
     property date now: new Date()
 
     // Returns false while the grid has no height to scroll yet.
+    // The hour the grid opens on (rows from hoursStart): the working day,
+    // or the hour before now when that is earlier. Pure, for the tests.
+    function workdayFirstHour(nowHour) {
+        return Math.max(0, Math.min(root.workStart, nowHour - 1) - root.hoursStart);
+    }
     function scrollToWorkday() {
         const flick = hourScroll.contentItem;
         if (!flick || flick.height <= 0 || flick.contentHeight <= flick.height) return false;
-        const nowHour = new Date().getHours();
-        const first = Math.max(0, Math.min(root.workStart, nowHour - 1) - root.hoursStart);
+        const first = root.workdayFirstHour(new Date().getHours());
         const maxY = Math.max(0, flick.contentHeight - flick.height);
         flick.contentY = Math.min(maxY, first * root.hourH);
         return true;
@@ -440,6 +444,9 @@ Item {
     // the time on top of a title.
     readonly property int eventOneLineH: Math.ceil(Theme.fsXs * 1.4) + 2 * Theme.sp2xs
     readonly property int eventTwoLineH: Math.ceil((Theme.fsXs + Theme.fsSm) * 1.4) + 2 * Theme.sp2xs
+    // The top of a block its time and a title of up to three lines take:
+    // a "+N" chip stays below it.
+    readonly property int blockTitleH: Math.ceil((Theme.fsXs + 3 * Theme.fsSm) * 1.4) + 2 * Theme.sp2xs
     function eventBlock(start, end) {
         return Overlap.block(start, end, root.hourH, root.eventOneLineH, root.eventTwoLineH);
     }
@@ -1167,7 +1174,7 @@ Item {
     readonly property var overlapItems: buildOverlapItems()
     readonly property var overlaps: Overlap.computeByDay(root.overlapItems)
     // The narrowest lane drawn; past it the rest fold onto "+N" (A1-7).
-    readonly property int minLaneW: Theme.px(64)
+    readonly property int minLaneW: Theme.px(44)
     readonly property int laneAvail: gridHost.dayW - 2 * root.laneInset
     readonly property int laneFit: Overlap.capacity(root.laneAvail, root.minLaneW)
     // The "+N" chips: what is folded, per day, from what hour.
@@ -2415,6 +2422,7 @@ Item {
                                 spacing: root.dayZoom ? Theme.sp2xs : 0
                                 clip: true
                                 Text {
+                                    id: blkStart
                                     visible: !wkBlock.oneLine && Style.fills && !root.dayZoom
                                     text: Theme.fmtHour(wkBlock.effStart)
                                     color: Theme.textMuted
@@ -2450,8 +2458,14 @@ Item {
                                         font.pixelSize: root.dayZoom ? Theme.fsMd : Theme.fsSm
                                         font.weight: Style.fills && !root.dayZoom ? Theme.fwHeading : Theme.fwBody
                                         wrapMode: wkBlock.oneLine || root.dayZoom || !Style.fills ? Text.NoWrap : Text.WordWrap
-                                        maximumLineCount: wkBlock.oneLine || root.dayZoom || !Style.fills ? 1 : 3
+                                        // As many lines as the block holds whole (up to
+                                        // three): a narrow lane wrapped a fourth one
+                                        // cut in half by the block's bottom.
+                                        maximumLineCount: wkBlock.oneLine || root.dayZoom || !Style.fills ? 1
+                                            : Math.max(1, Math.min(3, Math.floor((wkBlock.height - Theme.sp2xs * 2
+                                                - (blkStart.visible ? blkStart.height : 0)) / blkTitleFm.lineSpacing)))
                                         elide: Text.ElideRight
+                                        FontMetrics { id: blkTitleFm; font: blkTitle.font }
                                     }
                                     Text {
                                         visible: root.dayZoom
@@ -2645,7 +2659,8 @@ Item {
                             objectName: "week-fold-" + foldChip.modelData.dayIndex
                             readonly property var _last: Overlap.lane(root.laneFit - 1, root.laneFit, root.laneAvail, root.minLaneW)
                             x: gridHost.gutterW + foldChip.modelData.dayIndex * gridHost.dayW + root.laneInset + foldChip._last.x + foldChip._last.w - width - Theme.sp2xs
-                            y: (foldChip.modelData.start - root.hoursStart) * root.hourH + Theme.sp2xs
+                            // Off the title of what the last lane draws there.
+                            y: (Overlap.chipStart(foldChip.modelData, (height + Theme.sp2xs) / root.hourH, root.blockTitleH / root.hourH) - root.hoursStart) * root.hourH + Theme.sp2xs
                             z: 6
                             width: foldT.implicitWidth + 2 * Theme.spXs
                             height: foldT.implicitHeight + Theme.sp2xs

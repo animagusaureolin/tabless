@@ -133,7 +133,37 @@ TestCase {
         }
         // Nothing drawn overlaps: no title is covered by a neighbour.
         verify(l0.x + l0.w <= l1.x + 1e-9);
-        compare(Overlap.lane(0, 3, 50, 64).w, 50, "the minimum never exceeds the day");
+        compare(Overlap.lane(0, 3, 50, 64).w, 25, "two lanes always stand side by side");
+        verify(!Overlap.lane(1, 3, 50, 64).folded, "the second of two overlapping is drawn");
+    }
+
+    // B3 verify: a 102-120px day (1312-1440px windows) draws two
+    // overlapping meetings side by side; none hides behind "+1".
+    function test_an_ordinary_day_draws_two_lanes() {
+        compare(Overlap.capacity(98), 2);
+        compare(Overlap.capacity(116), 2);
+        compare(Overlap.capacity(30), 2);
+        const items = [{ id: "dev", start: 9, end: 10 }, { id: "ops", start: 9.5, end: 11 }];
+        compare(Overlap.folds(items, Overlap.compute(items), Overlap.capacity(98)).length, 0);
+    }
+
+    // The "+N" chip keeps off the title of the block drawn in the last lane.
+    function test_fold_chip_keeps_off_titles() {
+        const chip = 0.4, title = 1.4;
+        // Nothing in the last lane there: at the first folded start.
+        compare(Overlap.chipStart({ start: 10, lane: [] }, chip, title), 10);
+        // A tall block from 9 to 13: at its bottom, under its title.
+        fuzzyCompare(Overlap.chipStart({ start: 9.5, lane: [{ start: 9, end: 13 }] }, chip, title), 12.6, 1e-9);
+        // A short one (16:00-17:30): under it.
+        compare(Overlap.chipStart({ start: 16.25, lane: [{ start: 16, end: 17.5 }] }, chip, title), 17.5);
+        // The folded start already below the block's title stays put.
+        compare(Overlap.chipStart({ start: 11, lane: [{ start: 9, end: 13 }] }, chip, title), 11);
+        const items = [{ id: "a", start: 9, end: 10 }, { id: "b", start: 9, end: 11 },
+                       { id: "c", start: 9.5, end: 10.5 }];
+        const f = Overlap.folds(items, Overlap.compute(items), 2);
+        compare(f.length, 1);
+        compare(f[0].lane.length, 1, "b is drawn in the last lane");
+        compare(f[0].lane[0].start, 9);
     }
 
     function test_folds_count_what_is_not_drawn() {

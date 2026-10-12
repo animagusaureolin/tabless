@@ -81,13 +81,17 @@ function computeByDay(days) {
 // as many lanes as fit at `minW` are drawn, side by side; the rest are
 // `folded` - not drawn, counted on a "+N" chip that opens the day, and drawn
 // in the last lane while the keyboard cursor is on one of them.
-// The narrowest a lane gets (`minW` overrides): its title keeps ~6 letters.
-const MIN_LANE_W = 64;
+// The narrowest a lane gets (`minW` overrides): its title keeps ~4 letters.
+// At 64 a 102-120px day (1312-1440px windows) held one lane, and any two
+// overlapping meetings drew as one with the other behind "+1": 10:00-11:00
+// looked free (B3 verify). Two lanes always stand side by side.
+const MIN_LANE_W = 44;
+const MIN_LANES = 2;
 
 // How many lanes fit side by side.
 function capacity(avail, minW) {
     if (minW === undefined) minW = MIN_LANE_W;
-    return Math.max(1, Math.floor((avail + 1e-9) / minW));
+    return Math.max(MIN_LANES, Math.floor((avail + 1e-9) / minW));
 }
 
 function lane(col, cols, avail, minW) {
@@ -107,20 +111,47 @@ function lane(col, cols, avail, minW) {
 // The "+N" chips of one day: for every cluster wider than `fit` lanes, how
 // many are folded and from what hour. `items` is [{ id, start, end }] and
 // `slots` the compute() map.
+// `lane` lists what is drawn in the last lane of that cluster ({ start, end }),
+// so the chip can keep off its titles (chipStart).
 function folds(items, slots, fit) {
     const byCluster = {};
     for (let i = 0; i < items.length; i++) {
         const s = slots[items[i].id];
         if (!s || s.cols <= fit || s.col < fit) continue;
         const k = s.cluster;
-        if (!byCluster[k]) byCluster[k] = { n: 0, start: items[i].start, ids: [] };
+        if (!byCluster[k]) byCluster[k] = { n: 0, start: items[i].start, ids: [], lane: [] };
         byCluster[k].n++;
         byCluster[k].start = Math.min(byCluster[k].start, items[i].start);
         byCluster[k].ids.push(items[i].id);
     }
+    for (let i = 0; i < items.length; i++) {
+        const s = slots[items[i].id];
+        if (s && byCluster[s.cluster] && s.col === fit - 1)
+            byCluster[s.cluster].lane.push({ start: items[i].start, end: items[i].end });
+    }
     const out = [];
-    for (const k in byCluster) out.push(byCluster[k]);
+    for (const k in byCluster) {
+        byCluster[k].lane.sort(function (a, b) { return a.start - b.start; });
+        out.push(byCluster[k]);
+    }
     return out;
+}
+
+// The hour the "+N" chip of `fold` is drawn at: the first folded start,
+// moved down past the title of a block drawn there in the last lane - to
+// that block's bottom when it is tall enough to leave its title clear, else
+// under it. `chipH` and `titleH` are in hours.
+function chipStart(fold, chipH, titleH) {
+    let y = fold.start;
+    const lane = fold.lane || [];
+    for (let i = 0; i < lane.length; i++) {
+        const b = lane[i];
+        if (b.end <= y + 1e-9 || b.start >= y + chipH - 1e-9) continue;   // clear of it
+        if (y >= b.start + titleH - 1e-9) continue;                        // below its title
+        const bottom = b.end - chipH;
+        y = bottom >= b.start + titleH - 1e-9 ? Math.max(y, bottom) : b.end;
+    }
+    return y;
 }
 
 // How tall an event is drawn in the week grid, and whether it gets two lines

@@ -242,6 +242,11 @@ Popup {
                                 objectName: "end-of-day-carry-" + modelData
                                 text: I18n.t("carry.btn." + modelData)
                                 onClicked: root.carry(taskRow.modelData.id, modelData)
+                                // Enter on a pill Tab reached is that pill (a Button
+                                // takes only Space): "→ tomorrow" carried, not the
+                                // cursor row's task opened.
+                                Keys.onReturnPressed: clicked()
+                                Keys.onEnterPressed: clicked()
                                 // Tab into a row off the screen scrolls to it.
                                 onActiveFocusChanged: if (activeFocus) root.reveal(this)
                             }
