@@ -807,7 +807,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"keymap.was.view.month", {"your first view; the month is g c, then z m", "первый из «Моих видов»; месяц — g c, затем z m"}},
       {"keymap.was.view.archive",
        {"your second view; the archive is the is:archived filter", "второй из «Моих видов»; архив — фильтр is:archived"}},
-      {"keymap.was.view.docs", {"your third view; docs are g n", "третий из «Моих видов»; доки — g n"}},
+      {"keymap.was.view.docs", {"your third view; docs are g d", "третий из «Моих видов»; доки — g d"}},
       {"keymap.was.view.notes", {"your fourth view; notes are g n", "четвёртый из «Моих видов»; заметки — g n"}},
       {"keymap.was.view.settings", {"your fifth view; settings are Ctrl ,", "пятый из «Моих видов»; настройки — Ctrl ,"}},
       {"keymap.was.task.openExternal", {"a new task below; open in the tracker is g x", "новая задача ниже; открыть в трекере — g x"}},

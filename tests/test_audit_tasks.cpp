@@ -352,7 +352,10 @@ TEST_F(AuditTasksTest, TheRecurrenceIsNamedInTheMoveToast) {
   QSignalSpy spy(app_.get(), &AppController::undoableToast);
   app_->moveTask(QStringLiteral("R-1"), QStringLiteral("done"));
   ASSERT_EQ(spy.count(), 1);
-  EXPECT_TRUE(spy.at(0).at(0).toString().contains(QStringLiteral("R-1-r1")));
+  // The next one by its day, not by the copy's "-r1" id and an ISO date (A2-19).
+  const QString msg = spy.at(0).at(0).toString();
+  EXPECT_TRUE(msg.contains(QStringLiteral("next one"))) << msg.toStdString();
+  EXPECT_FALSE(msg.contains(QStringLiteral("R-1-r1"))) << msg.toStdString();
 }
 
 // ── TASKS-26: a new task knows when it entered its column ──
