@@ -305,6 +305,16 @@ Rebindable in Settings → Hotkeys; live only while Notes is on screen.
 | Show / hide the list of notes | `Ctrl+Alt+L` |
 | Filter the notes (title, folder and body) | `Ctrl+F` |
 
+Arriving in Notes (`G, N`, `Ctrl+3`, a click on the sidebar) puts the keyboard
+on the note as drawn, not in its text, as every other view does: the keymap's
+chords work there and the line above the title says `Enter — write`. `Return` (or
+any letter that is no key) opens the text; `Esc` steps out — text → note →
+list, and stays on the list. `F6` walks the list, the note and its links
+before it leaves the screen. `Tab` reaches every link in the note, `Return`
+follows it. `U` on the note takes back the note's own last edit, then only
+what was done to notes and pages; a change made on another screen is
+`Ctrl+Z`'s.
+
 ## Notes and doc page editor
 
 These work while the cursor is in the notes editor or a Docs page, and only
@@ -345,7 +355,7 @@ Every one of these is a single undo step.
   the next item; `Return` and `Shift+Return` start a new line (the lines after
   the first are the description). `Tab` (or the arrows, then `Return`) takes a
   suggestion. The quick note is the same: `Ctrl+Return` saves, `Return` is a
-  new line, `Esc` asks before dropping the text. From
+  new line, `Esc` closes it and keeps the text as a draft for next time. From
   another app it comes up on its own, without the main window, and a
   notification confirms what was created.
 - **Task editor:** `Ctrl+Return` saves. `Esc` (or a click on the backdrop) closes

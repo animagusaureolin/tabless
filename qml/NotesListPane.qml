@@ -48,9 +48,14 @@ Rectangle {
     }
     // After "+": the view puts the cursor in the new note.
     signal noteCreated(string id)
-    // Return on the list, Esc on an empty filter: the caret into the
-    // document on screen (IDIOT-KNOW-7/8).
+    // Return on the list: the caret into the document on screen
+    // (IDIOT-KNOW-7/8).
     signal editRequested()
+    // Esc on an empty filter: back to the note, drawn, not into its text
+    // (A4-6).
+    signal documentRequested()
+    // "Import Markdown…" under the empty list (A4-25).
+    signal importRequested()
     // Knowledge (APP-269): Docs live in the same list — the reference links
     // pinned at the top, the doc pages and the snippets below the notes.
     signal refActivated(string url)
@@ -416,6 +421,16 @@ Rectangle {
         pageRenamePopup.openFor(id, String(m.data(m.index(row, 0), m.roleOf("title")) || ""));
     }
     function takeFocus() { list.forceActiveFocus(); }
+    // Set when a row's own action (delete) took the row the keyboard was
+    // on: the list keeps the keyboard, whoever asks for it next.
+    property bool _reclaim: false
+    function reclaimFocus() {
+        if (!root._reclaim) return false;
+        root._reclaim = false;
+        if (!root.visible) return false;
+        root.focusList();
+        return true;
+    }
     function focusFilter() {
         filterField.forceActiveFocus();
         filterField.selectAll();
@@ -590,7 +605,7 @@ Rectangle {
             // hit to write in, ↓ walks the hits (IDIOT-KNOW-7).
             Keys.onEscapePressed: (event) => {
                 if (filterField.text.length > 0) root.setFilter("");
-                else root.editRequested();
+                else root.documentRequested();
                 event.accepted = true;
             }
             Keys.onReturnPressed: (event) => { root._openFirstHit(); event.accepted = true; }
@@ -609,6 +624,25 @@ Rectangle {
             line: root.filter.length > 0 ? I18n.t("notes.noMatches.hint")
                 : root.docs ? I18n.t("knowledge.docs.empty.line")
                 : I18n.t("notes.empty.line").arg(AppController.shortcutText("notes.new"))
+            // An action, not words in a sentence (A4-25).
+            Text {
+                id: importLink
+                objectName: "notes-empty-import"
+                visible: !root.docs && root.filter.length === 0
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: I18n.t("notes.empty.import")
+                color: importCA.hovered ? Theme.text : Theme.textDim
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsMd
+                font.underline: true
+                ClickArea {
+                    id: importCA
+                    label: importLink.text
+                    role: Accessible.Link
+                    showTip: false
+                    onActivated: root.importRequested()
+                }
+            }
         }
 
         ListView {
@@ -625,10 +659,24 @@ Rectangle {
             // the next note, the menu key (or Shift+F10) opens the open
             // note's menu — pin and delete had no keyboard path.
             activeFocusOnTab: true
+            // The view's own keyboard surface, not a stray control (Main's
+            // _focusOnControl): the keymap works here — u brings back a note
+            // just deleted from this list, g t goes to Today (A4-9).
+            readonly property bool viewSurface: true
             Accessible.role: Accessible.List
             Keys.onUpPressed: { root.step(-1); Qt.callLater(root._activeRowItem); }
             Keys.onDownPressed: { root.step(1); Qt.callLater(root._activeRowItem); }
+            // Esc on the list is as far out as Esc goes in Knowledge: it
+            // stays here. It went on into the note's text, so Esc, Esc, Esc
+            // ended up typing again (A4-6).
+            Keys.onShortcutOverride: (event) => {
+                if (event.key === Qt.Key_Escape && (event.modifiers & ~Qt.KeypadModifier) === Qt.NoModifier) event.accepted = true;
+            }
             Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Escape && (event.modifiers & ~Qt.KeypadModifier) === Qt.NoModifier) {
+                    event.accepted = true;
+                    return;
+                }
                 if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
                     const r = root._activeRowItem();
                     if (r) r.openMenu();
@@ -1024,7 +1072,14 @@ Rectangle {
                             objectName: "note-menu-delete"
                             text: I18n.t("common.delete")
                             danger: true
-                            onTriggered: AppController.deleteNote(row.note.id)
+                            // The keyboard stays on the list: it fell into the
+                            // next note's text, where u was typed instead of
+                            // bringing the note back (A4-9).
+                            onTriggered: {
+                                root._reclaim = true;
+                                AppController.deleteNote(row.note.id);
+                                Qt.callLater(root.reclaimFocus);
+                            }
                         }
                     }
                 }
@@ -1280,6 +1335,15 @@ Rectangle {
         }
     }
 
+    // A small muted label over a dialog field (X-Dlg-Small): the rename
+    // dialog's two fields were bare, the folder one read as a name (A4-11).
+    component FieldLabel: Text {
+        Layout.bottomMargin: -Theme.spSm
+        color: Theme.textMuted
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsXs
+    }
+
     // Rename and re-file in one place: they are the same edit as far as the
     // reader is concerned — what this note is called and where it lives.
     QQC.Dialog {
@@ -1293,10 +1357,29 @@ Rectangle {
         parent: QQC.Overlay.overlay
         padding: Theme.inset
         width: 380
-        title: I18n.t("notes.rename")
+        // The menu item's "…" is not the dialog's (A4-11).
+        title: I18n.t("notes.rename.title")
 
         // Why Save did nothing: an empty name, a name taken (IDIOT-KNOW-3/13).
         property string error: ""
+        // The same name in another folder is allowed, but [[name]] then has
+        // two notes to open: said while it is typed, not found out later
+        // (A4-10). Which one a link opens: its own folder's, else the first.
+        readonly property string elsewhere: {
+            const t = titleField.text.trim().toLowerCase();
+            if (t.length === 0 || renamePopup.error.length > 0) return "";
+            const folder = folderField.text.trim();
+            const m = AppController.notes;
+            const rT = m.roleOf("title"), rF = m.roleOf("folder"), rI = m.roleOf("id");
+            for (let i = 0; i < m.rowCount(); i++) {
+                const idx = m.index(i, 0);
+                if (String(m.data(idx, rI)) === renamePopup.noteId) continue;
+                if (String(m.data(idx, rT) || "").trim().toLowerCase() !== t) continue;
+                const f = String(m.data(idx, rF) || "");
+                if (f !== folder) return f.length > 0 ? f : I18n.t("notes.rename.noFolder");
+            }
+            return "";
+        }
         function openFor(id, title, folder) {
             renamePopup.noteId = id;
             titleField.text = title;
@@ -1329,9 +1412,11 @@ Rectangle {
 
         contentItem: ColumnLayout {
             spacing: Theme.spMd
+            FieldLabel { text: I18n.t("notes.rename.name") }
             QQC.TextField {
                 id: titleField
                 QQC.ContextMenu.menu: TextEditMenu { editor: titleField }
+                Accessible.name: I18n.t("notes.rename.name")
                 objectName: "note-rename-title"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 320
@@ -1351,9 +1436,22 @@ Rectangle {
                 font.pixelSize: Theme.fsSm
                 wrapMode: Text.Wrap
             }
+            Text {
+                objectName: "note-rename-elsewhere"
+                visible: renamePopup.elsewhere.length > 0
+                Layout.fillWidth: true
+                Layout.preferredWidth: 320
+                text: I18n.t("notes.rename.warn.elsewhere").arg(titleField.text.trim()).arg(renamePopup.elsewhere)
+                color: Theme.warning
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.Wrap
+            }
+            FieldLabel { text: I18n.t("notes.rename.folder") }
             QQC.TextField {
                 id: folderField
                 QQC.ContextMenu.menu: TextEditMenu { editor: folderField }
+                Accessible.name: I18n.t("notes.rename.folder")
                 objectName: "note-rename-folder"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 320

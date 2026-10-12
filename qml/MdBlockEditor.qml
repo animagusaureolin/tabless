@@ -117,6 +117,31 @@ Item {
         if (root.editing) { field.forceActiveFocus(); return; }
         root.editLine(root._lastLine >= 0 ? root._lastLine : 0, false);
     }
+    // The keyboard on the drawn document, no block open: what arriving on a
+    // screen does, as on every other view. The keymap's chords are keys here
+    // and Return opens the text; g n, g t typed "gt" into the note (A4-4).
+    // An empty document has nothing to read: the caret goes in.
+    function focusDocument() {
+        if (!root.visible) return;
+        if (!root.readOnly && src.text.trim().length === 0) {
+            root.focusEnd();
+            return;
+        }
+        root._leave(true);
+        view.forceActiveFocus();
+    }
+    // The drawn document holds the keyboard (not a block, not a link on it).
+    readonly property bool documentFocused: view.activeFocus && !root.editing
+                                            && !(root.Window.activeFocusItem && root.Window.activeFocusItem.objectName === "mdLinkStop")
+    // Its own undo, for the keymap's bare "u" on the drawn document.
+    readonly property bool canUndoHere: !root.readOnly && src.canUndo
+    function undoHere() {
+        if (!root.canUndoHere) return false;
+        root._leave(true);
+        src.undo();
+        doc.flush();
+        return true;
+    }
     // The caret back where it was, else at the end of the text. A document
     // that ends on its heading gets a line under it: the caret at the end of
     // "# Title" made the first words typed part of the title (IDIOT-KNOW-6/9).

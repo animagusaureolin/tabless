@@ -9433,6 +9433,14 @@ bool AppController::undoWouldRemoveTask(const QString& id) const {
   });
 }
 
+bool AppController::undoIsKnowledgeOnly() const {
+  const heap::undo::Entry* top = m_undo.peekUndo();
+  if(top == nullptr || top->profileRemoved || top->statusesTouched || top->savedViewsTouched) {
+    return false;
+  }
+  return top->tasks.isEmpty() && top->events.isEmpty() && top->people.isEmpty();
+}
+
 void AppController::undo() {
   if(!m_undo.canUndo()) {
     return;

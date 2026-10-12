@@ -1501,6 +1501,7 @@ ApplicationWindow {
                         onFilterConsumed: notesBridge.requestedFilter = ""
                         onTaskRequested: (id) => win.openTaskById(id)
                         onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
+                        onImportRequested: importVaultDialog.open()
                         // Its keys stand down behind a panel or a dialog (IDIOT-KNOW-4).
                         keysLive: !win._panelOpen && !win._modalOpen
                     }
@@ -1584,10 +1585,16 @@ ApplicationWindow {
         const v = AppController.currentSection === "tasks" ? win.activeViewItem() : null;
         return !!v && v.nothingFound === true;
     }
+    // Words typed with "/" are still on the board after Enter: Esc lets go of
+    // them as it does when they find nothing (A4-17). The cursor and a
+    // selection take the earlier Esc presses.
+    readonly property bool _taskFilterTyped: AppController.currentSection === "tasks"
+                                             && String(win.searchText || "").trim() !== win.defaultQuery("", false)
     Shortcut {
         sequence: "Escape"
         context: Qt.ApplicationShortcut
-        enabled: (win._taskFilterEmpty || (!!savedViewsHost.activeView && AppController.currentSection === "tasks"))
+        enabled: (win._taskFilterEmpty || win._taskFilterTyped
+                  || (!!savedViewsHost.activeView && AppController.currentSection === "tasks"))
                  && !win._viewKeysBlocked && !win._focusOnControl && !AppController.immersion
                  && AppController.selectionCount === 0
         onActivated: win.resetTaskFilter()
@@ -2182,7 +2189,11 @@ ApplicationWindow {
             return ["board", "list", "week"].indexOf(v) >= 0;
         case "nav.back": return win._navBack.length > 0 && !win._typing;
         case "nav.forward": return win._navFwd.length > 0 && !win._typing;
-        case "undo": return AppController.hasPendingUndo && !win._overlayOpen && !win._typing;
+        // A view may keep the bare key to what it shows (Knowledge: the
+        // note's own edit, never a change on a screen not in sight).
+        case "undo":
+            if (routed && b && typeof b.undoKeyLive === "function") return b.undoKeyLive() && !win._overlayOpen && !win._typing;
+            return AppController.hasPendingUndo && !win._overlayOpen && !win._typing;
         case "redo": return AppController.canRedo && !win._overlayOpen && !win._typing;
         case "focus.immersion": return !!(AppController.safety && AppController.safety.immersion);
         case "standup.draft": return !!(AppController.safety && AppController.safety.standupDraft);
@@ -2434,7 +2445,11 @@ ApplicationWindow {
         case "cal.taskLaterWeek": win._moveViewTask(7, 0); return;
         case "cal.taskTimeEarlier": win._moveViewTask(0, -1); return;
         case "cal.taskTimeLater": win._moveViewTask(0, 1); return;
-        case "undo": if (taskDoc.opened && win._focusInPanel) taskDoc.undo(); else AppController.undo(); return;
+        case "undo":
+            if (taskDoc.opened && win._focusInPanel) taskDoc.undo();
+            else if (b && typeof b.undoKey === "function") b.undoKey();
+            else AppController.undo();
+            return;
         case "redo": AppController.redo(); return;
         }
         win.runCommand(base);
@@ -3084,7 +3099,20 @@ ApplicationWindow {
         const list = win._regions();
         let i = list.indexOf(win._regionOf(win.activeFocusItem));
         if (i < 0) i = list.indexOf("content");
+        // A view made of parts (Knowledge: the list, the document, the
+        // links) walks them before F6 leaves it (A4-27). stepRegion() moves
+        // the keyboard and returns the part, or null past the last one.
+        const v = win.activeViewItem();
+        const parts = !!v && typeof v.stepRegion === "function";
+        if (parts && list[i] === "content" && !win._panelOpen) {
+            const part = v.stepRegion(dir, false);
+            if (part) { win._showRegion("content", part); return; }
+        }
         const next = list[(i + dir + list.length) % list.length];
+        if (next === "content" && parts && !win._panelOpen) {
+            const part = v.stepRegion(dir, true);
+            if (part) { win._showRegion("content", part); return; }
+        }
         if (next === "content") win.focusActiveView();
         else if (next === "sidebar") rail.takeFocus();
         else if (next === "header") topBar.focusSearch();
@@ -3093,8 +3121,10 @@ ApplicationWindow {
             if (stop) stop.forceActiveFocus(Qt.TabFocusReason);
             else win._regionItem(next).forceActiveFocus(Qt.TabFocusReason);
         }
-        win.regionShown = next;
-        const r = win._regionItem(next);
+        win._showRegion(next, win._regionItem(next));
+    }
+    function _showRegion(name, r) {
+        win.regionShown = name;
         const pos = r.mapToItem(win.contentItem, 0, 0);
         regionFrame.x = pos.x;
         regionFrame.y = pos.y;
