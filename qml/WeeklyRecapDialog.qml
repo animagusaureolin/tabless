@@ -157,7 +157,18 @@ Popup {
         const d = new Date(root.weekDay.getFullYear(), root.weekDay.getMonth(), root.weekDay.getDate() + 7 * n);
         root._load(d);
     }
-    onAboutToShow: root._load(root._autoOpened ? new Date(new Date().getTime() - 7 * 86400000) : new Date())
+    onAboutToShow: root._load(root.startDay(new Date(), root._autoOpened))
+    // The week it opens on (A2-29): the one that ended when opened on its
+    // own, and from the command too while the new week has nothing closed
+    // yet (a Monday review read "0 closed" on every day).
+    function startDay(now, auto) {
+        const lastWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+        if (auto) return lastWeek;
+        const f = AppController.weekFacts(now);
+        const ws = f.weekStart;
+        const firstDay = ws && ws.getTime && ws.getFullYear() === now.getFullYear() && ws.getMonth() === now.getMonth() && ws.getDate() === now.getDate();
+        return firstDay || (f.closed || []).length === 0 ? lastWeek : now;
+    }
     property bool _autoOpened: false
     onClosed: root._autoOpened = false
 
@@ -234,6 +245,18 @@ Popup {
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
+        }
+        // The keys that step the weeks, on screen (A1-12).
+        Text {
+            objectName: "recap-keys"
+            Layout.topMargin: Theme.spXs
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.fillWidth: true
+            text: I18n.t("recap.stepKeys")
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXs
+            wrapMode: Text.WordWrap
         }
 
         // One bar per day, as long as what closed on it.
@@ -330,6 +353,11 @@ Popup {
                 objectName: "weekly-recap-copy"
                 text: I18n.t("recap.copyMarkdown")
                 onClicked: root.copyMarkdown()
+            }
+            PillButton {
+                objectName: "weekly-recap-prev"
+                text: I18n.t("recap.prevWeek")
+                onClicked: root.stepWeek(-1)
             }
             PillButton {
                 objectName: "weekly-recap-next"

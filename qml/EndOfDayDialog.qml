@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
+import "KeyRules.js" as KeyRules
 
 // The day's summary (APP-190, X-Dlg-Recap "Итог дня"), from the end-of-day
 // check in Settings → Safety net, or from the palette at any time:
@@ -28,7 +29,11 @@ Popup {
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
     padding: 0
-    width: 428
+    // Wide enough for a row's four answers on one line (A2-30).
+    width: Math.min(Theme.px(540), (parent ? parent.width : Theme.px(540)) - 2 * Theme.sp3xl)
+    // Never taller than the window (A1-10, A2-30, A3-4): the leftovers
+    // scroll between the facts and the timer line.
+    height: Math.min(implicitHeight, (parent ? parent.height : implicitHeight) - 2 * Theme.sp3xl)
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     property var summary: ({ closed: [], carryOver: [], timers: [] })
@@ -42,6 +47,14 @@ Popup {
 
     signal taskActivated(string id)
 
+    // The leftover under the keyboard (A2-31): j / k walk them, t / w / s / c
+    // carry it, Enter opens it.
+    property int cursor: 0
+    // What was done to a leftover here, by id (A1-10): a task still due
+    // today or earlier stays on the list after "-> tomorrow" (its deadline
+    // is not moved), so its row says what was done to it.
+    property var carried: ({})
+
     function _read() {
         root.summary = AppController.endOfDaySummary();
         root.trackedSeconds = AppController.trackedSecondsOn(root.summary.date || new Date());
@@ -49,12 +62,41 @@ Popup {
     // A leftover carried on by hand; the list is read again, so it leaves
     // once it has a new day.
     function carry(id, mode) {
-        AppController.carryTasks([id], mode);
+        if (AppController.carryTasks([id], mode) > 0) {
+            const c = Object.assign({}, root.carried);
+            c[id] = mode;
+            root.carried = c;
+        }
         root._read();
+        root.cursor = Math.max(0, Math.min(root.cursor, root.carryRows.length - 1));
     }
     function showNow() {
+        root.carried = {};
+        root.cursor = 0;
         root._read();
         root.open();
+    }
+    // Keeps `item` (inside the list) on the screen.
+    function reveal(item) {
+        if (!item) return;
+        const p = item.mapToItem(carryCol, 0, 0);
+        if (p.y < carryFlick.contentY) carryFlick.contentY = p.y;
+        else if (p.y + item.height > carryFlick.contentY + carryFlick.height)
+            carryFlick.contentY = Math.min(p.y + item.height - carryFlick.height, Math.max(0, carryFlick.contentHeight - carryFlick.height));
+    }
+    function moveCursor(d) {
+        if (root.carryRows.length === 0) return;
+        root.cursor = Math.max(0, Math.min(root.carryRows.length - 1, root.cursor + d));
+        root.reveal(carryRep.itemAt(root.cursor));
+    }
+    readonly property var _keyModes: ({ "t": "tomorrow", "w": "window", "s": "someday", "c": "clear" })
+    function _keyOf(e) {
+        if (e.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) return "";
+        return KeyRules.latinOf(e.text);
+    }
+    function _ours(e) {
+        const k = root._keyOf(e);
+        return k.length === 1 && (root._keyModes[k] !== undefined || k === "j" || k === "k");
     }
 
     // "Закрыто 2 · в таймере 4 ч 10 мин · переходит 2"
@@ -78,6 +120,21 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: 0
+        focus: true
+        Keys.onShortcutOverride: (e) => { if (root._ours(e)) e.accepted = true; }
+        Keys.onPressed: (e) => {
+            const k = root._keyOf(e);
+            if (e.key === Qt.Key_Down || k === "j") { root.moveCursor(1); e.accepted = true; return; }
+            if (e.key === Qt.Key_Up || k === "k") { root.moveCursor(-1); e.accepted = true; return; }
+            const row = root.carryRows[root.cursor];
+            if (!row) return;
+            if (k.length === 1 && root._keyModes[k] !== undefined) { root.carry(row.id, root._keyModes[k]); e.accepted = true; return; }
+            if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
+                root.close();
+                root.taskActivated(row.id);
+                e.accepted = true;
+            }
+        }
 
         Text {
             objectName: "end-of-day-title"
@@ -103,35 +160,56 @@ Popup {
             wrapMode: Text.Wrap
         }
 
-        ColumnLayout {
-            objectName: "end-of-day-carryOver"
+        Text {
             visible: root.carryRows.length > 0
             Layout.topMargin: Theme.spLg
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
+            Layout.bottomMargin: Theme.spSm
+            text: I18n.t("eod.carryHint")
+            color: Theme.textMuted
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXs
+            wrapMode: Text.WordWrap
+        }
+        Flickable {
+            id: carryFlick
+            objectName: "end-of-day-scroll"
+            visible: root.carryRows.length > 0
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.preferredHeight: carryCol.implicitHeight
+            Layout.minimumHeight: Math.min(carryCol.implicitHeight, Theme.px(120))
+            contentWidth: width
+            contentHeight: carryCol.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ThinScrollBar {}
+        ColumnLayout {
+            id: carryCol
+            objectName: "end-of-day-carryOver"
+            x: Theme.inset
+            width: carryFlick.width - 2 * Theme.inset
             spacing: 0
-            Text {
-                Layout.fillWidth: true
-                Layout.bottomMargin: Theme.spSm
-                text: I18n.t("eod.carryHint")
-                color: Theme.textMuted
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsXs
-            }
             Repeater {
+                id: carryRep
                 model: root.carryRows
                 delegate: ColumnLayout {
                     id: taskRow
                     required property var modelData
+                    required property int index
                     objectName: "end-of-day-task-" + modelData.id
                     Layout.fillWidth: true
                     spacing: Theme.spSm
+                    readonly property bool current: root.cursor === taskRow.index
                     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.border }
                     Text {
                         id: titleText
                         Layout.fillWidth: true
                         readonly property string st: root._statusOf(taskRow.modelData.id)
-                        text: taskRow.modelData.title + (titleText.st.length > 0 ? " · " + titleText.st : "")
+                        readonly property string mode: root.carried[taskRow.modelData.id] || ""
+                        readonly property string did: mode.length > 0 ? " · " + I18n.t("carry.btn." + mode) + " \u2713" : ""
+                        text: (taskRow.current ? "\u203a " : "") + taskRow.modelData.title + (titleText.st.length > 0 ? " · " + titleText.st : "") + titleText.did
                         textFormat: Text.PlainText
                         color: Theme.text
                         font.family: Theme.fontUi
@@ -164,11 +242,26 @@ Popup {
                                 objectName: "end-of-day-carry-" + modelData
                                 text: I18n.t("carry.btn." + modelData)
                                 onClicked: root.carry(taskRow.modelData.id, modelData)
+                                // Tab into a row off the screen scrolls to it.
+                                onActiveFocusChanged: if (activeFocus) root.reveal(this)
                             }
                         }
                     }
                 }
             }
+        }
+        }
+        Text {
+            objectName: "end-of-day-keys"
+            visible: root.carryRows.length > 0
+            Layout.topMargin: Theme.spSm
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.fillWidth: true
+            text: I18n.t("eod.keysHint")
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXs
+            wrapMode: Text.WordWrap
         }
 
         // A running timer, as a question with its answer one click away.
