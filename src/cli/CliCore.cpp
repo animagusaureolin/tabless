@@ -982,7 +982,8 @@ int parseEstimate(const QString& text) {
   }
   t.remove(QChar(' '));
   static const QRegularExpression kHours(QStringLiteral(R"(^(\d+(?:[.,]\d+)?)(?:h|ч|час|часа|часов)(?:(\d+)(?:m|м|мин|min))?$)"));
-  static const QRegularExpression kMinutes(QStringLiteral(R"(^(\d+)(?:m|м|мин|min)$)"));
+  // A bare number is minutes, the commonest way to say it (A4-19).
+  static const QRegularExpression kMinutes(QStringLiteral(R"(^(\d+)(?:m|м|мин|min)?$)"));
   if(const QRegularExpressionMatch m = kHours.match(t); m.hasMatch()) {
     QString hours = m.captured(1);
     hours.replace(QChar(','), QChar('.'));

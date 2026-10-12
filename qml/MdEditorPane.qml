@@ -36,6 +36,13 @@ Item {
         if (root.mode === "live") live.focusEnd();
         else area.forceActiveFocus();
     }
+    // The page drawn, holding the keyboard with no block open (A4-4).
+    function focusDocument() {
+        if (root.pageId.length === 0) return;
+        if (root.mode === "live") live.focusDocument();
+        else area.forceActiveFocus();
+    }
+    readonly property MdBlockEditor liveEditor: live
     // No head row (title, word count, mode chips): the page sits in the
     // Knowledge document, which has no toolbar (DG-071).
     property bool bare: false

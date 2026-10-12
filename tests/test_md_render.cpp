@@ -392,3 +392,38 @@ TEST(MdRender, WikiTaskIsAChipAndMissingSaysSo) {
   EXPECT_TRUE(html.contains(QStringLiteral("no such note"))) << html.toStdString();
   EXPECT_TRUE(html.contains(QStringLiteral("heap://note/Gone"))) << html.toStdString();
 }
+
+// OWN-1: the # autocomplete inserts a tracker task's own id, provider first
+// ("#jira-APP-123"). A known one reads as its title and opens the task; an
+// id no task has stays the tag it looks like; "#APP-1" is unchanged.
+TEST(MdRender, TrackerTaskMentionReadsAsItsTitle) {
+  MdHtmlOptions options = testOptions();
+  options.ticketTitles.insert(QStringLiteral("jira-APP-123"), QStringLiteral("Billing export"));
+  options.ticketTitles.insert(QStringLiteral("github-17"), QStringLiteral("Crash on start"));
+  const QString html = renderFirst(QStringLiteral("see #jira-APP-123, #github-17 and #jira-APP-999\n"), BlockType::Paragraph, options);
+  EXPECT_TRUE(html.contains(QStringLiteral("heap://task/jira-APP-123"))) << html.toStdString();
+  EXPECT_TRUE(html.contains(QStringLiteral(">Billing export</a>"))) << html.toStdString();
+  EXPECT_TRUE(html.contains(QStringLiteral("heap://task/github-17"))) << html.toStdString();
+  EXPECT_TRUE(html.contains(QStringLiteral(">Crash on start</a>"))) << html.toStdString();
+  EXPECT_FALSE(html.contains(QStringLiteral("heap://task/jira-APP-999"))) << html.toStdString();
+  EXPECT_TRUE(html.contains(QStringLiteral("heap://tag/jira-APP-999"))) << html.toStdString();
+}
+
+// A2-35: a link to a note or a task is underlined, whatever its colour; a
+// tag or a person is not.
+TEST(MdRender, InternalLinksAreUnderlined) {
+  MdHtmlOptions options = testOptions();
+  options.ticketTitles.insert(QStringLiteral("APP-1"), QStringLiteral("Task one"));
+  options.wikiTargets.insert(QStringLiteral("APP-2"), {QStringLiteral("task"), QStringLiteral("APP-2 Task two")});
+  const QString html = renderFirst(QStringLiteral("[[Glossary]] [[APP-2]] #APP-1 #topic @alice\n"), BlockType::Paragraph, options);
+  const auto styleOf = [&html](const QString& href) {
+    const int at = html.indexOf(href);
+    const int style = html.indexOf(QStringLiteral("style=\""), at);
+    return html.mid(style, html.indexOf(QChar('"'), style + 7) - style);
+  };
+  EXPECT_TRUE(styleOf(QStringLiteral("heap://note/Glossary")).contains(QStringLiteral("text-decoration:underline"))) << html.toStdString();
+  EXPECT_TRUE(styleOf(QStringLiteral("heap://task/APP-2")).contains(QStringLiteral("text-decoration:underline"))) << html.toStdString();
+  EXPECT_TRUE(styleOf(QStringLiteral("heap://task/APP-1")).contains(QStringLiteral("text-decoration:underline"))) << html.toStdString();
+  EXPECT_TRUE(styleOf(QStringLiteral("heap://tag/topic")).contains(QStringLiteral("text-decoration:none"))) << html.toStdString();
+  EXPECT_TRUE(styleOf(QStringLiteral("heap://person/alice")).contains(QStringLiteral("text-decoration:none"))) << html.toStdString();
+}
