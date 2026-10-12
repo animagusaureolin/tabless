@@ -116,6 +116,17 @@ TEST(CliVerbScan, AnyOtherWordIsAnUnknownCommand) {
   EXPECT_EQ(p.error, QStringLiteral("unknown command 'frobnicate'"));
 }
 
+// A stray word after a window option, or a path, is the window launch's own
+// mistake: the window refuses it as an unexpected argument instead of the
+// command line reporting "Unknown option 'view'".
+TEST(CliVerbScan, StrayWordAfterAWindowOptionStaysTheWindows) {
+  EXPECT_EQ(classifyArgs({"--view", "board", "extra"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--capture", "extra"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--minimized", "extra"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--data-dir", "C:/x", "C:/tmp/dd"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--view", "board", "add"}), Invocation::Command);
+}
+
 TEST(CliVerbScan, VersionIsAVerb) {
   EXPECT_EQ(classifyArgs({"version"}), Invocation::Command);
   const ParsedArgs p = parseArgs({QStringLiteral("version")});

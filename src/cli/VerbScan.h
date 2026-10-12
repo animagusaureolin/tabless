@@ -57,6 +57,27 @@ bool takesValue(std::basic_string_view<CharT> arg) {
   });
 }
 
+// Options only a window launch has; a stray word after one of them is that
+// launch's mistake, not a mistyped verb.
+template<typename CharT>
+bool windowOnly(std::basic_string_view<CharT> arg) {
+  static constexpr std::array<std::string_view, 5> kWindow = {"--view", "--capture", "--minimized", "--smoke", "--perf-log"};
+  return std::any_of(kWindow.begin(), kWindow.end(), [arg](std::string_view v) {
+    return equalsAscii(arg, v);
+  });
+}
+
+// A plain word, the shape a mistyped verb has ("tody", "frobnicate"). A path or
+// a URI is not one.
+template<typename CharT>
+bool bareWord(std::basic_string_view<CharT> arg) {
+  return !arg.empty() && std::all_of(arg.begin(), arg.end(), [](CharT c) {
+    return (c >= static_cast<CharT>('a') && c <= static_cast<CharT>('z')) ||
+           (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z')) ||
+           (c >= static_cast<CharT>('0') && c <= static_cast<CharT>('9')) || c == static_cast<CharT>('_') || c == static_cast<CharT>('-');
+  });
+}
+
 }  // namespace detail
 
 // What `args` (without the program name) asks for.
@@ -69,6 +90,7 @@ template<typename CharT, typename Range>
 Invocation classify(const Range& args) {
   using View = std::basic_string_view<CharT>;
   bool skipValue = false;
+  bool windowOption = false;
   for(const auto& raw : args) {
     const View arg(raw);
     if(skipValue) {
@@ -84,19 +106,22 @@ Invocation classify(const Range& args) {
     }
     if(!arg.empty() && arg.front() == static_cast<CharT>('-')) {
       skipValue = detail::takesValue(arg);
+      windowOption = windowOption || detail::windowOnly(arg);
       continue;
     }
-    // The first positional argument decides. A window launch takes options
-    // only, plus the URI a notification click hands it ("tabless://notify…"),
-    // so any other word is a command — a typo ("tody", "frobnicate") gets
-    // "unknown command" and exit 1 instead of silently starting the window.
-    const std::string_view uriMark = "://";
-    for(std::size_t k = 0; k + uriMark.size() <= arg.size(); ++k) {
-      if(detail::equalsAscii(arg.substr(k, uriMark.size()), uriMark)) {
-        return Invocation::Window;
-      }
+    // The first positional argument decides. A verb is a command. A window
+    // launch takes options only, plus the URI a notification click hands it,
+    // so a plain word on its own is a mistyped verb ("tody") and gets
+    // "unknown command" instead of silently starting the window. A stray
+    // word after a window option, a path or a URI stays the window's, which
+    // refuses it as an unexpected argument.
+    const bool verb = std::any_of(kVerbs.begin(), kVerbs.end(), [arg](std::string_view v) {
+      return detail::equalsAscii(arg, v);
+    });
+    if(verb) {
+      return Invocation::Command;
     }
-    return Invocation::Command;
+    return !windowOption && detail::bareWord(arg) ? Invocation::Command : Invocation::Window;
   }
   return Invocation::Window;
 }
