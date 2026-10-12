@@ -351,6 +351,19 @@ TEST_F(StorageSafety, ACardWhoseColumnIsGoneLandsInTheFirstColumn) {
   EXPECT_EQ(app.tasks()->items().at(app.tasks()->indexOfId(QStringLiteral("QA-1"))).status, QStringLiteral("todo"));
 }
 
+TEST_F(StorageSafety, ABuiltInStatusMissingFromTheColumnListIsKept) {
+  // An older profile's column list may lack a built-in status; the card's
+  // status is data and loading must not rewrite it (upgrade loses nothing).
+  QJsonObject profile = profileJson("a", {taskJson("QA-7", "review"), taskJson("QA-8", "prog"), taskJson("QA-9", "c-gone")});
+  profile["statuses"] = QJsonArray{QJsonObject{{"id", "todo"}, {"name", "To Do"}, {"category", "todo"}}};
+  writeRaw(statePath(), stateDoc({profile}, "a"));
+  AppController app;
+  EXPECT_EQ(app.tasks()->items().at(app.tasks()->indexOfId(QStringLiteral("QA-9"))).status, QStringLiteral("todo"))
+      << "an unknown status still lands in the first column";
+  EXPECT_EQ(app.tasks()->items().at(app.tasks()->indexOfId(QStringLiteral("QA-7"))).status, QStringLiteral("review"));
+  EXPECT_EQ(app.tasks()->items().at(app.tasks()->indexOfId(QStringLiteral("QA-8"))).status, QStringLiteral("prog"));
+}
+
 TEST_F(StorageSafety, AFilterThatFindsNothingHereSaysWhereItWould) {
   // A3-13: "Taxes" from Acme names Personal instead of only "Nothing under".
   writeRaw(statePath(),

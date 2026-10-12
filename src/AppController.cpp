@@ -12624,15 +12624,24 @@ void AppController::applyProfileToModels(const Profile& p) {
   heap::board::spreadTiedRanks(tasks);
   // A card whose column is gone (an import, a hand-edited or older file) was
   // drawn by no column and still counted (A2-2): it goes to the first column,
-  // as saveTask files an unknown status (R3-138). A "done" card stays done.
+  // as saveTask files an unknown status (R3-138). Only a status nothing knows:
+  // a built-in one (an older profile's column list may lack it) and a tracker
+  // card's status are data, never rewritten on load.
   if(!p.statuses.isEmpty()) {
+    static const QSet<QString> builtIn = {QStringLiteral("backlog"),
+                                          QStringLiteral("todo"),
+                                          QStringLiteral("prog"),
+                                          QStringLiteral("half"),
+                                          QStringLiteral("blocked"),
+                                          QStringLiteral("review"),
+                                          QStringLiteral("done")};
     QSet<QString> columns;
     for(const QVariant& v : p.statuses) {
       columns.insert(v.toMap().value(QStringLiteral("id")).toString());
     }
     const QString first = p.statuses.constFirst().toMap().value(QStringLiteral("id")).toString();
     for(Task& t : tasks) {
-      if(!columns.contains(t.status) && t.status != QLatin1String("done") && !first.isEmpty()) {
+      if(!columns.contains(t.status) && !builtIn.contains(t.status) && t.externalProvider.isEmpty() && !first.isEmpty()) {
         t.status = first;
       }
     }
