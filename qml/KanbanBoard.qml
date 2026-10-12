@@ -1361,6 +1361,18 @@ Item {
                                 }
                                 AppMenuItem { objectName: "col-menu-fold"; text: I18n.t("colmenu.fold"); shortcutId: "board.collapseColumn"; onTriggered: root.toggleCollapsed(col.statusId) }
                                 AppMenuItem { objectName: "col-menu-wip"; text: I18n.t("colmenu.wip"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
+                                // When its cards go to the archive (APP-295): the
+                                // dialog was only reachable from the palette.
+                                AppMenuItem {
+                                    objectName: "col-menu-archive"
+                                    text: I18n.t("kanban.archive.set")
+                                    note: {
+                                        const days = (AppController.statuses, AppController.statusArchiveDays(col.statusId));
+                                        return days > 0 ? days + " " + I18n.t("common.days")
+                                                        : I18n.t("settings.tasks.archiveNever").toLowerCase();
+                                    }
+                                    onTriggered: archivePopup.openFor(col.statusId, col.statusName)
+                                }
                                 AppMenuSeparator {}
                                 AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; shortcutId: "board.columnLeft"; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
                                 AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast; shortcutId: "board.columnRight"; onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }

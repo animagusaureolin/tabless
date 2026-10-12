@@ -126,13 +126,13 @@ TestCase {
                    Theme.durTapOut, Theme.durPopOut, Theme.durMoveOut, Theme.durPulse];
         AppController.appSettingsJson = saved;
         compare(d[0], 90);
-        compare(d[1], 140);
-        compare(d[2], 220);
+        compare(d[1], 180);
+        compare(d[2], 280);
         compare(d[3], 45);
-        compare(d[4], 70);
-        compare(d[5], 110);
+        compare(d[4], 90);
+        compare(d[5], 140);
         verify(d[6] > 0);
-        compare(Theme.easeEnter, Easing.OutQuint);
+        compare(Theme.easeEnter, Easing.OutCubic);
         compare(Theme.easeExit, Easing.InCubic);
     }
 
@@ -254,7 +254,7 @@ TestCase {
         compare(showWeekends, true);
         compare(reduced, false);
         compare(contrast, false);
-        compare(durMove, 220);
+        compare(durMove, 280);
     }
 
     // ── explicit overrides win — notably showWeekends:false must survive
