@@ -89,11 +89,13 @@ Popup {
     readonly property var _free: root._clashWith.length > 0 ? root.nearestFree(root.parsed.when, root._minutes) : null
     // Whether a read date is already over at `now`: a time before now, or a
     // day before today. Said, never refused (A1-20).
-    function isPast(p, now) {
+    function isPast(p, at) {
         if (!p || p.state !== "ok") return false;
-        if (p.timed) return p.when.getTime() < now.getTime();
+        const when = new Date(p.when);
+        const now = new Date(at);
+        if (p.timed) return when.getTime() < now.getTime();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const day = new Date(p.when.getFullYear(), p.when.getMonth(), p.when.getDate());
+        const day = new Date(when.getFullYear(), when.getMonth(), when.getDate());
         return day.getTime() < today.getTime();
     }
     readonly property bool _past: root.isPast(root.parsed, new Date())

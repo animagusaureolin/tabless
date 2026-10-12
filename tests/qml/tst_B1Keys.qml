@@ -429,4 +429,35 @@ TestCase {
         cap.close();
         AppController.deleteEvent(d.id);
     }
+
+    // A1-20: a date already over is said in the schedule field.
+    function test_schedule_says_a_past_date() {
+        tc.win.typeAheadHoldMs = 0;
+        boardWithCursor("BK-2");
+        keyClick(Qt.Key_S);
+        const sched = popups().filter(p => p.objectName === "schedule-popup")[0];
+        tryCompare(sched, "opened", true);
+        const result = find(sched.contentItem, it => it.objectName === "schedule-result");
+        typeText("tomorrow");
+        tryVerify(() => result.text.length > 0, 500);
+        verify(result.text.indexOf(I18n.t("schedule.inPast")) < 0, result.text);
+        compare(sched.isPast({ state: "ok", when: new Date(2026, 9, 11, 10, 0), timed: true }, new Date(2026, 9, 12, 9, 0)), true);
+        compare(sched.isPast({ state: "ok", when: new Date(2026, 9, 12), timed: false }, new Date(2026, 9, 12, 23, 0)), false,
+                "today without a time is not past");
+        compare(sched.isPast({ state: "ok", when: new Date(2026, 9, 12, 10, 0), timed: true }, new Date(2026, 9, 12, 9, 0)), false);
+        sched.close();
+        tc.win.typeAheadHoldMs = 250;
+    }
+
+    // A2-28: a capture toast with an Undo gives way to a newer Undo.
+    function test_a_newer_undo_replaces_a_capture_toast() {
+        const toast = byName(tc.win.contentItem, "toast");
+        verify(toast !== null);
+        toast.clear();
+        toast.showWithActions("Created BK-9", [{ label: "Open", fn: function () {} }, { label: "Undo", fn: function () {} }], 8, "info", 1);
+        toast.showUndo("Done: BK-0", "Undo", 5, function () {});
+        compare(toast._items.length, 1);
+        compare(toast._items[0].message, "Done: BK-0", "the newest action's toast is on screen");
+        toast.clear();
+    }
 }
