@@ -17,6 +17,8 @@ Rectangle {
     // The task picked for a click on the grid; "" when none.
     property string armedId: ""
     signal taskOpened(string id)
+    // s on a row: the window opens the "when" field for it (A1-19).
+    signal scheduleRequested(string id)
 
     color: Theme.bg
     implicitWidth: Theme.px(260)
@@ -157,8 +159,8 @@ Rectangle {
                         elide: Text.ElideRight
                     }
                 }
-                // The keyboard's way in: Return picks it, S plans it in the
-                // next free window, O opens it.
+                // The keyboard's way in: Return picks it, S asks when (the
+                // schedule field), O opens it.
                 ClickArea {
                     id: rowKey
                     objectName: "undated-key-" + row.modelData.id
@@ -169,8 +171,9 @@ Rectangle {
                     Keys.onPressed: (event) => {
                         if (event.modifiers !== Qt.NoModifier) return;
                         if (event.key === Qt.Key_S) {
-                            root.armedId = row.modelData.id;
-                            root.scheduleArmed();
+                            // The "when" field, as s everywhere else: the
+                            // first free hour was taken without asking (A1-19).
+                            root.scheduleRequested(row.modelData.id);
                             event.accepted = true;
                         } else if (event.key === Qt.Key_O) {
                             root.taskOpened(row.modelData.id);

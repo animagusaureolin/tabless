@@ -107,13 +107,23 @@ Item {
     }
 
     // A click on the view being followed takes it off: the filters go back
-    // to none, as they were before it was picked.
+    // to none, as they were before it was picked. Only while it is on
+    // screen as saved: from Today its key turned it off and showed nothing
+    // (A1-27); there, and after the filter moved, the key opens it.
     function toggle(id) {
-        if (id !== "" && id === root.activeId) { root.clear(); return true; }
+        if (id !== "" && id === root.activeId && root.shownAsSaved()) { root.clear(); return true; }
         return root.apply(id);
     }
+    // The active view is what the screen shows: a task view of its kind,
+    // with its filters untouched.
+    function shownAsSaved() {
+        if (!root.activeView) return false;
+        if (["board", "list", "week", "month"].indexOf(AppController.currentView) < 0) return false;
+        return !root.modified && root.currentState().view === root.activeView.view;
+    }
 
-    // Alt+N: the Nth view in the sidebar, 1-based; pressed again, off.
+    // The Nth view's key (its catalogue key, g 1…): the Nth view in the
+    // sidebar, 1-based; pressed again while it is shown, off.
     function applyAt(n) {
         const list = AppController.savedViews;
         if (n < 1 || n > list.length) return false;

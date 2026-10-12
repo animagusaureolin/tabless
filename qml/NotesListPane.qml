@@ -625,6 +625,9 @@ Rectangle {
             // the next note, the menu key (or Shift+F10) opens the open
             // note's menu — pin and delete had no keyboard path.
             activeFocusOnTab: true
+            // The list is the view, not a stray control: g t, ?, :, / and u
+            // work here as on any view (A4-5); it keeps the keys it handles.
+            readonly property bool viewSurface: true
             Accessible.role: Accessible.List
             Keys.onUpPressed: { root.step(-1); Qt.callLater(root._activeRowItem); }
             Keys.onDownPressed: { root.step(1); Qt.callLater(root._activeRowItem); }

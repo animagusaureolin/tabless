@@ -41,3 +41,16 @@ function rowText(d, hasTime, today, plain) {
     if (days > 0 && days < 14) return I18n.fmtDate(d, "weekdayDay") + clock;
     return I18n.fmtDate(d, "dayMonth") + clock;
 }
+
+// A repeat rule in words ("каждый день", "по пятницам", "каждый месяц · 15"),
+// for the ↻ mark of a recurring task on a card and a Today row (A2-25). The
+// card said "daily" / "Mondays" in English in a Russian UI.
+function repeatText(r) {
+    const rule = String(r || "");
+    if (rule.length === 0) return "";
+    const monthly = /^every:month:(\d+)$/.exec(rule);
+    if (monthly) return I18n.t("taskdoc.repeat.month") + " · " + monthly[1];
+    const key = rule.replace("every:", "");
+    const said = I18n.t("taskdoc.repeat." + key);
+    return said.indexOf("taskdoc.") === 0 ? key : said;
+}

@@ -162,6 +162,10 @@ Popup {
         out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "" });
         // What left the selection bar, the profile menu and the column menu
         // for the sheets (DG-025, DG-026, DG-151): still one command away.
+        // "когда-нибудь" / "someday" / "отложить" find parking the task in
+        // front of the user (A1-15); Main says when there is none.
+        out.push({ kind: "command", commandId: "task.someday", label: I18n.t("palette.cmd.someday"), sub: "",
+                   body: I18n.t("palette.cmd.someday.words") });
         if (AppController.selectionCount > 0) {
             out.push({ kind: "command", commandId: "selection.label", label: I18n.t("palette.cmd.selLabel"), sub: "" });
             out.push({ kind: "command", commandId: "selection.carry", label: I18n.t("palette.cmd.selCarry"), sub: "" });

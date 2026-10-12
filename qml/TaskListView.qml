@@ -78,7 +78,12 @@ Item {
         const dlg = conflictLoader.item as SyncConflictDialog;
         if (dlg) dlg.showFor(AppController.taskById(id));
     }
+    // How many groups the query left. The only group is never folded: the
+    // "N без даты — посмотреть и решить" link landed on one folded line, and
+    // j / d / s had nothing to act on (A1-1, A2-9, A5-17).
+    property int _groupCount: 0
     function isFolded(groupId) {
+        if (root._groupCount <= 1) return false;
         const v = root._folds[groupId];
         return v === undefined ? groupId === "none:" : !!v;
     }
@@ -98,6 +103,13 @@ Item {
         root._layout();
     }
     function _layout() {
+        let groups = 0;
+        for (let i = 0; i < root._all.length; i++)
+            if (root._all[i].kind === "group") groups++;
+        root._groupCount = groups;
+        // Where the cursor was, to keep its place when its task leaves.
+        const oldIds = root._taskIds();
+        const oldAt = oldIds.indexOf(root.cursorTaskId);
         const out = [];
         let n = 0;
         for (let i = 0; i < root._all.length; i++) {
@@ -115,6 +127,13 @@ Item {
         root._rows = out;
         root.taskCount = n;
         list.contentY = Math.min(keep, Math.max(0, list.contentHeight - list.height));
+        // The cursor's task left the list (s moved it out of "без даты", d
+        // finished it): the row that took its place gets the cursor, so the
+        // triage loop goes on and no key acts on a task nobody sees (A1-3).
+        if (root.cursorTaskId && oldAt >= 0 && ids.indexOf(root.cursorTaskId) < 0) {
+            if (ids.length === 0) root.clearCursor();
+            else root.cursorTaskId = ids[Math.min(oldAt, ids.length - 1)];
+        }
     }
     Timer { id: refreshSoon; interval: 0; onTriggered: root.refresh() }
     function _refreshSoon() { refreshSoon.restart(); }
@@ -163,7 +182,18 @@ Item {
     }
     function moveCursor(dx, dy) {
         if (dy === 0) return;
-        const ids = root._taskIds();
+        let ids = root._taskIds();
+        // Only folded groups on screen: j opens the first one rather than
+        // doing nothing under a "j k выбор" hint.
+        if (ids.length === 0) {
+            for (let i = 0; i < root._all.length; i++) {
+                if (root._all[i].kind === "group" && root.isFolded(root._all[i].groupId)) {
+                    root.toggleGroup(root._all[i].groupId);
+                    break;
+                }
+            }
+            ids = root._taskIds();
+        }
         if (ids.length === 0) return;
         root.cursorVisible = true;
         const at = ids.indexOf(root.cursorTaskId);
@@ -206,8 +236,14 @@ Item {
         root.cursorVisible = true;
         AppController.toggleTaskSelection(root.cursorTaskId);
     }
+    // Every task the filter lets through, folded groups included, as on the
+    // board: Ctrl A took 60 of 1200 here and all 1200 there, and said nothing
+    // about the folded rest (A3-16, A5-24). A big delete asks first (A1-28).
     function selectAllVisible() {
-        AppController.setSelectedTaskIds(root._taskIds());
+        const ids = [];
+        for (let i = 0; i < root._all.length; i++)
+            if (root._all[i].kind === "task") ids.push(root._all[i].id);
+        AppController.setSelectedTaskIds(ids);
     }
     function archiveCursor() {
         if (AppController.selectionCount > 0) { AppController.setSelectedTasksArchived(true); return; }
@@ -270,7 +306,9 @@ Item {
             cacheBuffer: 400
             reuseItems: true
             ScrollBar.vertical: ThinScrollBar {}
-            footer: Item { width: 1; height: Theme.sp2xl }
+            // Room under the last row for the selection bar, which covered
+            // half of it (A5-25).
+            footer: Item { width: 1; height: Theme.sp2xl + (AppController.selectionCount > 0 ? Theme.px(42) + Theme.sp2xl : 0) }
             TapHandler { onTapped: { AppController.clearSelection(); root.clearCursor(); } }
 
             delegate: Item {
@@ -334,7 +372,8 @@ Item {
                     }
                     ClickArea {
                         objectName: "list-group-toggle"
-                        enabled: row.isGroup
+                        // The only group cannot fold (isFolded).
+                        enabled: row.isGroup && root._groupCount > 1
                         label: (groupHead.folded ? I18n.t("list.expand") : I18n.t("list.collapse")) + " " + (row.isGroup ? root.groupTitle(row.modelData) : "")
                         showTip: false
                         onActivated: root.toggleGroup(row.modelData.groupId)
@@ -584,7 +623,8 @@ Item {
         Rectangle {
             objectName: "list-hints"
             Layout.fillWidth: true
-            visible: Style.keyHints
+            // The selection bar takes this place with its own keys (A5-25).
+            visible: Style.keyHints && AppController.selectionCount === 0
             implicitHeight: hintRow.implicitHeight + 2 * Theme.spLg
             color: Theme.bg
             Rectangle { anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; height: 1; color: Theme.border }

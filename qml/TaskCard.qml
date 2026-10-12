@@ -112,22 +112,7 @@ Rectangle {
         return sec + "s";
     }
     function _recurLabel(r) {
-        switch (r) {
-            case "every:day":     return "daily";
-            case "every:week":    return "weekly";
-            case "every:weekday": return "weekdays";
-            case "every:mon":     return "Mondays";
-            case "every:tue":     return "Tuesdays";
-            case "every:wed":     return "Wednesdays";
-            case "every:thu":     return "Thursdays";
-            case "every:fri":     return "Fridays";
-            case "every:sat":     return "Saturdays";
-            case "every:sun":     return "Sundays";
-            case "every:month":   return "monthly";
-        }
-        const monthly = /^every:month:(\d+)$/.exec(String(r || ""));
-        if (monthly) return "monthly · " + monthly[1];
-        return r ? String(r).replace("every:", "") : "";
+        return TaskDates.repeatText(r);
     }
 
     // Selection and the keyboard cursor look different in shape, not only
@@ -537,12 +522,24 @@ Rectangle {
                 // Today and tomorrow are amber in the bold style (APP-262);
                 // past, red; the quiet style says it in words only.
                 readonly property bool near: dlText.length > 0 && (days === 0 || days === 1)
+                // Where "19 д просрочки" does not fit beside the key and the
+                // priority, the short form "−19 д": it was cut to
+                // "19 д прос…" on most cards (A3-21, A6-15).
+                readonly property string shortText: {
+                    if (!overdue) return dlText;
+                    const timed = card.task.dueHasTime !== undefined ? card.task.dueHasTime : card.task.hasTime;
+                    const clock = timed && card.task.dueAt && card.task.dueAt.getHours ? " " + I18n.fmtTime(card.task.dueAt) : "";
+                    return I18n.t("task.due.overdueShort").arg(-days) + clock;
+                }
+                TextMetrics { id: dueFull; font: dueT.font; text: dueT.dlText }
                 visible: dlText.length > 0
-                text: dlText
+                text: dueT.width >= dueFull.advanceWidth || !overdue ? dlText : shortText
+                Accessible.name: dlText
                 // Never under the card edge: the Russian overdue text ran past
                 // it with the number cut off (EYES-2).
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
+                Layout.preferredWidth: dueFull.advanceWidth + 1
                 elide: Text.ElideRight
                 color: overdue ? Theme.signalUrgent : near ? Theme.signalNow : Theme.textDim
                 font.family: Theme.fontUi
@@ -584,6 +581,17 @@ Rectangle {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: if (card.task) AppController.stopTaskTimer(card.task.id)
                 }
+            }
+            // A repeating task says so at rest, not only with the details
+            // open: it read as a one-off (A2-25).
+            Text {
+                objectName: "tc-repeat-mark"
+                visible: !card.detailsOpen && !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
+                text: "↻"
+                color: Theme.textDim
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
+                Accessible.name: card._recurLabel(card.task ? card.task.recurrence : "")
             }
             Item { Layout.fillWidth: true }
             // P0 and P1 in bold, P0 only in quiet (R3-030); P2 and P3 are

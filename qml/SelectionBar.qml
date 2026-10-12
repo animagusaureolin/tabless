@@ -103,7 +103,7 @@ Rectangle {
             objectName: "sel-delete"
             text: I18n.t("selection.bar.delete")
             keys: AppController.shortcutText("selection.deleteSel")
-            onActivated: AppController.deleteSelectedTasks()
+            onActivated: bar.commandRequested("selection.deleteSel")
         }
         BarAction {
             objectName: "sel-clear"
@@ -173,7 +173,9 @@ Rectangle {
         id: carryMenu
         objectName: "sel-carry-menu"
         Repeater {
-            model: ["tomorrow", "window", "someday", "clear"]
+            // "Снять срок" by name: carrying moves the plan date only, and
+            // overdue tasks stayed overdue with no way here to say so (A5-8).
+            model: ["tomorrow", "window", "someday", "clear", "clearDue"]
             AppMenuItem {
                 required property string modelData
                 objectName: "sel-carry-" + modelData

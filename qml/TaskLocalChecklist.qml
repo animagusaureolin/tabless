@@ -6,9 +6,10 @@ import TodoCpp
 
 // The card's own checklist (APP-236): my steps, at any depth, never sent to
 // the tracker and never rewritten by a pull. One row per item; the keyboard
-// works the list: Space / x tick, Enter or F2 edit, Tab / Shift+Tab a level
-// deeper / shallower, Alt+↑/↓ move with the sub-items, Delete remove, C make
-// it a card of its own. A tick on a parent ticks everything under it; a
+// works the list: Space / x / d tick, j k or ↑/↓ walk, Enter or F2 edit,
+// Alt+→ / Alt+← a level deeper / shallower (Tab in the edit field too; on a
+// row Tab moves on, A1-11), Alt+↑/↓ move with the sub-items, Delete remove,
+// u undo, C make it a card of its own. A tick on a parent ticks everything under it; a
 // parent all of whose children are done closes itself, drawn with its own
 // mark. "As text" edits the whole list as lines ("-- [x] item").
 ColumnLayout {
@@ -193,24 +194,48 @@ ColumnLayout {
 
         function act(fn) { root._focusId = row.itemId; fn(); }
 
+        // The keymap's keys that mean something else on an item (Main asks
+        // here first): d ticks this item, not the whole task; j / k walk the
+        // items, as the arrows do; u undoes (A4-15: d closed the task, j did
+        // nothing, u was dead while Ctrl+Z worked).
+        readonly property var claimedKeys: ["task.done", "board.cursorDown", "board.cursorUp", "undo"]
+        function runClaimed(id) {
+            if (row.editing) return false;
+            if (id === "task.done") {
+                row.act(() => AppController.toggleChecklistItem(root.taskId, row.itemId));
+                return true;
+            }
+            if (id === "board.cursorDown") { row.step(1); return true; }
+            if (id === "board.cursorUp") { row.step(-1); return true; }
+            return false;   // undo: the document's own, as Ctrl+Z
+        }
+        function step(dy) {
+            if (dy < 0) {
+                if (row.index > 0) root.focusItem(root.items[row.index - 1].id);
+            } else if (row.index + 1 < root.items.length) {
+                root.focusItem(root.items[row.index + 1].id);
+            } else {
+                root.focusAdd();
+            }
+        }
+
         Keys.onPressed: (e) => {
             if (row.editing) return;
             const alt = (e.modifiers & Qt.AltModifier);
             if (e.key === Qt.Key_Space || (e.key === Qt.Key_X && !e.modifiers)) {
                 row.act(() => AppController.toggleChecklistItem(root.taskId, row.itemId));
-            } else if (e.key === Qt.Key_Tab) {
+            } else if (alt && e.key === Qt.Key_Right) {
                 row.act(() => AppController.indentChecklistItem(root.taskId, row.itemId, 1));
-            } else if (e.key === Qt.Key_Backtab) {
+            } else if (alt && e.key === Qt.Key_Left) {
                 row.act(() => AppController.indentChecklistItem(root.taskId, row.itemId, -1));
             } else if (alt && e.key === Qt.Key_Up) {
                 row.act(() => AppController.moveChecklistItem(root.taskId, row.itemId, -1));
             } else if (alt && e.key === Qt.Key_Down) {
                 row.act(() => AppController.moveChecklistItem(root.taskId, row.itemId, 1));
             } else if (e.key === Qt.Key_Up) {
-                if (row.index > 0) root.focusItem(root.items[row.index - 1].id);
+                row.step(-1);
             } else if (e.key === Qt.Key_Down) {
-                if (row.index + 1 < root.items.length) root.focusItem(root.items[row.index + 1].id);
-                else root.focusAdd();
+                row.step(1);
             } else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_F2) {
                 root._editId = row.itemId;
                 editField.text = row.modelData.text;
