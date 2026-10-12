@@ -410,6 +410,65 @@ TEST(CaptureAcceptance, HabitualRepeats) {
   }
 }
 
+// REG-3: a plain repeat takes in the day, time or start that follows it,
+// or the whole phrase stays in the title; never only the repeat word.
+TEST(CaptureAcceptance, ARepeatReadsTheDayAndStartAfterIt) {
+  const QDateTime now(QDate(2026, 10, 13), QTime(10, 0));  // Tuesday
+  Parsed r = at(QStringLiteral("report weekly on monday"), now);
+  EXPECT_EQ(r.title, QStringLiteral("report"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:mon"));
+  EXPECT_EQ(r.when.date(), QDate(2026, 10, 19));
+  r = at(QStringLiteral("report every week on monday"), now);
+  EXPECT_EQ(r.title, QStringLiteral("report"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:mon"));
+  r = at(QString::fromUtf8("отчёт еженедельно по понедельникам"), now);
+  EXPECT_EQ(r.title, QString::fromUtf8("отчёт"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:mon"));
+  EXPECT_EQ(r.when.date(), QDate(2026, 10, 19));
+  r = at(QString::fromUtf8("отчёт каждую неделю в понедельник"), now);
+  EXPECT_EQ(r.title, QString::fromUtf8("отчёт"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:mon"));
+  r = at(QString::fromUtf8("бэкап раз в неделю в пятницу 18:00"), now);
+  EXPECT_EQ(r.title, QString::fromUtf8("бэкап"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:fri"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 16), QTime(18, 0)));
+  r = at(QString::fromUtf8("стендап ежедневно с завтра"), now);
+  EXPECT_EQ(r.title, QString::fromUtf8("стендап"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:day"));
+  EXPECT_EQ(r.when.date(), QDate(2026, 10, 14));
+  r = at(QStringLiteral("standup daily from tomorrow"), now);
+  EXPECT_EQ(r.title, QStringLiteral("standup"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:day"));
+  EXPECT_EQ(r.when.date(), QDate(2026, 10, 14));
+  r = at(QStringLiteral("standup daily starting tomorrow at 9am"), now);
+  EXPECT_EQ(r.title, QStringLiteral("standup"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 14), QTime(9, 0)));
+  r = at(QStringLiteral("pay rent monthly on the 1st"), now);
+  EXPECT_EQ(r.title, QStringLiteral("pay rent"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:month:1"));
+  EXPECT_EQ(r.when.date(), QDate(2026, 11, 1));
+  // A time range after "from" is a clock, not the 9th of the month.
+  r = at(QStringLiteral("standup daily from 9 to 10"), now);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:day"));
+  EXPECT_EQ(r.when.time(), QTime(9, 0));
+  EXPECT_EQ(r.title, QStringLiteral("standup"));
+  r = at(QStringLiteral("weekly on monday report"), now);
+  EXPECT_EQ(r.title, QStringLiteral("report"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:mon"));
+  r = at(QStringLiteral("report weekly, monday"), now);
+  EXPECT_EQ(r.title, QStringLiteral("report"));
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:mon"));
+  // "on" with nothing readable after it: the whole phrase is the title.
+  r = at(QStringLiteral("report weekly on call"), now);
+  EXPECT_EQ(r.title, QStringLiteral("report weekly on call"));
+  EXPECT_TRUE(r.recurrence.isEmpty());
+  // Unchanged: a time after the repeat, and the repeat alone.
+  r = at(QStringLiteral("report weekly at 10"), now);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:week"));
+  EXPECT_EQ(r.when.time(), QTime(10, 0));
+  EXPECT_EQ(at(QString::fromUtf8("Бэкап раз в неделю"), now).recurrence, QStringLiteral("every:week"));
+}
+
 // A4-22.
 TEST(CaptureAcceptance, NextWeekOnADayAndTheComingFriday) {
   const QDateTime now(QDate(2026, 10, 12), QTime(10, 0));  // Monday

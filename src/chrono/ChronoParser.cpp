@@ -1431,6 +1431,112 @@ class ChronoParser::Impl {
     out.date = d;
   }
 
+  // What follows a plain repeat ("weekly", "раз в неделю", "every week",
+  // "daily", "monthly"): its day and its start. "weekly on monday",
+  // "еженедельно по понедельникам" and "раз в неделю в пятницу" repeat on
+  // that weekday; "monthly on the 1st" on that day of the month; "daily from
+  // tomorrow" / "ежедневно с завтра" starts then. Without this the repeat
+  // took in only its own word: the day stayed in the title and the repeat
+  // started today (REG-3). Returns true when anything after it was read.
+  bool refineRepeat(const QVector<Token>& toks,
+                    const QDateTime& ref,
+                    const ChronoLocale* primary,
+                    const ChronoLocale* fallback,
+                    DateMatch& out,
+                    QString& recurrence) const {
+    bool read = false;
+    const auto isWord = [&](int k) {
+      return k < toks.size() && toks[k].kind == TokenKind::Word;
+    };
+    const auto isOnWord = [&](int k) {
+      return isWord(k) && (toks[k].lower == QStringLiteral("on") || inListAny(toks[k].lower, primary->atWords, fallback->atWords));
+    };
+    // "weekly, monday": a comma between the two is still one phrase.
+    const auto afterComma = [&](int k) {
+      return k < toks.size() && toks[k].kind == TokenKind::Punct && toks[k].text == QStringLiteral(",") ? k + 1 : k;
+    };
+
+    if(recurrence == QStringLiteral("every:week")) {
+      const int k = afterComma(out.lastTok + 1);
+      // "по понедельникам", "every monday".
+      DateMatch dm;
+      QString rec;
+      bool weekdayRule = false;
+      if(isWord(k) && tryEveryPhrase(toks, k, ref, primary, fallback, dm, rec)) {
+        for(int iso = 1; iso <= 7; ++iso) {
+          weekdayRule = weekdayRule || rec == QStringLiteral("every:") + isoDay3(iso);
+        }
+      }
+      if(weekdayRule) {
+        recurrence = rec;
+        out.date = dm.date;
+        out.lastTok = dm.lastTok;
+        read = true;
+      } else {
+        // "on monday", "в пятницу", "monday".
+        const int j = isOnWord(k) ? k + 1 : k;
+        bool found = false;
+        const int iso = isWord(j) ? lookupHashAny(toks[j].lower, primary->weekdayNames, fallback->weekdayNames, &found) : 0;
+        if(found) {
+          recurrence = QStringLiteral("every:") + isoDay3(iso);
+          out.date = ref.date().addDays((iso - ref.date().dayOfWeek() + 7) % 7);
+          out.lastTok = j;
+          read = true;
+        }
+      }
+    } else if(recurrence.startsWith(QStringLiteral("every:month:"))) {
+      int j = afterComma(out.lastTok + 1);
+      bool lead = false;
+      if(isOnWord(j)) {
+        ++j;
+        lead = true;
+      }
+      if(isWord(j) && toks[j].lower == QStringLiteral("the")) {
+        ++j;
+        lead = true;
+      }
+      int end = -1;
+      const int day = dayOfMonthAt(toks, j, /*needMarker=*/!lead, end);
+      if(day > 0) {
+        monthlyOn(day, ref, recurrence, out);
+        out.lastTok = end;
+        read = true;
+      }
+    }
+
+    // The start: "from tomorrow", "starting monday", "с завтра", "начиная с
+    // понедельника". Only a plain date counts, never another repeat.
+    int j = out.lastTok + 1;
+    bool lead = false;
+    if(isWord(j) && (toks[j].lower == QStringLiteral("starting") || toks[j].lower == QString::fromUtf8("начиная"))) {
+      ++j;
+      lead = true;
+    }
+    if(isWord(j) && (inListAny(toks[j].lower, primary->fromWords, fallback->fromWords) ||
+                     (lead && (toks[j].lower == QStringLiteral("on") || toks[j].lower == QStringLiteral("from"))))) {
+      ++j;
+      lead = true;
+    }
+    if(lead && j < toks.size()) {
+      DateMatch dm;
+      QString rec;
+      int recF = -1;
+      int recL = -1;
+      // A lone number is a clock ("daily from 9 to 10"), not the 9th.
+      const bool loneNumber = toks[j].kind == TokenKind::Number;
+      if(matchDate(toks, j, ref, primary, fallback, dm, rec, recF, recL) && rec.isEmpty() && dm.date.isValid() &&
+         !(loneNumber && dm.lastTok == j)) {
+        const QDate start = dm.date;
+        const bool anchored = recurrence == QStringLiteral("every:day") || recurrence == QStringLiteral("every:week");
+        const QDate first = anchored ? start : heap::recur::nextOccurrence(recurrence, start.addDays(-1));
+        out.date = first.isValid() ? first : start;
+        out.lastTok = dm.lastTok;
+        read = true;
+      }
+    }
+    return read;
+  }
+
   // ── "every monday" / "каждую среду" / "every weekday" / "every day" ──
   bool tryEveryPhrase(const QVector<Token>& toks,
                       int i,
@@ -1451,33 +1557,39 @@ class ChronoParser::Impl {
     // Russian adverbs ("ежедневно") are a repeat wherever they stand.
     const bool englishAdjective =
         toks[i].lower == QStringLiteral("daily") || toks[i].lower == QStringLiteral("weekly") || toks[i].lower == QStringLiteral("monthly");
+    // "on" / "from" / "starting" promise a day or a start; when none can be
+    // read after them the whole phrase stays in the title, never half of it.
+    bool needsMore = false;
     if(englishAdjective && i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Word) {
-      static const QStringList kLeadIns = {QStringLiteral("at"),
-                                           QStringLiteral("on"),
-                                           QStringLiteral("from"),
-                                           QStringLiteral("in"),
-                                           QStringLiteral("until"),
-                                           QStringLiteral("till"),
-                                           QStringLiteral("starting")};
-      if(!kLeadIns.contains(toks[i + 1].lower)) {
+      static const QStringList kLeadIns = {QStringLiteral("at"), QStringLiteral("in")};
+      static const QStringList kDayLeadIns = {QStringLiteral("on"), QStringLiteral("from"), QStringLiteral("starting")};
+      // "daily from 9 to 10" is a clock range, read after the repeat.
+      const bool clockNext = i + 2 < toks.size() && toks[i + 2].kind == TokenKind::Number;
+      const bool dayLeadIn = kDayLeadIns.contains(toks[i + 1].lower);
+      needsMore = dayLeadIn && !clockNext;
+      if(!dayLeadIn && !kLeadIns.contains(toks[i + 1].lower)) {
         return false;
       }
     }
     // "monthly" / "ежемесячно": on this day of the month.
-    if(toks[i].lower == QStringLiteral("monthly") || toks[i].lower == QString::fromUtf8("ежемесячно")) {
-      monthlyOn(ref.date().day(), ref, recurrence, out);
-      out.firstTok = i;
-      out.lastTok = i;
-      return true;
-    }
     // "daily" / "ежедневно", "weekly" / "еженедельно", from today.
-    if(toks[i].lower == QStringLiteral("daily") || toks[i].lower == QString::fromUtf8("ежедневно") ||
-       toks[i].lower == QStringLiteral("weekly") || toks[i].lower == QString::fromUtf8("еженедельно")) {
-      const bool day = toks[i].lower == QStringLiteral("daily") || toks[i].lower == QString::fromUtf8("ежедневно");
-      recurrence = day ? QStringLiteral("every:day") : QStringLiteral("every:week");
-      out.date = ref.date();
+    const bool monthWord = toks[i].lower == QStringLiteral("monthly") || toks[i].lower == QString::fromUtf8("ежемесячно");
+    const bool dayWord = toks[i].lower == QStringLiteral("daily") || toks[i].lower == QString::fromUtf8("ежедневно");
+    const bool weekWord = toks[i].lower == QStringLiteral("weekly") || toks[i].lower == QString::fromUtf8("еженедельно");
+    if(monthWord || dayWord || weekWord) {
+      if(monthWord) {
+        monthlyOn(ref.date().day(), ref, recurrence, out);
+      } else {
+        recurrence = dayWord ? QStringLiteral("every:day") : QStringLiteral("every:week");
+        out.date = ref.date();
+      }
       out.firstTok = i;
       out.lastTok = i;
+      const bool read = refineRepeat(toks, ref, primary, fallback, out, recurrence);
+      if(needsMore && !read) {
+        recurrence.clear();
+        return false;
+      }
       return true;
     }
     // "раз в день / неделю / месяц": once a day, a week, a month.
@@ -1497,6 +1609,7 @@ class ChronoParser::Impl {
       }
       out.firstTok = i;
       out.lastTok = i + 2;
+      refineRepeat(toks, ref, primary, fallback, out, recurrence);
       return true;
     }
     if(!inListAny(toks[i].lower, primary->everyAdjectives, fallback->everyAdjectives)) {
@@ -1578,18 +1691,12 @@ class ChronoParser::Impl {
     // "every day" / "каждый день"
     bool foundUnit = false;
     const int days = lookupHashAny(w, primary->unitToDays, fallback->unitToDays, &foundUnit);
-    if(foundUnit && days == 1) {
-      recurrence = QStringLiteral("every:day");
+    if(foundUnit && (days == 1 || days == 7)) {
+      recurrence = days == 1 ? QStringLiteral("every:day") : QStringLiteral("every:week");
       out.date = ref.date();
       out.firstTok = i;
       out.lastTok = i + 1;
-      return true;
-    }
-    if(foundUnit && days == 7) {
-      recurrence = QStringLiteral("every:week");
-      out.date = ref.date();
-      out.firstTok = i;
-      out.lastTok = i + 1;
+      refineRepeat(toks, ref, primary, fallback, out, recurrence);
       return true;
     }
     // "every <weekday>"
