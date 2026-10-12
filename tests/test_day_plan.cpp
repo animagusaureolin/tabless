@@ -83,6 +83,34 @@ TEST(DayPlan, AMeetingAcrossMidnightIsInBothDays) {
   EXPECT_DOUBLE_EQ(next.blocks[0].end, 1);
 }
 
+// A3-3, A6-3: both parts of a meeting across midnight know where it really
+// begins and ends and how long it is in all, for "until 01:30 next day".
+TEST(DayPlan, AMeetingAcrossMidnightKeepsItsRealEnd) {
+  EventIn late = meeting("release", 23, 1.5);
+  late.endDate = kDay.addDays(1);
+  const Day today = buildDay(kDay, kNoon, {late}, {}, 9, 19, true);
+  ASSERT_EQ(today.blocks.size(), 1);
+  EXPECT_DOUBLE_EQ(today.blocks[0].realEnd, 1.5);
+  EXPECT_EQ(today.blocks[0].totalMinutes, 150);
+  const Day next = buildDay(kDay.addDays(1), kNoon, {late}, {}, 9, 19, true);
+  ASSERT_EQ(next.blocks.size(), 1);
+  EXPECT_DOUBLE_EQ(next.blocks[0].realStart, 23);
+  EXPECT_EQ(next.blocks[0].totalMinutes, 150);
+}
+
+// A6-17: an all-day block over several days says which day of how many.
+TEST(DayPlan, AMultiDayBlockKnowsItsDayOfTheSpan) {
+  EventIn conf = meeting("conference", 0, 24);
+  conf.allDay = true;
+  conf.endDate = kDay.addDays(3);
+  const Day d = buildDay(kDay.addDays(1), kNoon, {conf}, {}, 9, 19, true);
+  ASSERT_EQ(d.allDay.size(), 1);
+  EXPECT_EQ(d.allDay[0].dayNo, 2);
+  EXPECT_EQ(d.allDay[0].dayCount, 4);
+  EXPECT_EQ(d.allDay[0].firstDay, kDay);
+  EXPECT_EQ(d.allDay[0].lastDay, kDay.addDays(3));
+}
+
 TEST(DayPlan, AllDayIsAboveTheHoursAndNotLoad) {
   EventIn off = meeting("offsite", 0, 24);
   off.allDay = true;

@@ -62,6 +62,11 @@ FocusScope {
     property string context: ""
     property string location: ""
     property int reminderMinutes: -1
+    // A meeting kept in another zone (A6-4): the zone and its start there,
+    // shown read-only beside the local hours.
+    property string srcTz: ""
+    property real srcStart: 0
+    function zoneCity(tz) { return String(tz || "").split("/").pop().replace(/_/g, " "); }
     property var _stored: ({})
     readonly property bool repeating: root.masterId.length > 0 || root.rule.length > 0
     // An occurrence the series generated (not a stored override of it). Told
@@ -104,6 +109,8 @@ FocusScope {
         root.taskId = src.taskId || "";
         root.profileId = src.profileId || "";
         root.context = src.context || "";
+        root.srcTz = src.srcTz || "";
+        root.srcStart = Number(src.srcStart) || 0;
         root.reminderMinutes = src.reminderMinutes === undefined || src.reminderMinutes === null ? -1 : Number(src.reminderMinutes);
         root._error = "";
         root._customOpen = false;
@@ -309,6 +316,8 @@ FocusScope {
     }
 
     function reminderLabel(v) {
+        // Focus time does not remind unless a lead is picked for it (A2-17).
+        if (v === -1 && root.type === "focus") return I18n.t("event.reminder.focusDefault");
         if (v === -1) return I18n.t("event.reminder.default").arg(root.defaultLead);
         if (v === -2) return I18n.t("event.reminder.none");
         if (v === 0) return I18n.t("event.reminder.atStart");
@@ -617,12 +626,29 @@ FocusScope {
                 }
             }
             FieldRow {
+                visible: root.srcTz.length > 0
+                RowLabel { text: I18n.t("common.timezone") }
+                Text {
+                    objectName: "event-zone"
+                    Layout.fillWidth: true
+                    text: Theme.fmtHour(root.srcStart) + " " + root.zoneCity(root.srcTz)
+                    color: Theme.textMuted
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
+                    font.pixelSize: Theme.fsMd
+                    elide: Text.ElideRight
+                }
+            }
+            FieldRow {
                 RowLabel { text: I18n.t("event.row.repeat") }
                 ValueLink {
                     id: repeatLink
                     objectName: "event-repeat"
                     activeFocusOnTab: true
+                    // A series kept in another zone repeats on that zone's
+                    // days, which here can be a day off (A6-5).
                     text: EventRule.describe(root.rule, root.pickedDate, I18n)
+                          + (root.srcTz.length > 0 ? " · " + I18n.t("event.zoneTime").arg(root.zoneCity(root.srcTz)) : "")
                     onActivated: repeatMenu.popup(repeatLink, 0, repeatLink.height)
                     Keys.onReturnPressed: repeatMenu.popup(repeatLink, 0, repeatLink.height)
                     AppMenu {
