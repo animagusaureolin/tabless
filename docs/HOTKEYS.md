@@ -72,7 +72,7 @@ Keys go to the innermost thing that holds the keyboard:
 | Tasks · Board | `G, B` |
 | Tasks · List | `G, L` |
 | Tasks · Calendar | `G, C` |
-| Knowledge | `G, N` or `Ctrl+3` |
+| Notes | `G, N` or `Ctrl+3` |
 | My view 1 … 9 | `G, 1` `G, 2` `G, 3` `G, 4` `G, 5` `G, 6` `G, 7` `G, 8` `G, 9`; also `Ctrl+4` `Ctrl+5` `Ctrl+6` `Ctrl+7` `Ctrl+8` `Ctrl+9` for the first six |
 | Open the task in its tracker | `G, X` |
 | Back / forward through where you have been | `Ctrl+O` / `Ctrl+I` |
@@ -84,7 +84,7 @@ given one.
 
 `Ctrl+K` opens it, `Ctrl+K` again closes it. What you type is read in the
 language quick capture speaks: `p0` … `p3` priority, `until fri` / `до пт`
-a deadline, `#label`, a column by the start of a word (`block`, `заблок`),
+a due date, `#label`, a column by the start of a word (`block`, `заблок`),
 `APP-101` a task by ID, `>` commands only. A finished condition becomes a chip
 (`Backspace` on an empty line takes the last one back); `Tab` makes a chip of
 the word still being typed. The syntax card beside the results can be hidden.
@@ -108,7 +108,7 @@ to create the task.
 
 Every view has one keyboard cursor (0.8.0): the card on the board, the row
 in the List, the meeting or task on Today and in the calendar, the note in
-Knowledge. Without one the keys act on the selection or the task under the
+Notes. Without one the keys act on the selection or the task under the
 pointer.
 
 | Action | Default |
@@ -117,7 +117,7 @@ pointer.
 | New task below / above (same column) | `O` / `Shift+O` |
 | Rename | `I` |
 | Schedule: a small field that reads "fri 15:00", "tomorrow", "no" (on an empty calendar day: go to a date) | `S` |
-| Deadline, the same way | `Shift+S` |
+| Due date, the same way | `Shift+S` |
 | Priority P0 … P3 | `1` `2` `3` `4` |
 | Timer start / pause | `T` |
 | Archive | `E` |

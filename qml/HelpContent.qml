@@ -28,7 +28,7 @@ Item {
         {anchor: "help-calendar", label: root.tr2("Calendar — events, drag-create, focus blocks", "Календарь — события, создание перетаскиванием, фокус-блоки")},
         {anchor: "help-people", label: root.tr2("People — contacts, mentions, state cycle", "Люди — контакты, упоминания, цикл состояний")},
         {anchor: "help-profiles", label: root.tr2("Profiles — workspaces, JSON", "Профили — рабочие пространства, JSON")},
-        {anchor: "help-search", label: root.tr2("Search & Command Palette", "Поиск и палитра команд")},
+        {anchor: "help-search", label: root.tr2("Search & Command line", "Поиск и командная строка")},
         {anchor: "help-filter", label: root.tr2("Filters — priorities, archived, show-done, saved views", "Фильтры — приоритеты, архив, выполненные, сохранённые виды")},
         {anchor: "help-tweaks", label: root.tr2("Appearance — theme, accent, density, style", "Внешний вид — тема, акцент, плотность, стиль")},
         {anchor: "help-hotkeys", label: root.tr2("Hotkeys — rebinding and conflicts", "Горячие клавиши — переназначение и конфликты")},
@@ -251,8 +251,8 @@ Item {
                               "Две половины. Страницы — дерево длинных markdown-документов: место для абзаца, объясняющего, почему что-то важно. Удаление страницы забирает всё, что под ней, и отменяется, как любое другое действие.")
             }
             Body {
-                text: root.tr2("References is the catalog: sections with tips, code snippets with syntax highlighting, and contact cards. The command palette searches across all of it at once.",
-                              "Справочник — каталог: разделы с подсказками, сниппеты кода с подсветкой синтаксиса и карточки контактов. Палитра команд ищет по всему этому сразу.")
+                text: root.tr2("References is the catalog: sections with tips, code snippets with syntax highlighting, and contact cards. The command line searches across all of it at once.",
+                              "Справочник — каталог: разделы с подсказками, сниппеты кода с подсветкой синтаксиса и карточки контактов. Командная строка ищет по всему этому сразу.")
             }
 
             H3 {
@@ -549,17 +549,17 @@ Item {
             }
         }
 
-        // ─────────────────────────────────────────── SEARCH / PALETTE
+        // ─────────────────────────────────────────── SEARCH / COMMAND LINE
         HelpCard {
             objectName: "help-search"
             H2 {
-                text: root.tr2("Search & Command Palette",
-                              "Поиск и палитра команд")
+                text: root.tr2("Search & Command line",
+                              "Поиск и командная строка")
             }
 
             H3 {
-                text: root.tr2("Command Palette",
-                              "Палитра команд")
+                text: root.tr2("Command line",
+                              "Командная строка")
             }
             RowLayout {
                 spacing: Theme.spSm
@@ -567,8 +567,8 @@ Item {
                     keys: root.kbd("palette.open")
                 }
                 Body {
-                    text: root.tr2("— opens the command palette: commands (switch view, toggle theme, open a Settings section, new task / note / event…), tasks in all profiles, doc sections, ",
-                                  "— открывает палитру: команды (сменить вид, переключить тему, открыть раздел настроек, новая задача / заметка / событие…), задачи всех профилей, разделы доков, ")
+                    text: root.tr2("— opens the command line: commands (switch view, toggle theme, open a Settings section, new task / note / event…), tasks in all profiles, doc sections, ",
+                                  "— открывает командную строку: команды (сменить вид, переключить тему, открыть раздел настроек, новая задача / заметка / событие…), задачи всех профилей, разделы доков, ")
                 }
             }
             Body {
@@ -595,8 +595,8 @@ Item {
                 }
             }
             Body {
-                text: root.tr2("title, ID, description. Esc clears it, a second Esc (or Return) hands the keyboard back to the view. In Notes the same key opens the palette, which searches every note.",
-                              "названию, ID и описанию. Esc очищает поле, второй Esc (или Enter) возвращает клавиатуру виду. В заметках та же клавиша открывает палитру — она ищет по всем заметкам.")
+                text: root.tr2("title, ID, description. Esc clears it, a second Esc (or Return) hands the keyboard back to the view. In Notes the same key opens the command line, which searches every note.",
+                              "названию, ID и описанию. Esc очищает поле, второй Esc (или Enter) возвращает клавиатуру виду. В заметках та же клавиша открывает командную строку — она ищет по всем заметкам.")
             }
         }
 
@@ -640,8 +640,8 @@ Item {
                               "Сохранённые виды")
             }
             Body {
-                text: root.tr2("A saved view is a named set of filters: the search query (status:, priority:, #tag, due:, is:, -, OR), the priority chips, the board sort, Archived, Show done, and the view it opens in. \"Save view…\" in the filter bar or \"Save current view\" in the palette asks for a name (Enter saves, Esc cancels). Views are listed in the sidebar under Saved views, numbered, with how many tasks each one shows; Alt+1…Alt+9 or a click applies one, and the palette has \"View: name\" for each. Once you change a filter the view reads as modified, and the filter bar offers Update view or Save as new. Right click (or Menu) on a view renames, updates, duplicates, moves or deletes it — each one undoable. A query Tabless can no longer read, such as a column that was deleted, shows \"?\" on the view instead of an empty count. Views belong to the profile and travel with its export.",
-                              "Сохранённый вид — это набор фильтров с именем: поисковый запрос (status:, priority:, #метка, due:, is:, -, OR), чипы приоритетов, сортировка доски, «Архив», «Выполненные» и вид, в котором он открывается. «Сохранить вид…» в панели фильтров или «Сохранить текущий вид» в палитре спрашивает название (Enter сохраняет, Esc отменяет). Виды перечислены на боковой панели в разделе «Сохранённые виды», пронумерованы и показывают, сколько задач в каждом; Alt+1…Alt+9 или щелчок применяет вид, а в палитре для каждого есть «Вид: название». Если вы измените фильтр, вид отмечается как изменённый, и панель фильтров предлагает «Обновить вид» или «Сохранить как новый». Правый щелчок (или Menu) по виду переименовывает, обновляет, дублирует, перемещает или удаляет его — всё это можно отменить. Если запрос больше не читается, например колонку удалили, на виде вместо числа стоит «?». Виды принадлежат профилю и переносятся вместе с его экспортом.")
+                text: root.tr2("A saved view is a named set of filters: the search query (status:, priority:, #tag, due:, is:, -, OR), the priority chips, the board sort, Archived, Show done, and the view it opens in. \"Save view…\" in the filter bar or \"Save current view\" in the command line asks for a name (Enter saves, Esc cancels). Views are listed in the sidebar under Saved views, numbered, with how many tasks each one shows; Alt+1…Alt+9 or a click applies one, and the command line has \"View: name\" for each. Once you change a filter the view reads as modified, and the filter bar offers Update view or Save as new. Right click (or Menu) on a view renames, updates, duplicates, moves or deletes it — each one undoable. A query Tabless can no longer read, such as a column that was deleted, shows \"?\" on the view instead of an empty count. Views belong to the profile and travel with its export.",
+                              "Сохранённый вид — это набор фильтров с именем: поисковый запрос (status:, priority:, #метка, due:, is:, -, OR), чипы приоритетов, сортировка доски, «Архив», «Выполненные» и вид, в котором он открывается. «Сохранить вид…» в панели фильтров или «Сохранить текущий вид» в командной строке спрашивает название (Enter сохраняет, Esc отменяет). Виды перечислены на боковой панели в разделе «Сохранённые виды», пронумерованы и показывают, сколько задач в каждом; Alt+1…Alt+9 или щелчок применяет вид, а в командной строке для каждого есть «Вид: название». Если вы измените фильтр, вид отмечается как изменённый, и панель фильтров предлагает «Обновить вид» или «Сохранить как новый». Правый щелчок (или Menu) по виду переименовывает, обновляет, дублирует, перемещает или удаляет его — всё это можно отменить. Если запрос больше не читается, например колонку удалили, на виде вместо числа стоит «?». Виды принадлежат профилю и переносятся вместе с его экспортом.")
             }
 
             H3 {
@@ -745,8 +745,8 @@ Item {
                               "По умолчанию")
             }
             Body {
-                text: root.tr2("Ctrl+K — palette, Ctrl+N — new task, Ctrl+1…8 — the views in side-rail order (Board, Timeline, Week, Month, Archive, Docs, Notes, Settings), Ctrl+] / Ctrl+[ — next/previous profile, Ctrl+Z / Ctrl+Shift+Z — undo / redo, Ctrl+, — Tweaks, Ctrl+/ — hotkey catalog, Ctrl+F — focus search, Ctrl+= / Ctrl+- / Ctrl+0 — interface scale up, down, back to the default. docs/HOTKEYS.md has the full list.",
-                              "Ctrl+K — палитра, Ctrl+N — новая задача, Ctrl+1…8 — виды в порядке боковой панели (доска, лента, неделя, месяц, архив, доки, заметки, настройки), Ctrl+] / Ctrl+[ — следующий/предыдущий профиль, Ctrl+Z / Ctrl+Shift+Z — отменить / повторить, Ctrl+, — твики, Ctrl+/ — каталог клавиш, Ctrl+F — фокус в поиск, Ctrl+= / Ctrl+- / Ctrl+0 — масштаб интерфейса крупнее, мельче, обратно по умолчанию. Полный список — в docs/HOTKEYS.md.")
+                text: root.tr2("Ctrl+K — command line, Ctrl+N — new task, Ctrl+1…8 — the views in side-rail order (Board, Timeline, Week, Month, Archive, Docs, Notes, Settings), Ctrl+] / Ctrl+[ — next/previous profile, Ctrl+Z / Ctrl+Shift+Z — undo / redo, Ctrl+, — Tweaks, Ctrl+/ — hotkey catalog, Ctrl+F — focus search, Ctrl+= / Ctrl+- / Ctrl+0 — interface scale up, down, back to the default. docs/HOTKEYS.md has the full list.",
+                              "Ctrl+K — командная строка, Ctrl+N — новая задача, Ctrl+1…8 — виды в порядке боковой панели (доска, лента, неделя, месяц, архив, доки, заметки, настройки), Ctrl+] / Ctrl+[ — следующий/предыдущий профиль, Ctrl+Z / Ctrl+Shift+Z — отменить / повторить, Ctrl+, — твики, Ctrl+/ — каталог клавиш, Ctrl+F — фокус в поиск, Ctrl+= / Ctrl+- / Ctrl+0 — масштаб интерфейса крупнее, мельче, обратно по умолчанию. Полный список — в docs/HOTKEYS.md.")
             }
             Body {
                 text: root.tr2("On the board, J/K/H/L (or the arrows) move a cursor between cards and Shift with them moves the card itself; Return opens it, Space adds it to the selection. On the week and month views T goes to today, the arrows step a period, and G opens a date picker. Esc closes the innermost thing first — a menu, a dialog, the editor — and lets go of the selection last.",
@@ -1067,7 +1067,7 @@ Item {
             }
             Body {
                 text: root.tr2("Wipes all profiles, settings, and history. Makes a backup before resetting, just in case — the path to the backup is shown in a toast.",
-                              "Стирает все профили, настройки и историю. Перед сбросом на всякий случай делает резервную копию — путь к нему показывается в тосте.")
+                              "Стирает все профили, настройки и историю. Перед сбросом на всякий случай делает резервную копию — путь к ней показывается в тосте.")
             }
         }
 
