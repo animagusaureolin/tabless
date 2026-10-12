@@ -46,6 +46,8 @@ Item {
     readonly property bool keyboardFocused: ca.activeFocus
 
     signal activated()
+    // A double click: `activated` has already fired for its first click.
+    signal doubleActivated()
     // Right button, when `acceptedButtons` asks for it.
     signal contextRequested(real x, real y)
 
@@ -79,6 +81,7 @@ Item {
             if (ca.shortcutId.length > 0) AppController.noteMouseAction(ca.shortcutId);
             ca.activated();
         }
+        onDoubleClicked: (mouse) => { if (mouse.button === Qt.LeftButton) ca.doubleActivated(); }
     }
 
     readonly property string _tipText: {
