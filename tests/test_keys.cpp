@@ -152,3 +152,17 @@ TEST(KeyRepeat, OnlyMovesRepeat) {
   EXPECT_FALSE(isRepeatableAction(QStringLiteral("selection.deleteSel")));
   EXPECT_FALSE(isRepeatableAction(QStringLiteral("selection.clearSel")));
 }
+
+// Type-to-search on the board (A4-3): only a cursor move runs at once; a key
+// that acts on a card waits to see whether a word is being typed.
+TEST(KeyTyping, OnlyCursorMovesSkipTheWait) {
+  EXPECT_TRUE(isCursorMove(QStringLiteral("board.cursorDown")));
+  EXPECT_TRUE(isCursorMove(QStringLiteral("board.cursorLeft")));
+  EXPECT_TRUE(isCursorMove(QStringLiteral("cursor.last")));
+  EXPECT_FALSE(isCursorMove(QStringLiteral("task.done")));
+  EXPECT_FALSE(isCursorMove(QStringLiteral("task.schedule")));
+  EXPECT_FALSE(isCursorMove(QStringLiteral("undo.alt")));
+  EXPECT_FALSE(isCursorMove(QStringLiteral("board.moveRight")));
+  EXPECT_FALSE(isCursorMove(QStringLiteral("board.cardMenu")));
+  EXPECT_FALSE(isCursorMove(QStringLiteral("board.archive")));
+}
