@@ -10,7 +10,7 @@ import '@fontsource/golos-text/600.css';
 import '../styles/site.css';
 import wordmark from '../assets/tabless-wordmark.svg?raw';
 import { copy, type Lang } from '../data/i18n';
-import { GITHUB_URL, LICENSE_URL, url } from '../lib/site';
+import { GITHUB_URL, LICENSE_URL, RELEASES_URL, url } from '../lib/site';
 
 interface Props {
   lang: Lang;
@@ -76,6 +76,7 @@ const ogImage = new URL(url('og.png'), Astro.site).href;
         <a href={sec('faq')} data-scroll={home ? '#faq' : undefined}>{t.nav.faq}</a>
       </nav>
       <button class="search-btn" type="button" aria-haspopup="dialog" aria-label={t.search.label}><span>{t.search.button}</span><kbd>Ctrl K</kbd></button>
+      <a class="gh-link" href={GITHUB_URL}>GitHub</a>
       <a class="lang-switch" href={there} hreflang={t.otherLang.lang} lang={t.otherLang.lang} title={t.otherLang.title}>{t.otherLang.label}</a>
       <a class="btn ghost sm" href={url(prefix(lang) + 'download/')}>{t.download}</a>
     </header>
@@ -93,6 +94,7 @@ const ogImage = new URL(url('og.png'), Astro.site).href;
           <a href={there} hreflang={t.otherLang.lang} lang={t.otherLang.lang}>{other.selfName}</a>
           <a href={LICENSE_URL}>MIT</a>
           <a href={GITHUB_URL}>GitHub</a>
+          <a href={RELEASES_URL}>{t.releases}</a>
         </span>
       </footer>
     </main>

@@ -29,6 +29,7 @@ const ru = {
   search: { button: 'Поиск', label: 'Поиск по сайту', placeholder: 'Найти на странице…', empty: 'Ничего не нашлось', hint: '↑↓ выбрать · Enter перейти · Esc закрыть' },
   download: 'Скачать',
   downloadApp: 'Скачать Tabless',
+  releases: 'Релизы',
   otherLang: { label: 'EN', lang: 'en', title: 'English' },
   hero: {
     sub: 'Рабочий день разработчика в одном окне: задачи из 13 трекеров, встречи на сегодня и заметки — с клавиатуры.',
@@ -227,6 +228,7 @@ const en: typeof ru = {
   search: { button: 'Search', label: 'Search this site', placeholder: 'Find on this page…', empty: 'Nothing found', hint: '↑↓ choose · Enter go · Esc close' },
   download: 'Download',
   downloadApp: 'Download Tabless',
+  releases: 'Releases',
   otherLang: { label: 'RU', lang: 'ru', title: 'Русский' },
   hero: {
     sub: 'A developer’s workday in one window: your tasks from 13 trackers, today’s meetings and your notes, from the keyboard.',

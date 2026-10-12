@@ -3227,12 +3227,58 @@ Item {
                                 Layout.topMargin: Theme.sp2xl
                                 spacing: 0
                                 visible: intCard.isConn && intCard.modelData.directory !== true && statusMapRep.count > 0
-                                Text {
-                                    Layout.bottomMargin: Theme.spSm
-                                    text: I18n.t("settings.trk.statusMap").arg(intCard.modelData.name)
-                                    color: Theme.text
-                                    font.pixelSize: Theme.fsMd
-                                    font.weight: root.quiet ? Theme.fwTitle : Theme.fwHeading
+                                // Folds by its heading (APP-291). It starts open
+                                // when a status maps to nothing yet — once, so
+                                // picking a column does not fold it under the
+                                // cursor; a search opens it too.
+                                property bool userOpen: false
+                                readonly property bool open: userOpen || root.searching
+                                function needsAttention() {
+                                    const rows = statusMapRep.model || [];
+                                    for (let i = 0; i < rows.length; i++)
+                                        if (rows[i].known === false && !rows[i].overridden) return true;
+                                    return false;
+                                }
+                                Component.onCompleted: userOpen = needsAttention()
+                                Item {
+                                    objectName: "status-map-toggle-" + intCard.intKey
+                                    Layout.fillWidth: true
+                                    Layout.bottomMargin: statusMapBlock.open ? Theme.spSm : 0
+                                    implicitHeight: mapHead.implicitHeight
+                                    RowLayout {
+                                        id: mapHead
+                                        anchors.left: parent.left; anchors.right: parent.right
+                                        spacing: Theme.sp2xs
+                                        Icon {
+                                            name: statusMapBlock.open ? "chevron-down" : "chevron-right"
+                                            size: Theme.iconSize - 2
+                                            color: mapCA.hovered ? Theme.text : Theme.textDim
+                                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: I18n.t("settings.trk.statusMap").arg(intCard.modelData.name)
+                                            color: Theme.text
+                                            font.pixelSize: Theme.fsMd
+                                            font.weight: root.quiet ? Theme.fwTitle : Theme.fwHeading
+                                            elide: Text.ElideRight
+                                        }
+                                        Text {
+                                            text: String(statusMapRep.count)
+                                            color: Theme.textDim
+                                            font.pixelSize: Theme.fsSm
+                                            font.features: Theme.tabularNums
+                                        }
+                                    }
+                                    ClickArea {
+                                        id: mapCA
+                                        label: I18n.t("settings.trk.statusMap").arg(intCard.modelData.name)
+                                        showTip: false
+                                        role: Accessible.CheckBox
+                                        checkable: true
+                                        checked: statusMapBlock.open
+                                        onActivated: statusMapBlock.userOpen = !statusMapBlock.userOpen
+                                    }
                                 }
                                 Repeater {
                                     id: statusMapRep
@@ -3250,6 +3296,7 @@ Item {
                                         id: mapRow
                                         required property var modelData
                                         Layout.fillWidth: true
+                                        visible: statusMapBlock.open
                                         implicitHeight: Theme.px(39)
                                         Rectangle {
                                             anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top

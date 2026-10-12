@@ -158,4 +158,35 @@ TestCase {
         verify(fold._tipText.indexOf(AppController.shortcutText("board.collapseColumn")) > 0, fold._tipText);
     }
 
+
+    // APP-289: a column is made on the board — "+" at the end of the row
+    // adds it last, the column menu right of that column.
+    function test_board_makes_a_new_column() {
+        const board = make('import TodoCpp; KanbanBoard { anchors.fill: parent }');
+        wait(50);
+        const tile = areaIn(byName(board, "board-add-column"));
+        verify(tile !== null, "no add-column tile");
+        const n = AppController.statuses.length;
+        const popup = findChild(board, "add-column-popup");
+        verify(popup !== null, "no add-column dialog");
+        tile.activated();
+        tryVerify(function () { return popup.opened; }, 1000);
+        const name = findChild(popup, "add-column-name");
+        name.text = "Probe last";
+        popup.commit();
+        compare(AppController.statuses.length, n + 1);
+        const last = AppController.statuses[n];
+        compare(last.name, "Probe last");
+        // From the first column's menu: lands second.
+        tryVerify(function () { return !popup.opened; }, 1000);
+        popup.openAfter(0);
+        findChild(popup, "add-column-name").text = "Probe second";
+        popup.commit();
+        compare(AppController.statuses.length, n + 2);
+        compare(AppController.statuses[1].name, "Probe second");
+        AppController.deleteStatus(AppController.statuses[1].id, AppController.statuses[0].id);
+        AppController.deleteStatus(last.id, AppController.statuses[0].id);
+        compare(AppController.statuses.length, n);
+        AppController.clearPendingUndo();
+    }
 }

@@ -293,6 +293,7 @@ Item {
     property string _docsPage: ""
     onModeChanged: {
         root._flushPending();
+        root.shownDoc = null;
         // mode, not docs: the binding may not have caught up yet.
         if (root.mode === "docs") {
             root.pageId = root._docsPage;
@@ -312,8 +313,40 @@ Item {
     // Return then typing wrote into that note (IDIOT-KNOW-2).
     function openPage(id) {
         root._flushPending();
+        root.shownDoc = null;
         root.pageId = id;
         Qt.callLater(pageEditor.focusEditor);
+    }
+    // ── A snippet or a link, shown in the document (APP-290) ──────────
+    // Where it sits in the Docs data; what is shown is read from that live,
+    // so an edit shows at once and a delete clears the pane.
+    property var shownDoc: null
+    readonly property string shownKey: !root.shownDoc ? ""
+        : root.shownDoc.kind === "snippet" ? "snippet:" + root.shownDoc.idx
+        : "ref:" + root.shownDoc.sec + ":" + root.shownDoc.item
+    readonly property var shownDocData: {
+        const at = root.shownDoc;
+        if (!at || !root.docs) return null;
+        let d = ({});
+        try { d = JSON.parse(AppController.docsState || "{}") || ({}); } catch (e) { return null; }
+        if (at.kind === "snippet") {
+            const sn = (d.snippets || [])[at.idx];
+            if (!sn) return null;
+            return { kind: "snippet", idx: at.idx, title: String(sn.title || ""), lang: String(sn.lang || ""),
+                     code: String(sn.code || "") };
+        }
+        const sec = (d.sections || [])[at.sec];
+        const it = sec && sec.items ? sec.items[at.item] : null;
+        if (!it || !String(it.url || "").length) return null;
+        return { kind: "ref", sec: at.sec, item: at.item, title: String(it.title || it.ref || it.url),
+                 refTitle: String(it.title || ""), ref: String(it.ref || ""), url: String(it.url),
+                 desc: String(it.desc || "") };
+    }
+    function showDoc(r) {
+        root._flushPending();
+        root.pageId = "";
+        root.shownDoc = r.kind === "snippet" ? { kind: "snippet", idx: r.idx }
+                                             : { kind: "ref", sec: r.sec, item: r.item };
     }
     property var _pageUpdated: null
     function _refreshPage() {
@@ -875,26 +908,26 @@ Item {
             Layout.fillHeight: true
             mode: root.mode
             openPageId: root.pageId
+            shownKey: root.shownKey
             onNoteActivated: (id) => {
                 // Flush first: the editor debounces its saves, so the last
                 // keystrokes are still only in the text field here and
                 // switching would drop them.
                 root._flushPending();
                 root.pageId = "";
+                root.shownDoc = null;
                 AppController.activeNoteId = id;
             }
             // "+" makes a note to write in: the cursor goes there.
             onNoteCreated: (id) => root._focusNewNote()
             // Return on the list, Esc on an empty filter (IDIOT-KNOW-7/8).
             onEditRequested: root._focusEditorAtEnd()
-            // A reference opens under the link rules, a page opens here in
-            // the document, a snippet is copied, a contact's handle too.
+            // A page, a snippet or a reference opens here in the document
+            // (a reference's "Open" goes under the link rules); a contact's
+            // handle is copied.
             onRefActivated: (url) => preview.openExternal(url)
             onPageActivated: (id) => root.openPage(id)
-            onSnippetActivated: (title, code) => {
-                AppController.copyToClipboard(code);
-                AppController.showToast(I18n.t("docs.toast.copied").arg(title));
-            }
+            onItemShown: (r) => root.showDoc(r)
             onContactActivated: (handle) => {
                 AppController.copyToClipboard(handle);
                 AppController.showToast(I18n.t("docs.toast.copied").arg(handle));
@@ -1170,12 +1203,96 @@ Item {
                 // Docs with no page open: what to do, in one line.
                 EmptyState {
                     objectName: "docs-no-page"
-                    visible: root.docs && root.pageId.length === 0
+                    visible: root.docs && root.pageId.length === 0 && !root.shownDocData
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignTop
                     Layout.topMargin: Theme.px(80)
                     title: I18n.t("knowledge.docs.noPage")
                     line: I18n.t("knowledge.docs.noPage.line")
+                }
+                // A snippet's code or a link's address and description, to
+                // read and select; open, copy and edit beside the title.
+                ColumnLayout {
+                    id: docItemView
+                    objectName: "docs-item-view"
+                    readonly property var d: root.shownDocData
+                    readonly property bool isSnippet: !!d && d.kind === "snippet"
+                    readonly property string tag: !d ? "" : (isSnippet ? d.lang : d.ref)
+                    visible: root.docs && root.pageId.length === 0 && !!d
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.topMargin: Theme.spLg
+                    spacing: Theme.spMd
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spMd
+                        Text {
+                            objectName: "docs-item-title"
+                            Layout.fillWidth: true
+                            text: docItemView.d ? (docItemView.d.title || docItemView.d.lang) : ""
+                            color: Theme.text
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsLg
+                            font.weight: Theme.fwHeading
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            visible: docItemView.tag.length > 0
+                            text: docItemView.tag
+                            color: Theme.textDim
+                            font.family: Theme.fontMono
+                            font.pixelSize: Theme.fsXs
+                        }
+                        PillButton {
+                            objectName: "docs-item-open"
+                            visible: !!docItemView.d && !docItemView.isSnippet
+                            text: I18n.t("md.link.web.open")
+                            onClicked: preview.openExternal(docItemView.d.url)
+                        }
+                        PillButton {
+                            objectName: "docs-item-copy"
+                            text: I18n.t("docs.copy")
+                            onClicked: notesList.copyItem(docItemView.d)
+                        }
+                        PillButton {
+                            objectName: "docs-item-edit"
+                            text: I18n.t("knowledge.edit")
+                            onClicked: notesList.editItem(docItemView.d.kind, docItemView.d)
+                        }
+                    }
+                    Text {
+                        visible: !!docItemView.d && !docItemView.isSnippet
+                        Layout.fillWidth: true
+                        text: docItemView.d && !docItemView.isSnippet ? docItemView.d.url : ""
+                        color: Theme.textDim
+                        font.family: Theme.fontMono
+                        font.pixelSize: Theme.fsSm
+                        wrapMode: Text.WrapAnywhere
+                    }
+                    ScrollView {
+                        // A link without a description shows only its address.
+                        visible: docItemView.isSnippet || (!!docItemView.d && docItemView.d.desc.length > 0)
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        background: FieldFrame {}
+                        TextEdit {
+                            objectName: "docs-item-text"
+                            readOnly: true
+                            selectByMouse: true
+                            selectByKeyboard: true
+                            padding: Theme.spMd
+                            textFormat: TextEdit.PlainText
+                            text: !docItemView.d ? "" : (docItemView.isSnippet ? docItemView.d.code : docItemView.d.desc)
+                            color: Theme.text
+                            selectionColor: Theme.accentSoft
+                            selectedTextColor: Theme.text
+                            font.family: docItemView.isSnippet ? Theme.fontMono : Theme.fontUi
+                            font.pixelSize: Theme.fsSm
+                            wrapMode: docItemView.isSnippet ? TextEdit.NoWrap : TextEdit.Wrap
+                        }
+                    }
+                    Item { visible: !docItemView.isSnippet && !!docItemView.d && docItemView.d.desc.length === 0; Layout.fillHeight: true }
                 }
                 MdEditorPane {
                     id: pageEditor
