@@ -39,7 +39,7 @@ $$('[data-scroll]').forEach((a) =>
 const nav = $('.nav');
 ScrollTrigger.create({ start: 24, end: 'max', onToggle: (s) => nav.classList.toggle('scrolled', s.isActive) });
 
-/* ---------- download buttons: this platform's file, named in the button ---------- */
+/* ---------- download buttons: name this platform; they lead to the download page ---------- */
 const downloadFor = EN ? 'Download for' : 'Скачать для';
 const detected = detectCurrentOS();
 const desktop: DesktopOS | null = detected && detected !== 'mobile' ? detected : null;
@@ -47,7 +47,6 @@ const primary = JSON.parse(document.body.dataset.primary || '{}') as Partial<Rec
 if (desktop && primary[desktop]) {
   const file = primary[desktop]!;
   $$<HTMLAnchorElement>('a[data-os-cta]').forEach((a) => {
-    a.href = file.url;
     a.title = file.name;
     const label = $('[data-app]', a);
     if (label) label.textContent = `${downloadFor} ${OS_LABEL[desktop]}`;

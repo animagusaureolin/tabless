@@ -206,7 +206,7 @@ test.describe('home page scenes', () => {
   });
 });
 
-test('the download buttons point at this platform’s file', async ({ page, isMobile }) => {
+test('the download buttons name this platform and lead to the download page', async ({ page, isMobile }) => {
   await page.goto('');
   await page.waitForLoadState('networkidle');
   const cta = page.locator('.hero a[data-os-cta]');
@@ -216,7 +216,23 @@ test('the download buttons point at this platform’s file', async ({ page, isMo
     await expect(page.locator('[data-mobile-note]')).toBeVisible();
   } else {
     await expect(cta).toHaveText(/Download for (Linux|Windows|macOS)/);
-    await expect(cta).toHaveAttribute('href', new RegExp(`^https://github\\.com/${REPO}/releases/download/`));
+    await expect(cta).toHaveAttribute('href', `${BASE}/download/`);
+    await cta.click();
+    await expect(page).toHaveURL(new RegExp(`${BASE}/download/$`));
+    await expect(page.locator('.os-col.mine')).toHaveCount(1);
+  }
+});
+
+test('the header links to GitHub and the footer to GitHub and the releases', async ({ page, isMobile }) => {
+  for (const [path, releases] of [['', 'Releases'], ['ru/', 'Релизы']]) {
+    await page.goto(path);
+    const gh = page.locator('.nav .gh-link');
+    await expect(gh).toHaveAttribute('href', `https://github.com/${REPO}`);
+    if (isMobile) await expect(gh).toBeHidden();
+    else await expect(gh).toBeVisible();
+    const foot = page.locator('.foot-links');
+    await expect(foot.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', `https://github.com/${REPO}`);
+    await expect(foot.getByRole('link', { name: releases })).toHaveAttribute('href', `https://github.com/${REPO}/releases`);
   }
 });
 
