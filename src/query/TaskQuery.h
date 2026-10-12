@@ -23,13 +23,18 @@ namespace heap::query {
 //   status:blocked            a column, by id, by name or by the name's slug —
 //   status:"code review"      what the board shows, not only the internal id
 //   status:in-progress
-//   priority:P0,P1            comma = any of
+//   priority:P0,P1            comma = any of; "p0 p1" and "p0,p1" too —
+//                             a task has one priority, so repeated
+//                             priority:/status: clauses mean either (A1-25)
+//   priority:none             no priority (A1-26)
 //   tag:infra   #infra        a label
 //   mention:@ada              the assignee, or an @name in the text
 //   due:today  due:overdue    (deadline: is the same field) today, overdue,
 //   due:week   due:<7d        this week, relative/absolute comparisons,
 //   due:friday due:none       anything the date parser reads, or no date
 //   is:open  is:done  is:archived  is:overdue  is:recurring
+//   is:tracker  is:local      a tracker's card / my own task (A1-26)
+//   source:jira               a card from that tracker
 //   is:someday                parked for "someday"
 //   is:unscheduled            open, not someday, with no "when"
 //   is:blocked                an open card blocks it (APP-240)
@@ -135,6 +140,7 @@ class TaskQuery {
   };
 
   bool clauseMatches(const Clause& c, const Task& t, const QString& haystack) const;
+  static bool mergeSingleValued(QVector<Clause>& group, const Clause& cl);
 
   // OR of AND-groups.
   QVector<QVector<Clause>> m_groups;
@@ -153,6 +159,14 @@ class TaskQuery {
 
 // The fields a clause may name, for the UI to hint with. Sorted.
 QStringList queryFields();
+
+// Search text as it is compared: lower case, «ё» read as «е» — most people
+// type е for ё (A3-11). Both the haystacks and the typed words go through it.
+QString foldSearch(const QString& text);
+
+// Does the haystack hold the free text? A whole ticket key ("sd-105") is
+// matched as a key: "SD-1050" does not answer it (A3-23).
+bool textMatches(const QString& haystack, const QString& freeText);
 
 // Ids of the tasks some open card blocks ("blocks" links whose source is
 // neither done nor archived). `isDone` says what done means on this board.

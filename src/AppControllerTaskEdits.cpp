@@ -38,7 +38,7 @@ void AppController::setTaskPriority(const QString& taskId, const QString& priori
   }
   const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
   if(setPriorityOf(taskId, priority)) {
-    emit undoableToast(tr_("task.moved").arg(taskId, priority), 5);
+    emit undoableToast(tr_("task.moved").arg(displayKey(taskId), priority), 5);
     scheduleSave();
   }
 }
@@ -121,7 +121,7 @@ bool AppController::passesFilter_(
     return false;
   }
   const QString free = q.freeText();
-  if(!free.isEmpty() && !m_tasks.searchTextAt(row).contains(free)) {
+  if(!heap::query::textMatches(m_tasks.searchTextAt(row), free)) {
     return false;
   }
   return !q.isQuery() || q.matches(t, m_tasks.searchTextAt(row));
