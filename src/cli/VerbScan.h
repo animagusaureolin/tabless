@@ -12,8 +12,8 @@
 // line), so it is plain C++ over any character type.
 namespace heap::cli {
 
-inline constexpr std::array<std::string_view, 11> kVerbs = {
-    "add", "now", "list", "today", "done", "open", "sched", "due", "est", "someday", "help"};
+inline constexpr std::array<std::string_view, 12> kVerbs = {
+    "add", "now", "list", "today", "done", "open", "sched", "due", "est", "someday", "help", "version"};
 
 namespace detail {
 
@@ -86,11 +86,17 @@ Invocation classify(const Range& args) {
       skipValue = detail::takesValue(arg);
       continue;
     }
-    // The first positional argument decides.
-    const bool verb = std::any_of(kVerbs.begin(), kVerbs.end(), [arg](std::string_view v) {
-      return detail::equalsAscii(arg, v);
-    });
-    return verb ? Invocation::Command : Invocation::Window;
+    // The first positional argument decides. A window launch takes options
+    // only, plus the URI a notification click hands it ("tabless://notify…"),
+    // so any other word is a command — a typo ("tody", "frobnicate") gets
+    // "unknown command" and exit 1 instead of silently starting the window.
+    const std::string_view uriMark = "://";
+    for(std::size_t k = 0; k + uriMark.size() <= arg.size(); ++k) {
+      if(detail::equalsAscii(arg.substr(k, uriMark.size()), uriMark)) {
+        return Invocation::Window;
+      }
+    }
+    return Invocation::Command;
   }
   return Invocation::Window;
 }

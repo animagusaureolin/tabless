@@ -172,11 +172,12 @@ ParsedArgs parseArgs(const QStringList& args) {
 
   const QString name = positional.takeFirst();
   const std::optional<Verb> verb = verbFromName(name);
-  if(!verb || *verb == Verb::Version) {
+  if(!verb) {
     return fail(QStringLiteral("unknown command '%1'").arg(name));
   }
   r.verb = parser.isSet(help) ? Verb::Help : *verb;
-  if(r.verb == Verb::Help) {
+  // `tabless version` answers like --version.
+  if(r.verb == Verb::Help || r.verb == Verb::Version) {
     out.ok = true;
     return out;
   }
