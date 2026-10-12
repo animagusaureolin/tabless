@@ -10,6 +10,7 @@ import QtQuick.Layouts
 import TodoCpp
 
 Popup {
+    PopupArrival { popup: root; dialog: false }
     id: root
     // Emitted on every change, so what the picker edits repaints live.
     signal picked(string hex)

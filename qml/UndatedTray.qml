@@ -129,6 +129,7 @@ Rectangle {
                     anchors.fill: parent
                     radius: Theme.radiusSm
                     color: row.armed ? Theme.accentSoft : rowArea.containsMouse ? Theme.panel2 : "transparent"
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     border.color: row.armed ? Theme.accent : "transparent"
                     border.width: row.armed ? 1 : 0
                 }

@@ -6,6 +6,7 @@ import TodoCpp
 import "PopupStack.js" as PopupStack
 
 Popup {
+    PopupArrival { popup: root }
     id: root
     modal: true
     focus: true
@@ -997,6 +998,7 @@ Popup {
                             Layout.preferredHeight: 32
                             radius: Theme.radiusMd
                             color: deadlineCalMA.hovered ? Theme.panel3 : Theme.panel2
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             border.color: Theme.border; border.width: 1
                             Rectangle {   // mini calendar glyph
                                 anchors.centerIn: parent
@@ -1275,6 +1277,7 @@ Popup {
                         Text {
                             text: (root.detailsOpen ? "▾  " : "▸  ") + I18n.t("editor.details")
                             color: detailsMA.containsMouse ? Theme.text : Theme.textMuted
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             font.pixelSize: Theme.fsMd
                             font.weight: Theme.fwTitle
                         }
@@ -1583,6 +1586,7 @@ Popup {
                         anchors.verticalCenter: parent.verticalCenter
                         text: (root.historyOpen ? "▾  " : "▸  ") + I18n.t("editor.history").arg(root._history.length)
                         color: historyMA.containsMouse ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.pixelSize: Theme.fsMd
                         font.weight: Theme.fwTitle
                     }
@@ -1706,6 +1710,7 @@ Popup {
 
     // ── Unsaved changes: save, discard or keep editing ──
     Popup {
+        PopupArrival { popup: discardPrompt }
         id: discardPrompt
         objectName: "te-discard-prompt"
         parent: root.contentItem
@@ -1787,6 +1792,7 @@ Popup {
         signal clicked()
         radius: Theme.radiusPill
         color: active ? Theme.accentSoft : (segMA.containsMouse ? Theme.panel3 : "transparent")
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         border.color: activeFocus ? Theme.focusRing : active ? Theme.withAlpha(Theme.accent, 0.5) : "transparent"
         border.width: activeFocus ? 2 : 1
         activeFocusOnTab: true
@@ -1801,6 +1807,7 @@ Popup {
             anchors.centerIn: parent
             text: seg.text
             color: seg.active ? Theme.accentStrong : (segMA.containsMouse ? Theme.text : Theme.textMuted)
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.pixelSize: Theme.fsSm
         }
         MouseArea {

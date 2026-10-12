@@ -122,10 +122,6 @@ Menu {
         implicitHeight: 32
     }
 
-    enter: Transition {
-        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
-    }
-    exit: Transition {
-        NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Theme.durPopOut; easing.type: Theme.easeExit }
-    }
+    enter: PopEnter {}
+    exit: PopExit {}
 }

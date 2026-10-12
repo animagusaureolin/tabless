@@ -66,6 +66,7 @@ ColumnLayout {
             visible: root.textMode || listHover.hovered || tmCA.activeFocus
             text: root.textMode ? I18n.t("local.checklist.asList") : I18n.t("local.checklist.asText")
             color: tmCA.hovered ? Theme.text : Theme.textDim
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsXs
             ClickArea {
@@ -235,6 +236,7 @@ ColumnLayout {
             anchors.fill: parent
             radius: Theme.radiusSm
             color: row.activeFocus ? Theme.rowHighlight : (rowHover.hovered ? Theme.panel2 : "transparent")
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         }
         HoverHandler { id: rowHover }
         TapHandler {
@@ -318,6 +320,7 @@ ColumnLayout {
                 visible: String(row.modelData.cardId || "").length > 0
                 text: "→ " + row.modelData.cardId
                 color: cardCA.hovered ? Theme.text : Theme.textMuted
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
                 ClickArea {

@@ -12,6 +12,7 @@ import QtQuick.Controls
 import TodoCpp
 
 Popup {
+    PopupArrival { popup: root }
     id: root
     modal: true
     focus: true

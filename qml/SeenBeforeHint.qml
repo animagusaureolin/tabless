@@ -58,6 +58,7 @@ Item {
         }
         textFormat: Text.PlainText
         color: hintArea.hovered ? Theme.accentStrong : Theme.textMuted
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         font.pixelSize: Theme.fsXs
         font.underline: hintArea.hovered
         elide: Text.ElideRight

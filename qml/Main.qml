@@ -53,6 +53,16 @@ ApplicationWindow {
         if (v === "board") boardLoader.active = true;
         else if (v === "notes" || v === "docs") notesLoader.active = true;
     }
+    // One fade for whichever view came on screen; a fade cut short by the
+    // next switch leaves its view fully drawn, not half.
+    function fadeInView(loader) {
+        if (viewFade.running && viewFade.target && viewFade.target !== loader) {
+            viewFade.stop();
+            viewFade.target.opacity = 1;
+        }
+        viewFade.target = loader;
+        viewFade.restart();
+    }
 
     // Whichever view is on screen. Four loaders now hold them — three kept
     // alive, one shared — so nothing outside should have to know which.
@@ -452,6 +462,7 @@ ApplicationWindow {
     }
 
     QQC.Dialog {
+        PopupArrival { popup: closeAsk }
         id: closeAsk
         objectName: "close-to-tray-ask"
         modal: true
@@ -1270,6 +1281,7 @@ ApplicationWindow {
                         visible: AppController.currentView === "board"
                         active: false
                         sourceComponent: boardComp
+                        onVisibleChanged: if (visible) win.fadeInView(boardLoader)
                     }
                     Loader {
                         id: notesLoader
@@ -1277,12 +1289,15 @@ ApplicationWindow {
                         visible: AppController.currentView === "notes" || AppController.currentView === "docs"
                         active: false
                         sourceComponent: notesComp
+                        onVisibleChanged: if (visible) win.fadeInView(notesLoader)
                     }
 
                     Loader {
                         id: viewLoader
                         anchors.fill: parent
                         visible: !boardLoader.visible && !notesLoader.visible
+                        onVisibleChanged: if (visible) win.fadeInView(viewLoader)
+                        onLoaded: if (visible) win.fadeInView(viewLoader)
                         sourceComponent: {
                             if (AppController.currentView === "today") return todayComp;
                             if (AppController.currentView === "list") return listComp;
@@ -1365,6 +1380,15 @@ ApplicationWindow {
                             }
                             onWheel: (wheel) => wheel.accepted = true
                         }
+                    }
+                    // A view switched to fades in at pop speed (APP-175):
+                    // only in, never out, so a hotkey still lands at once.
+                    NumberAnimation {
+                        id: viewFade
+                        property: "opacity"
+                        from: 0; to: 1
+                        duration: Theme.durPop
+                        easing.type: Theme.easeEnter
                     }
                     // The task document (APP-265): a panel over the right
                     // of the view, or the whole width.

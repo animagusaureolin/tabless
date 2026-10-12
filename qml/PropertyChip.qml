@@ -128,6 +128,7 @@ Item {
                 name: "close"
                 size: Theme.iconSize - 4
                 color: removeArea.hovered ? Theme.text : Theme.textDim
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             }
             ClickArea {
                 id: removeArea
@@ -154,6 +155,7 @@ Item {
             name: "close"
             size: Theme.iconSize - 6
             color: badgeArea.hovered ? Theme.text : Theme.textDim
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         }
         ClickArea {
             id: badgeArea

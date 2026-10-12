@@ -248,7 +248,9 @@ Rectangle {
             // Quiet: a hairline field on the sidebar, no fill (H2-Today-Calm,
             // X-Oth-Light, R4-013); bold keeps the panel fill.
             color: newTaskCA.hovered ? Theme.panel2 : Style.fills ? Theme.panel : "transparent"
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.color: newTaskCA.hovered ? Theme.borderStrong : Theme.border
+            Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.width: 1
             Text {
                 visible: root.expanded
@@ -318,6 +320,7 @@ Rectangle {
                 anchors.fill: parent
                 radius: Theme.radiusMd
                 color: timerCA.hovered ? Theme.panel2 : "transparent"
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 border.width: 1
                 border.color: Theme.border
             }
@@ -367,6 +370,7 @@ Rectangle {
                         name: "pause"
                         size: Theme.px(10)
                         color: pauseCA.hovered ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     }
                     ClickArea {
                         id: pauseCA
@@ -545,6 +549,7 @@ Rectangle {
                 text: updateLine.phase === "ready" ? I18n.t("update.line.restart")
                     : updateLine.can ? I18n.t("update.line.install") : I18n.t("update.line.download")
                 color: updActCA.hovered ? Theme.textMuted : Theme.text
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
                 font.underline: true
@@ -570,6 +575,7 @@ Rectangle {
                 objectName: "sidebar-update-notes"
                 text: I18n.t("update.line.whatsNew")
                 color: notesCA.hovered ? Theme.text : Theme.textMuted
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
                 ClickArea {
@@ -680,6 +686,7 @@ Rectangle {
             anchors.fill: parent
             radius: Theme.radiusMd
             color: navCA.hovered && !nav.active ? Theme.panel2 : "transparent"
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         }
         // Folded: the open section is a rounded tile behind its icon
         // (N/X-Oth-Small, R4-011), not the underline of the full sidebar.
@@ -710,6 +717,7 @@ Rectangle {
             text: nav.label
             elide: Text.ElideRight
             color: nav.active || navCA.hovered ? Theme.text : Theme.textMuted
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             font.weight: nav.active && Style.fills ? Theme.fwHeading : Theme.fwBody
@@ -806,6 +814,7 @@ Rectangle {
             anchors.fill: parent
             radius: Theme.radiusMd
             color: vrMA.dragging ? Theme.panel3 : vrMA.containsMouse && !vr.active ? Theme.panel2 : "transparent"
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             border.color: Theme.focusRing
             border.width: vr.activeFocus ? 2 : 0
         }
@@ -845,6 +854,7 @@ Rectangle {
             elide: Text.ElideRight
             font.italic: vr.modified
             color: vr.active || vrMA.containsMouse ? Theme.text : Theme.textMuted
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             font.weight: vr.active && Style.fills ? Theme.fwHeading : Theme.fwBody

@@ -66,6 +66,7 @@ Column {
         horizontalAlignment: Text.AlignHCenter
         text: root.line
         color: root.lineLink && lineCA.hovered ? Theme.text : Theme.textDim
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         font.pixelSize: root.compact ? Theme.fsXs : Theme.fsMd
         wrapMode: Text.WordWrap
         ClickArea {

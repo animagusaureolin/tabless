@@ -11,6 +11,7 @@ import "TaskDates.js" as TaskDates
 // legacy right panel's people list; Today shows the short version and opens
 // this one. You mark, Tabless only remembers: nothing is sent anywhere.
 Dialog {
+    PopupArrival { popup: root }
     id: root
     objectName: "people-dialog"
     modal: true
@@ -149,6 +150,7 @@ Dialog {
                         implicitHeight: col.implicitHeight + 2 * Theme.spMd
                         radius: Theme.radiusMd
                         color: row.on ? Theme.panel2 : (hov.hovered ? Theme.withAlpha(Theme.text, 0.03) : "transparent")
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         Accessible.role: Accessible.ListItem
                         Accessible.name: row.name + (row.role.length ? ", " + row.role : "")
                         HoverHandler { id: hov }
@@ -277,6 +279,7 @@ Dialog {
                         text: (lt.modelData.key ? lt.modelData.key + " · " : "") + lt.modelData.title
                         elide: Text.ElideRight
                         color: ltCA.hovered ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.pixelSize: Theme.fsMd
                         lineHeight: Math.round(font.pixelSize * 1.7)
                         lineHeightMode: Text.FixedHeight
@@ -304,6 +307,7 @@ Dialog {
                         text: root.meetingWhen(mt.modelData) + " · " + mt.modelData.title
                         elide: Text.ElideRight
                         color: mtCA.hovered ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.pixelSize: Theme.fsMd
                         lineHeight: Math.round(font.pixelSize * 1.7)
                         lineHeightMode: Text.FixedHeight

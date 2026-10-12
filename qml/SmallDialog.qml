@@ -13,6 +13,7 @@ import TodoCpp
 //       buttons: [ PillButton {...}, PillButton {...} ]
 //   }
 Popup {
+    PopupArrival { popup: root }
     id: root
     modal: true
     focus: true

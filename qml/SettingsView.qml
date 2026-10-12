@@ -356,6 +356,7 @@ Item {
                                 Layout.preferredHeight: Theme.px(28)
                                 radius: Theme.radiusMd
                                 color: navMA.containsMouse && !root.quiet ? Theme.panel : "transparent"
+                                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
@@ -1099,6 +1100,7 @@ Item {
             Layout.bottomMargin: Theme.spSm
             text: root.opt(I18n.t(more.open ? "settings.more.close" : "settings.more.open"))
             color: moreMA.hovered ? Theme.text : Theme.textDim
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.pixelSize: Theme.fsSm
             ClickArea {
                 id: moreMA
@@ -1166,6 +1168,7 @@ Item {
         id: link
         signal activated()
         color: linkMA.hovered ? Theme.text : Theme.textMuted
+        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         font.pixelSize: Theme.fsSm
         font.underline: true
         ClickArea {
@@ -1638,6 +1641,7 @@ Item {
                     visible: !addColField.visible
                     text: "+ " + root.opt(I18n.t("settings.cols.add"))
                     color: addColMA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.pixelSize: Theme.fsMd
                     ClickArea { id: addColMA; label: parent.text; showTip: false; onActivated: addColField.visible = true }
                 }
@@ -2478,6 +2482,7 @@ Item {
                             text: I18n.t("settings.keys.reset").arg(String(keyRow.modelData.defaultSequence).length > 0
                                                                      ? AppController.keyText(keyRow.modelData.defaultSequence) : "—")
                             color: resetMA.hovered ? Theme.text : Theme.textDim
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             font.pixelSize: Theme.fsXs
                             elide: Text.ElideRight
                             ClickArea {
@@ -3587,6 +3592,7 @@ Item {
                         text: I18n.t("settings.data.wipeButton")
                         onActivated: wipeDialog.open()
                         Popup {
+                            PopupArrival { popup: wipeDialog }
                             id: wipeDialog
                             objectName: "settings-wipe-dialog"
                             modal: true
@@ -3934,6 +3940,7 @@ Item {
     // The guide (HelpContent) in a reader over the page: "С чего начать" and
     // Ctrl K "welcome.replay" open it.
     Popup {
+        PopupArrival { popup: helpReader }
         id: helpReader
         objectName: "settings-help-reader"
         parent: Overlay.overlay

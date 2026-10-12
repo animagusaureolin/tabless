@@ -12,6 +12,7 @@ import TodoCpp
 // program path) can start a program: the same dialog, with the warning and a
 // red "Open anyway". One dialog for every surface.
 QQC.Dialog {
+    PopupArrival { popup: root }
     id: root
     objectName: "mdLinkConfirm"
     property string link: ""

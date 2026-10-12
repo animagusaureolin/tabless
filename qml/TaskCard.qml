@@ -156,7 +156,10 @@ Rectangle {
                 // EYES-4): the light themes keep a hairline, dark ones none.
                 : Theme.cardBorder
     border.width: _isStuck && !dragArea.drag.active ? 2 : 1
-    opacity: dragArea.drag.active ? 1.0 : (_isArchived ? 0.7 : 1.0)
+    // A list's add/remove transitions fade this, not `opacity`, so the
+    // archived dim below keeps its binding through them (APP-175).
+    property real enterFade: 1
+    opacity: enterFade * (dragArea.drag.active ? 1.0 : (_isArchived ? 0.7 : 1.0))
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
     z: dragArea.drag.active ? 1000 : 0

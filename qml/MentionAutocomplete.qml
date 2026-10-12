@@ -19,6 +19,7 @@ import "Mention.js" as Mention
 // stable across renames and matches MdHighlighter's mention and
 // ticket rules.
 Popup {
+    PopupArrival { popup: ac; dialog: false }
     id: ac
 
     property Item target: null
@@ -228,6 +229,7 @@ Popup {
             height: Theme.px(30)
             radius: Theme.radiusSm
             color: acRow.on ? Theme.panel3 : (rowMA.containsMouse ? Theme.withAlpha(Theme.text, 0.04) : "transparent")
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             // A person: the name, the role on the right (sheet X-Dlg-Small).
             // A task: its id and title. The add row: one dim line.
             Text {

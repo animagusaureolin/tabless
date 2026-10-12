@@ -129,6 +129,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             text: act.text
             color: actArea.hovered ? Theme.text : Theme.textMuted
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             font.weight: Theme.fwTitle
@@ -185,6 +186,7 @@ Rectangle {
     // Type a label: Enter adds it to every selected card, Shift+Enter takes
     // it off them.
     Popup {
+        PopupArrival { popup: labelPopup; dialog: false }
         id: labelPopup
         objectName: "sel-label-popup"
         parent: bar

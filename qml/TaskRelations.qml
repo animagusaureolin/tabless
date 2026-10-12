@@ -123,6 +123,7 @@ ColumnLayout {
                 objectName: "task-doc-link-add-" + addLink.modelData
                 text: "+ " + I18n.t("local.link.add." + addLink.modelData)
                 color: addCA.hovered ? Theme.text : Theme.textDim
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
                 ClickArea {
@@ -183,6 +184,7 @@ ColumnLayout {
             textFormat: Text.PlainText
             elide: Text.ElideRight
             color: root._pick === sug.index || sugCA.hovered ? Theme.text : Theme.textMuted
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsXs
             ClickArea {

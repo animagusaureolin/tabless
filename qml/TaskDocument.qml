@@ -22,6 +22,10 @@ FocusScope {
     property bool full: false
     readonly property bool opened: root.taskId.length > 0
     visible: root.opened
+    // Slides in from the right edge (APP-175).
+    transform: [arrival.shift]
+    PanelArrival { id: arrival; target: root; shown: root.opened }
+    onFullChanged: arrival.replay()
 
     // Where to put the keyboard when it closes (the view asks back).
     signal closed(string taskId)
@@ -423,6 +427,7 @@ FocusScope {
                     objectName: "task-doc-crumbs-root"
                     text: I18n.t("sidebar.tasks")
                     color: crumbCA.hovered ? Theme.text : (root._quiet ? Theme.textMuted : Theme.text)
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
                     ClickArea { id: crumbCA; label: parent.text; onActivated: root.close() }
@@ -479,11 +484,13 @@ FocusScope {
                         anchors.fill: parent
                         radius: Theme.radiusSm
                         color: fullCA.hovered ? Theme.panel2 : "transparent"
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     }
                     Icon {
                         anchors.centerIn: parent
                         name: root.full ? "collapse" : "expand"
                         color: fullCA.hovered ? Theme.text : Theme.textMuted
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     }
                     ClickArea {
                         id: fullCA
@@ -679,6 +686,7 @@ FocusScope {
                     visible: !!(root._tv.priorityChanged || root._tv.dueChanged)
                     text: I18n.t("local.tracker.keepMine")
                     color: keepCA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
                     ClickArea { id: keepCA; label: parent.text; onActivated: AppController.acknowledgeTrackerChange(root.taskId) }
@@ -687,6 +695,7 @@ FocusScope {
                     objectName: "task-doc-reset-tracker"
                     text: I18n.t("local.tracker.reset")
                     color: resetCA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
                     ClickArea { id: resetCA; label: parent.text; onActivated: AppController.resetToTracker(root.taskId, "") }
@@ -746,6 +755,7 @@ FocusScope {
                     visible: body.text.trim().length > 0
                     text: I18n.t("local.notes.toNote")
                     color: toNoteCA.hovered ? Theme.text : Theme.textDim
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
                     ClickArea {
@@ -888,6 +898,7 @@ FocusScope {
                                 text: mention.modelData.title
                                 elide: Text.ElideRight
                                 color: noteCA.hovered ? Theme.text : (root._quiet ? Theme.textMuted : Theme.text)
+                                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                                 font.family: Theme.fontUi
                                 font.pixelSize: root._quiet ? Theme.fsMd : Theme.fsMd
                                 font.weight: root._quiet ? Theme.fwBody : Theme.fwTitle
@@ -981,6 +992,7 @@ FocusScope {
                         visible: root._quiet
                         text: root.task.isTiming ? I18n.t("taskdoc.pause").toLowerCase() : I18n.t("taskcard.startTimer").toLowerCase()
                         color: timerCA.hovered ? Theme.text : Theme.textDim
+                        Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsSm
                         font.underline: timerCA.hovered

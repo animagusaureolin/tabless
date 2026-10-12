@@ -5,6 +5,7 @@ import QtQuick.Controls.Basic
 import TodoCpp
 import "QueryWords.js" as QueryWords
 import "TaskDates.js" as TaskDates
+import "Motion.js" as Motion
 
 // Tasks → List (APP-263, sheets H2-List / Q-List): the tasks the query lets
 // through, one row each, in groups — by date (default: Overdue, Today,
@@ -49,6 +50,10 @@ Item {
     // a few thousand tasks costs a few dozen delegates.
     property var _all: []
     property var _rows: []
+    // Rows that were not on screen before the last rebuild fade in
+    // (APP-175); `_seen` is Motion.arrivals' memory, never a binding.
+    property var _fresh: ({})
+    readonly property var _seen: ({})
     property int taskCount: 0
 
     // Folded groups by groupId; "No date" is folded until opened. Kept in
@@ -104,6 +109,9 @@ Item {
             out.push(r);
         }
         const keep = list.contentY;
+        const ids = [];
+        for (let i = 0; i < out.length; i++) if (out[i].kind === "task") ids.push(out[i].id);
+        root._fresh = Motion.arrivals(root._seen, ids);
         root._rows = out;
         root.taskCount = n;
         list.contentY = Math.min(keep, Math.max(0, list.contentHeight - list.height));
@@ -276,6 +284,13 @@ Item {
                 readonly property var ticket: !row.isGroup && row.modelData.own !== false
                     ? (AppController.taskById(row.taskId).ticket || ({})) : ({})
                 width: list.width
+                function _arrive() {
+                    if (!row.isGroup && root._fresh[row.taskId]) { row.opacity = 0; rowFade.restart(); }
+                    else { rowFade.stop(); row.opacity = 1; }
+                }
+                Component.onCompleted: row._arrive()
+                ListView.onReused: row._arrive()
+                NumberAnimation { id: rowFade; target: row; property: "opacity"; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
                 height: row.isGroup ? groupHead.implicitHeight + (row.index === 0 ? Theme.spLg : Theme.sp2xl) + Theme.spMd
                                     : Theme.px(36)
 
@@ -370,6 +385,7 @@ Item {
                             StatusRing {
                                 id: ring
                                 visible: !taskRow.selected
+                                subject: row.taskId
                                 category: row.isGroup ? "todo" : (row.modelData.category || "todo")
                             }
                             // Selected: a check in a circle (form, not colour).
@@ -508,6 +524,7 @@ Item {
                             visible: root._archive
                             text: I18n.t("list.restore")
                             color: restoreCA.hovered ? Theme.text : Theme.textMuted
+                            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsSm
                             font.underline: restoreCA.hovered

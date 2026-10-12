@@ -523,6 +523,11 @@ QtObject {
     readonly property int durMoveOut: durMove / 2
     readonly property int easeEnter: Easing.OutQuint
     readonly property int easeExit:  Easing.InCubic
+    // Distances the moves cover, all 0 (or 1 for a scale) with "Reduce
+    // motion" on: a dialog grows in from just under its size, a side panel
+    // slides the last stretch in from the edge it lives on.
+    readonly property real dialogScaleFrom: 1 - 0.03 * motion
+    readonly property int  panelShift: Math.round(sp3xl * motion)
     // The one big move (APP-176): a task marked done folds into a bar where
     // its card stood, then lays itself on the stack over the Done column,
     // like a bar in the heap mark. One curve (easeEnter) for both halves;

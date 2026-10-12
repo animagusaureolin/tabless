@@ -78,4 +78,37 @@ TestCase {
         compare(findChild(bare, "empty-state-icon").visible, false);
         compare(findChild(bare, "empty-state-line").visible, false);
     }
+
+    // ── APP-175 motion pass ─────────────────────────────────────────────
+    function test_arrivals_first_call_only_remembers() {
+        const memo = {};
+        compare(Object.keys(Motion.arrivals(memo, ["a", "b"])).length, 0, "a list that opens fades nothing in");
+        const fresh = Motion.arrivals(memo, ["a", "b", "c"]);
+        compare(Object.keys(fresh), ["c"]);
+        compare(Object.keys(Motion.arrivals(memo, ["c"])).length, 0, "rows that left are not arrivals");
+        compare(Object.keys(Motion.arrivals(memo, ["c", "a"])), ["a"], "a row back after leaving arrives again");
+    }
+
+    function test_motion_distances_vanish_with_reduced_motion() {
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: false } });
+        const on = [Theme.dialogScaleFrom, Theme.panelShift];
+        AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: true } });
+        const off = [Theme.dialogScaleFrom, Theme.panelShift];
+        AppController.appSettingsJson = saved;
+        verify(on[0] < 1 && on[0] > 0.9, "a dialog grows in from just under its size");
+        verify(on[1] > 0, "a panel slides the last stretch in");
+        compare(off, [1, 0]);
+    }
+
+    function test_status_ring_pops_only_for_the_same_task() {
+        const r = createTemporaryQmlObject('import TodoCpp; StatusRing { subject: "t1"; category: "todo" }', host);
+        r.category = "done";
+        tryCompare(r, "popping", Theme.motion > 0);
+        r.category = "todo";
+        wait(Theme.durTap + Theme.durPop + 50);
+        r.subject = "t2"; r.category = "done";   // a pooled row handed another task
+        wait(0);
+        compare(r.popping, false);
+    }
 }

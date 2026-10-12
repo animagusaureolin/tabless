@@ -17,6 +17,7 @@ import TodoCpp
 //   SyncConflictDialog { id: conflictDlg }
 //   conflictDlg.showFor(task)   // task: the card's task map, with `ticket`
 Popup {
+    PopupArrival { popup: root }
     id: root
     objectName: "sync-conflict"
     modal: true
