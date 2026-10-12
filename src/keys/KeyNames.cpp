@@ -430,6 +430,11 @@ QString commonReason(const QString& portable) {
   return kCtrl.value(c.key);
 }
 
+bool isCursorMove(const QString& id) {
+  return id.startsWith(QLatin1String("board.cursor")) || id.startsWith(QLatin1String("cursor.")) || id.startsWith(QLatin1String("nav.")) ||
+         id.startsWith(QLatin1String("region."));
+}
+
 bool isRepeatableAction(const QString& id) {
   // A bare u is undone once per press (IDIOT-TASKS-4); Ctrl+Z repeats as
   // every editor's does.

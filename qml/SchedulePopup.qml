@@ -37,12 +37,15 @@ Popup {
     }
 
     readonly property var _noWords: ["нет", "no", "none", "-", "—", "убрать", "clear"]
+    // Parked for later from s (A1-15): the plan date goes, "someday" is set.
+    readonly property var _somedayWords: ["когда-нибудь", "когданибудь", "someday", "отложить"]
     function _valid(d) { return !!d && !!d.getTime && !isNaN(d.getTime()); }
     // { state: "empty" | "clear" | "unknown" | "ok", when, timed }
     function read(raw) {
         const s = String(raw || "").trim();
         if (s.length === 0) return { state: "empty" };
         if (root._noWords.indexOf(s.toLowerCase()) >= 0) return { state: "clear" };
+        if (!root.due && root._somedayWords.indexOf(s.toLowerCase()) >= 0) return { state: "someday" };
         const p = AppController.captureParse("x " + s, new Date(), []);
         let when = root.due ? p.due : p.when;
         let timed = root.due ? p.dueHasTime : p.whenHasTime;
@@ -84,8 +87,25 @@ Popup {
     readonly property string _clashWith: root.parsed.state === "ok" && root.parsed.timed && !root.due
                                          ? root._clash(root.parsed.when, root._minutes) : ""
     readonly property var _free: root._clashWith.length > 0 ? root.nearestFree(root.parsed.when, root._minutes) : null
+    // Whether a read date is already over at `now`: a time before now, or a
+    // day before today. Said, never refused (A1-20).
+    function isPast(p, at) {
+        if (!p || p.state !== "ok") return false;
+        const when = new Date(p.when);
+        const now = new Date(at);
+        if (p.timed) return when.getTime() < now.getTime();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const day = new Date(when.getFullYear(), when.getMonth(), when.getDate());
+        return day.getTime() < today.getTime();
+    }
+    readonly property bool _past: root.isPast(root.parsed, new Date())
     function resultText() {
+        const out = root._resultBase();
+        return root._past ? out + " · " + I18n.t("schedule.inPast") : out;
+    }
+    function _resultBase() {
         const p = root.parsed;
+        if (p.state === "someday") return I18n.t("carry.someday");
         if (p.state === "empty") return root.due ? I18n.t("schedule.hint.due") : I18n.t("schedule.hint.when");
         if (p.state === "clear") return root.due ? I18n.t("schedule.clear.due") : I18n.t("schedule.clear.when");
         if (p.state === "unknown") return I18n.t("schedule.unknown");
@@ -104,6 +124,11 @@ Popup {
     // Sets it, for every task; nothing is sent anywhere.
     function apply() {
         const p = root.parsed;
+        if (p.state === "someday") {
+            AppController.carryTasks(root.taskIds, "someday");
+            root.close();
+            return true;
+        }
         if (p.state !== "ok" && p.state !== "clear") return false;
         for (let i = 0; i < root.taskIds.length; i++) {
             if (p.state === "clear") AppController.clearTaskDate(root.taskIds[i], root.field);
@@ -181,7 +206,7 @@ Popup {
             // red; quiet keeps them in text and grey (R3-069).
             color: root.parsed.state === "unknown" ? (Style.urgency ? Theme.danger : Theme.textMuted)
                  : root.parsed.state === "empty" ? Theme.textMuted
-                 : root._clashWith.length > 0 ? (Style.urgency ? Theme.warning : Theme.text) : Theme.text
+                 : root._clashWith.length > 0 || root._past ? (Style.urgency ? Theme.warning : Theme.text) : Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSm
         }

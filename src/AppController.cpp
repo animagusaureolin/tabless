@@ -361,6 +361,13 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"carry.many", {"%1 tasks", "Задач: %1"}},
       {"carry.windows", {"the nearest free windows", "ближайшие свободные окна"}},
       {"carry.noWindow", {"no free window in the next two weeks", "нет свободного окна в ближайшие две недели"}},
+      {"carry.clearDue", {"%1: deadline removed", "%1: срок снят"}},
+      {"carry.dueStays",
+       {"%1 still overdue: the deadline stays (Shift S changes it)", "%1 всё ещё просрочено: срок остаётся (Shift S меняет его)"}},
+      {"carry.nothingDue",
+       {"Nothing to carry: these tasks have a deadline, not a plan date. Shift S changes the deadline",
+        "Нечего переносить: у этих задач срок, а не дата плана. Shift S меняет срок"}},
+      {"carry.nothing", {"Nothing to carry", "Нечего переносить"}},
       {"undo.timer", {"Timer change undone: %1", "Изменение таймера отменено: %1"}},
       {"undo.snooze", {"Snooze undone: %1", "Откладывание отменено: %1"}},
       {"undo.bulkEdit", {"Change undone for %1 task(s)", "Изменение отменено для задач: %1"}},
@@ -6974,13 +6981,20 @@ int AppController::carryTasksAt(const QStringList& ids, const QString& mode, con
   const bool window = mode == QLatin1String("window");
   const bool someday = mode == QLatin1String("someday");
   const bool clear = mode == QLatin1String("clear");
-  if(!tomorrow && !window && !someday && !clear) {
+  // The deadline, only when asked for by name (A5-8): carrying moves the
+  // plan date and never touches a deadline the person set.
+  const bool clearDue = mode == QLatin1String("clearDue");
+  if(!tomorrow && !window && !someday && !clear && !clearDue) {
     return 0;
   }
   const QDate today = now.date();
   UndoScope scope(this, tr_("undo.carry"));
   int changed = 0;
   int missing = 0;
+  // Carried, yet still overdue by their deadline: the toast says so, as the
+  // count on Today does not go down (A5-8).
+  int stillOverdue = 0;
+  int withDue = 0;
   QString lastId;
   QString lastWhere;
   for(const QString& id : ids) {
@@ -6990,6 +7004,21 @@ int AppController::carryTasksAt(const QStringList& ids, const QString& mode, con
     }
     Task t = m_tasks.items().at(row);
     if(t.archived) {
+      continue;
+    }
+    if(heap::local::effectiveDueAt(t).isValid()) {
+      ++withDue;
+    }
+    if(clearDue) {
+      // A tracker card's deadline is the tracker's: only a local task's goes.
+      if(!t.dueAt.isValid() || !t.externalId.isEmpty()) {
+        continue;
+      }
+      t.dueAt = QDateTime();
+      t.dueHasTime = false;
+      m_tasks.upsert(t);
+      ++changed;
+      lastId = t.id;
       continue;
     }
     const QDateTime was = t.scheduledAt;
@@ -7039,14 +7068,24 @@ int AppController::carryTasksAt(const QStringList& ids, const QString& mode, con
     if(t.scheduledHasTime && wasTimed) {
       moveLinkedFocusBlocks(t.id, was, t.scheduledAt);
     }
+    const QDateTime due = heap::local::effectiveDueAt(t);
+    if(due.isValid() && due.date() < today && statusCategory(t.status) != QLatin1String("done")) {
+      ++stillOverdue;
+    }
     ++changed;
     lastId = t.id;
     lastWhere = t.scheduledHasTime ? dateTimeLabel(t.scheduledAt, QStringLiteral("weekdayDay")) : QString();
   }
   if(changed == 0) {
     scope.abandon();
+    // Nothing moved is said too: "clear date" on tasks that only have a
+    // deadline did nothing and said nothing (A5-8).
     if(missing > 0) {
       emit toast(tr_("carry.noWindow"), QStringLiteral("info"));
+    } else if(withDue > 0 && !clearDue) {
+      emit toast(tr_("carry.nothingDue"), QStringLiteral("info"));
+    } else {
+      emit toast(tr_("carry.nothing"), QStringLiteral("info"));
     }
     return 0;
   }
@@ -7058,11 +7097,16 @@ int AppController::carryTasksAt(const QStringList& ids, const QString& mode, con
     msg = tr_("carry.window").arg(who, changed == 1 ? lastWhere : tr_("carry.windows"));
   } else if(someday) {
     msg = tr_("carry.someday").arg(who);
+  } else if(clearDue) {
+    msg = tr_("carry.clearDue").arg(who);
   } else {
     msg = tr_("carry.clear").arg(who);
   }
   if(missing > 0) {
     msg += QStringLiteral(" · ") + tr_("carry.noWindow");
+  }
+  if(stillOverdue > 0) {
+    msg += QStringLiteral(" · ") + tr_("carry.dueStays").arg(stillOverdue);
   }
   emit undoableToast(msg, 6);
   scheduleSave();

@@ -182,6 +182,18 @@ Item {
     function dropUndo() {
         let changed = false;
         const strip = function (e) {
+            if (e.undo && e.undoSlot === 1 && e.action2Label) {
+                e.action2Label = "";
+                e.action2Fn = null;
+                changed = true;
+                return;
+            }
+            if (e.undo && e.undoSlot === 2 && e.action3Label) {
+                e.action3Label = "";
+                e.action3Fn = null;
+                changed = true;
+                return;
+            }
             if (!e.undo || !e.actionLabel) return;
             e.actionLabel = "";
             e.actionFn = null;
@@ -196,10 +208,14 @@ Item {
     // tracker" / "Archive" for a refused move (APP-204); open / in 15 min /
     // next free window on a task block's start (APP-256). Same look, same
     // clock: an action keeps it up at least ToastTiming.ACTION_MS.
-    function showWithActions(s, actions, seconds, k) {
+    // `undoSlot`: the index of the action that is an Undo of the newest
+    // action, if any: a newer Undo replaces the toast rather than waiting
+    // behind it (A2-28), and a lost history drops that action only.
+    function showWithActions(s, actions, seconds, k, undoSlot) {
         const a = actions || [];
         const label = a.length > 0 ? String(a[0].label) : "";
-        _push({ id: ++_seq, message: String(s), kind: k || "info",
+        const slot = typeof undoSlot === "number" && undoSlot >= 0 && undoSlot < a.length ? undoSlot : -1;
+        _push({ id: ++_seq, message: String(s), kind: k || "info", undo: slot >= 0, undoSlot: slot,
                 actionLabel: label, actionFn: a.length > 0 ? a[0].fn : null,
                 action2Label: a.length > 1 ? String(a[1].label) : "", action2Fn: a.length > 1 ? a[1].fn : null,
                 action3Label: a.length > 2 ? String(a[2].label) : "", action3Fn: a.length > 2 ? a[2].fn : null,
