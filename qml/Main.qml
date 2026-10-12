@@ -97,6 +97,12 @@ ApplicationWindow {
     }
 
     // The same link rules outside Notes: a doc page's [[note]] opens the note.
+    // "New task" inside the app opens the full ticket editor (APP-286);
+    // the one-line quick capture stays on its own hotkey, the tray and --capture.
+    function newTask(statusId) {
+        taskEditor.showFor(AppController.newTaskDraft(statusId || ""));
+    }
+
     function followMdLink(kind, target) {
         if (kind === "task") { win.openTaskById(target); return; }
         if (kind === "person") {
@@ -1076,7 +1082,7 @@ ApplicationWindow {
                 return !!t && t.firstRun;
             }
             onToggleRequested: win.toggleSideRail()
-            onNewTaskRequested: quickCapture.open()
+            onNewTaskRequested: win.newTask("")
             // Every source and how it is doing (R2-048).
             onSyncStatusRequested: syncPopover.openAt(rail.profileSwitcher)
             onTimerTaskRequested: (id) => win.showTask(AppController.taskById(id))
@@ -1327,6 +1333,7 @@ ApplicationWindow {
                         function onCreateRequested(startHour, endHour, day) { win.createEventAt(startHour, endHour, day); }
                         function onTaskClicked(id) { win.openTask(id); }
                         function onUndatedRequested() { win.showQuery("is:undated", "list"); }
+                        function onOverdueRequested() { win.showQuery("due:overdue", "list"); }
                         function onRecapRequested() { win.runCommand("recap.open"); }
                         // The first-run screen (APP-271).
                         function onFirstTaskCreated(id) { win.notice(quickCapture.headline(id)); }
@@ -1335,7 +1342,7 @@ ApplicationWindow {
                         function onExampleRequested() { win.openExample(); }
                         function onPeopleRequested(id) { peopleDialog.showFor(id); }
                         function onPersonEditRequested(id) { personEditor.showFor(AppController.personById(id)); }
-                        function onPersonAddRequested() { personEditor.showFor(AppController.newPersonDraft()); }
+                        function onPersonAddRequested() { personPicker.open_(); }
                     }
 
                     // First visit to one of the kept-alive views builds it.
@@ -1438,7 +1445,7 @@ ApplicationWindow {
                         showArchived: win.tasksShowArchived
                         sortMode: win.boardSortMode
                         onTaskClicked: (id) => win.showTask(AppController.taskById(id))
-                        onCreateInStatus: (s) => quickCapture.openIn(s)
+                        onCreateInStatus: (s) => win.newTask(s)
                         onResetFilterRequested: win.resetTaskFilter()
                     }
                 }
@@ -1927,7 +1934,7 @@ ApplicationWindow {
             return;
         }
         switch (id) {
-        case "task.new":             quickCapture.open(); break;
+        case "task.new":             win.newTask(""); break;
         case "task.done":            win.markDone(); break;
         case "task.schedule":        win.scheduleKeyTasks(); break;
         case "quick-capture":        quickCapture.open(); break;
@@ -1935,7 +1942,7 @@ ApplicationWindow {
         case "people.open":          peopleDialog.showFor(""); break;
         case "rail.toggle":          win.toggleSideRail(); break;
         case "theme.toggle":         AppController.theme = (Theme.slot === "dark" ? "light" : "dark"); break;
-        case "person.new":           personEditor.showFor(AppController.newPersonDraft()); break;
+        case "person.new":           personPicker.open_(); break;
         case "profile.new":          profileEditor.showCreate(); break;
         case "profile.next":         win._cycleProfile(1); break;
         case "profile.prev":         win._cycleProfile(-1); break;
@@ -2472,7 +2479,7 @@ ApplicationWindow {
         sequence: _kbd("task.new")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: quickCapture.open()
+        onActivated: win.newTask("")
     }
     Shortcut {
         sequence: _kbd("quick-capture")
@@ -2562,7 +2569,7 @@ ApplicationWindow {
         sequence: _kbd("person.new")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: personEditor.showFor(AppController.newPersonDraft())
+        onActivated: personPicker.open_()
     }
     Shortcut {
         sequence: _kbd("profile.new")
