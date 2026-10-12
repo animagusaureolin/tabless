@@ -412,6 +412,11 @@ TEST(ExtractMeta, TicketKeyLeavesTheTitle) {
   EXPECT_EQ(m.title, QStringLiteral("починить логин"));
   // Lower-case words with a dash and digits are not tickets.
   EXPECT_TRUE(extractMeta(QStringLiteral("обновить utf-8 и covid-19")).ticketKey.isEmpty());
+  // A6-6: a zone offset said with a time is not a ticket.
+  const auto z = extractMeta(QStringLiteral("call tue 15:00 UTC-5"));
+  EXPECT_TRUE(z.ticketKey.isEmpty());
+  EXPECT_EQ(z.title, QStringLiteral("call tue 15:00 UTC-5"));
+  EXPECT_TRUE(extractMeta(QStringLiteral("call 15:00 GMT-05:00")).ticketKey.isEmpty());
 }
 
 TEST(ExtractMeta, Priority) {
@@ -424,6 +429,11 @@ TEST(ExtractMeta, Priority) {
   // "не срочно" is not "срочно".
   EXPECT_EQ(extractMeta(QStringLiteral("не срочно: почистить логи")).priority, QStringLiteral("P3"));
   EXPECT_TRUE(extractMeta(QStringLiteral("купить хлеб")).priority.isEmpty());
+  // Todoist's "p4" is the lowest (A5-4); "з1" is "p1" in the Russian layout (A4-21).
+  EXPECT_EQ(extractMeta(QStringLiteral("buy milk p4")).priority, QStringLiteral("P3"));
+  EXPECT_EQ(extractMeta(QStringLiteral("buy milk p4")).title, QStringLiteral("buy milk"));
+  EXPECT_EQ(extractMeta(QString::fromUtf8("з1 починить прод")).priority, QStringLiteral("P1"));
+  EXPECT_EQ(extractMeta(QString::fromUtf8("з1 починить прод")).title, QString::fromUtf8("починить прод"));
 }
 
 // ─── The audit's TASKS-13: capture understands priority and labels ───

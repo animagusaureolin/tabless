@@ -11,14 +11,18 @@ Tweaks — are not checked).
 | Tasks | Задачи | The section with the board, list and calendar | tickets, cards (in UI copy) |
 | Task | Задача | One item, local or from a tracker | ticket, card, issue |
 | Task document | Задача-документ | A task opened as a full page | task editor, details |
-| Knowledge | Знания | Notes, pinned references, pages and snippets in one section | Docs + Notes |
-| Pinned | Закреплено | References (RFC, API links with a tag) on top of Knowledge | Reference, Справочник |
+| Notes | Заметки | The notes section (Ctrl 3, g n) | Knowledge, Знания |
+| Docs | Доки | Pinned references, pages and snippets | Knowledge, Знания |
+| Pinned | Закреплено | References (RFC, API links with a tag) on top of Docs | Reference, Справочник |
+| Due (date) | Срок | When a task must be done by | deadline, дедлайн |
+| Backup | Резервная копия | A copy of the data in the backups folder | бэкап |
+| Time machine | Машина времени | Hourly snapshots in the history folder | backup |
 | My views | Мои виды | Saved task queries in the sidebar | saved filters |
 | Save as view | Сохранить как вид | Saving the current query | Save view, Сохранить вид |
 | Column stage | Этап колонки | What a column means: todo / in progress / done… | status category |
 | Command line | Командная строка | Ctrl K: find anything, run any command | palette, палитра |
 | Style: Quiet / Bold / Custom | Стиль: Тихий / Насыщенный / Свой | The look of the app | theme preset |
-| Appearance (Settings) | Внешний вид (Настройки) | Where Tweaks went | Tweaks, Твики |
+| Appearance (Settings) | Внешний вид (Настройки) | Theme, colours, density, style, scale | Tweaks, Твики |
 | Only yours | Только у вас | Data that never leaves this computer | private, local-only |
 | Profile | Профиль | A set of tasks with its own trackers and statuses | project, workspace |
 

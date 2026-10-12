@@ -188,6 +188,54 @@ TestCase {
         AppController.deleteEvent(ev.id);
     }
 
+    // "9am-5pm" keeps each end's am/pm (A6-1), and "22:00-01:00" ends the
+    // next morning instead of being cut to the old length (A6-2).
+    function test_when_ranges_across_meridiem_and_midnight() {
+        const day = new Date();
+        day.setDate(day.getDate() + 431);
+        day.setHours(0, 0, 0, 0);
+        const ev = AppController.newEventDraft(22, day);
+        ev.title = "late sync probe";
+        ev.end = 23;
+        ev.date = day;
+        AppController.saveEvent(ev);
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.showForId(ev.id);
+        compare(ed.applyWhen("9am-5pm"), "");
+        compare(ed.startHour, 9);
+        compare(ed.endHour, 17);
+        compare(ed.applyWhen("11am-1pm"), "");
+        compare(ed.startHour, 11);
+        compare(ed.endHour, 13);
+        compare(ed.applyWhen("22:00-01:00"), "");
+        compare(ed.startHour, 22);
+        compare(ed.endHour, 1);
+        compare(ed._spanDays(), 1, "the meeting ends the next day");
+        const saved = AppController.eventById(ev.id);
+        compare(saved.start, 22);
+        compare(saved.end, 1);
+        compare(Qt.formatDate(saved.endDate, "yyyy-MM-dd"),
+                Qt.formatDate(new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1), "yyyy-MM-dd"));
+        // REG-2: a lone time keeps the 3 h across midnight; a same-day range
+        // typed after it is one morning again, not a 25-hour meeting.
+        compare(ed.applyWhen("23:00"), "");
+        compare(ed.startHour, 23);
+        compare(ed.endHour, 2);
+        compare(ed._spanDays(), 1);
+        compare(ed.applyWhen("10:00-11:30"), "");
+        compare(ed.startHour, 10);
+        compare(ed.endHour, 11.5);
+        compare(ed._spanDays(), 0, "the overnight end does not stick");
+        const oneDay = AppController.eventById(ev.id).endDate;
+        verify(!oneDay || !oneDay.getFullYear || Qt.formatDate(oneDay, "yyyy-MM-dd") === Qt.formatDate(day, "yyyy-MM-dd"),
+               "the saved meeting ends on its own day");
+        compare(ed.applyWhen("9:00"), "");
+        compare(ed.endHour, 10.5);
+        compare(ed._spanDays(), 0);
+        ed.close();
+        AppController.deleteEvent(ev.id);
+    }
+
     // The words of a rule, and what the one-line input takes out first.
     function test_rule_words() {
         const fri = new Date(2026, 9, 9);

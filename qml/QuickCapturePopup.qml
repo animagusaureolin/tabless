@@ -276,8 +276,8 @@ Popup {
         if (summary) root.captured(summary.title, summary.body, summary.taskId || "");
     }
 
-    // Ctrl+Enter adds and closes; Ctrl+Shift+Enter adds and stays open for
-    // the next one. Enter and Shift+Enter start a new line (APP-209): the
+    // Enter (and Ctrl+Enter) adds and closes; Ctrl+Shift+Enter adds and stays
+    // open for the next one. Shift+Enter starts a new line (APP-266): the
     // lines after the first are the task's description.
     function _submitFromKey(keep) {
         root.keepOpen = keep;
@@ -672,6 +672,15 @@ Popup {
 
                 Keys.onPressed: (e) => {
                     const enter = e.key === Qt.Key_Return || e.key === Qt.Key_Enter;
+                    // Ctrl M: "also a meeting" from the keyboard; the chip was
+                    // mouse-only and Tab leaves for the document (A2-14).
+                    if (e.key === Qt.Key_M && (e.modifiers & Qt.ControlModifier) && !(e.modifiers & Qt.ShiftModifier)) {
+                        e.accepted = true;
+                        root._refreshPreview();
+                        if (meetingBox.visible) meetingBox.checked = !meetingBox.checked;
+                        else root._hint = I18n.t("capture.meeting.needTime");
+                        return;
+                    }
                     if (at.isOpen) {
                         if (e.key === Qt.Key_Down) {
                             at.moveSelection(+1);
@@ -778,7 +787,11 @@ Popup {
                 small: false
                 removable: true
                 key: I18n.t("capture.when")
+                // The end of a range said with it ("23:00-01:00"), too.
+                readonly property bool _hasEnd: visible && root._preview.hasTime && !!root._preview.end
+                                                && !!root._preview.end.getTime && !isNaN(root._preview.end.getTime())
                 value: visible ? root._chipWhen(root._preview.start, root._preview.hasTime)
+                                 + (_hasEnd ? "–" + I18n.fmtTime(root._preview.end) : "")
                                  + (root._preview.whenPast ? " · " + I18n.t("capture.past") : "") : ""
                 valueColor: visible && root._preview.whenPast ? Theme.textDim : Theme.text
                 onRemoved: root.rejectSpan("when")
@@ -795,6 +808,16 @@ Popup {
                                  + (root._preview.duePast ? " · " + I18n.t("capture.past") : "") : ""
                 valueColor: visible && root._preview.duePast ? Theme.textDim : Theme.text
                 onRemoved: root.rejectSpan("due")
+            }
+            // A repeat said in the line, before Enter (A2-21): "каждый
+            // понедельник" read the same as a one-off "в понедельник".
+            PropertyChip {
+                outlined: true
+                objectName: "qc-repeat"
+                visible: !!(root._parsed && root._parsed.recurrence)
+                small: false
+                key: I18n.t("capture.repeat")
+                value: visible ? root._recurLabel(root._parsed.recurrence) : ""
             }
             PropertyChip {
                 outlined: true
@@ -936,7 +959,15 @@ Popup {
                 Layout.fillWidth: true
                 spacing: Theme.sp2xl
                 Repeater {
-                    model: I18n.t("capture.hints").split(" · ")
+                    // Tab (the document) and Ctrl M (a meeting) are said where
+                    // they work: Tab opened the document unannounced (A2-14).
+                    model: {
+                        const keys = I18n.t("capture.hints").split(" · ");
+                        const extra = [];
+                        if (meetingBox.visible) extra.push(I18n.t("capture.hint.meeting"));
+                        if (!root.standalone) extra.push(I18n.t("capture.hint.tab"));
+                        return keys.slice(0, keys.length - 1).concat(extra).concat(keys.slice(keys.length - 1));
+                    }
                     delegate: Text {
                         required property string modelData
                         text: modelData

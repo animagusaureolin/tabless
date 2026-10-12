@@ -57,8 +57,8 @@ expect_ok(--version)
 # APP-161: the opt-in timing flag is a known option.
 expect_ok(--perf-log --version)
 
-expect_refused("unexpected argument 'positional_arg'" positional_arg)
-expect_refused("unexpected argument 'board'" board)
+expect_refused("unknown command 'positional_arg'" positional_arg)
+expect_refused("unknown command 'board'" board)
 expect_refused("unexpected argument 'extra'" --view board extra)
 expect_refused("unexpected argument 'C:/tmp/dd'" --data-dir "${WORK_DIR}" C:/tmp/dd)
 # APP-171: --capture is an option heap knows (bound to a desktop shortcut).

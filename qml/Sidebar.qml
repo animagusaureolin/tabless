@@ -448,9 +448,10 @@ Rectangle {
         // Empty, bold shows the head and "Появятся, когда сохраните фильтр";
         // quiet shows no block at all (H2-First / Q-First, R2-058).
         // Folded shows only the sections (N/X-Oth-Small, R3-015); the views
-        // stay on their Alt keys and in Ctrl K.
+        // stay on their Alt keys and in Ctrl K. On the first run the empty
+        // head goes with its empty line: a bare heading over nothing.
         Item {
-            visible: root.expanded && (root._savedViews.length > 0 || !Style.plainRows)
+            visible: root.expanded && (root._savedViews.length > 0 || (!Style.plainRows && AppController.welcomeSeen))
             Layout.fillWidth: true
             Layout.topMargin: Theme.spLg
             Layout.preferredHeight: viewsHead.implicitHeight + Theme.spXs
@@ -469,7 +470,9 @@ Rectangle {
         }
         Text {
             objectName: "sidebar-views-empty"
-            visible: root._savedViews.length === 0 && root.expanded && !Style.plainRows
+            // Not on the first run, next to the hero: no explainer for a
+            // feature not used yet (EYES-3).
+            visible: root._savedViews.length === 0 && root.expanded && !Style.plainRows && AppController.welcomeSeen
             Layout.fillWidth: true
             Layout.leftMargin: Theme.spMd
             text: I18n.t("sidebar.myViews.empty")

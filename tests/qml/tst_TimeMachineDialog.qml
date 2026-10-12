@@ -93,4 +93,21 @@ TestCase {
         verify(findChild(d.contentItem, "time-machine-snap-0") !== null);
         d.close();
     }
+
+    // A5-12: each row says what a restore would change, and the list opens on
+    // the newest snapshot that differs from now, not on "no changes".
+    function test_rows_say_the_difference_from_now() {
+        const d = make();
+        d._now = { tasks: 360, notes: 4 };
+        compare(d.deltaText({ tasks: 375, notes: 4 }), "+15");
+        compare(d.deltaText({ tasks: 330, notes: 4 }), "−30");
+        compare(d.deltaText({ tasks: 360, notes: 4 }), "");
+        verify(!d._differs({ tasks: 360, notes: 4 }));
+        verify(d._differs({ tasks: 360, notes: 5 }));
+        // reload() counts what is there now, in every profile.
+        let t = 0;
+        for (const p of AppController.profiles) t += p.tasks || 0;
+        compare(d._nowCounts().tasks, t);
+    }
 }
+
