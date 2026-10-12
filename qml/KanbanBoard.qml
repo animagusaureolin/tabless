@@ -146,7 +146,7 @@ Item {
     // One of the board's own dialogs or menus is up (new column, WIP limit,
     // delete confirmation, a card menu). Main.qml keeps Ctrl+Z from acting
     // on the board behind it.
-    readonly property bool dialogOpen: cardMenuOpen || wipPopup.opened || archivePopup.opened
+    readonly property bool dialogOpen: cardMenuOpen || wipPopup.opened || archivePopup.opened || addColumnPopup.opened
                                        || confirmDelete.opened || colorPopup.opened
 
     // One source of truth for the column width. focusColumn() scrolls by
@@ -1350,6 +1350,7 @@ Item {
                                     text: I18n.t("colmenu.header").arg(col.statusName) + " · " + I18n.count(col.shownCount, "list.tasks")
                                 }
                                 AppMenuItem { objectName: "col-menu-new"; text: I18n.t("colmenu.newTask"); shortcutId: "task.newBelow"; onTriggered: root.createInStatus(col.statusId) }
+                                AppMenuItem { objectName: "col-menu-new-column"; text: I18n.t("kanban.newColumn") + "…"; onTriggered: addColumnPopup.openAfter(col.index) }
                                 AppMenuItem { objectName: "col-menu-rename"; text: I18n.t("kanban.rename"); keyText: "F2"; onTriggered: col.startRename() }
                                 AppMenuItem {
                                     objectName: "col-menu-stage"
@@ -1754,6 +1755,26 @@ Item {
                 }
             }
 
+            // "+ column" at the end of the row (APP-289): columns are made on
+            // the board itself, not only in Settings → Tasks.
+            Rectangle {
+                id: addColTile
+                width: Theme.chipH
+                height: Theme.chipH
+                y: (Theme.px(38) - height) / 2
+                radius: Theme.radiusMd
+                color: addColCA.hovered || addColCA.keyboardFocused ? Theme.panel2 : "transparent"
+                PlusGlyph {
+                    anchors.centerIn: parent
+                    color: addColCA.hovered || addColCA.keyboardFocused ? Theme.text : Theme.textDim
+                }
+                ClickArea {
+                    id: addColCA
+                    objectName: "board-add-column"
+                    label: I18n.t("kanban.newColumn")
+                    onActivated: addColumnPopup.openAfter(-1)
+                }
+            }
         }
     }
 
@@ -2202,6 +2223,97 @@ Item {
                 onClicked: confirmDelete.deleteNow()
             }
         ]
+    }
+
+    // ── New column (APP-289) ──────────────────────────────────────────
+    // From the "+" tile it goes last; from a column's menu, right of it.
+    QQC.Dialog {
+        PopupArrival { popup: addColumnPopup }
+        id: addColumnPopup
+        objectName: "add-column-popup"
+        property int afterIndex: -1
+        readonly property var swatches: Theme.swatches
+        property color picked: swatches[0]
+
+        function openAfter(index) {
+            addColumnPopup.afterIndex = index;
+            addColumnPopup.picked = addColumnPopup.swatches[0];
+            addColNameField.text = "";
+            addColumnPopup.open();
+            addColNameField.forceActiveFocus();
+        }
+
+        modal: true
+        Overlay.modal: ModalScrim {}
+        anchors.centerIn: Overlay.overlay
+        parent: Overlay.overlay
+        padding: Theme.inset
+        title: I18n.t("kanban.newColumn")
+
+        background: ModalSurface {}
+
+        function commit() {
+            const n = addColNameField.text.trim();
+            if (n.length === 0) return;
+            const before = AppController.statuses.length;
+            AppController.addStatus(n, String(addColumnPopup.picked));
+            const list = AppController.statuses;
+            // A taken name adds nothing; the dialog stays for another name.
+            if (list.length === before) return;
+            if (addColumnPopup.afterIndex >= 0 && addColumnPopup.afterIndex + 1 < list.length - 1)
+                AppController.moveStatus(list[list.length - 1].id, addColumnPopup.afterIndex + 1);
+            addColumnPopup.close();
+        }
+
+        contentItem: ColumnLayout {
+            spacing: Theme.spMd
+            TextField {
+                id: addColNameField
+                ContextMenu.menu: TextEditMenu { editor: addColNameField }
+                objectName: "add-column-name"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 280
+                maximumLength: 60
+                placeholderText: I18n.t("kanban.colName.ph")
+                color: Theme.text
+                placeholderTextColor: Theme.textDim
+                font.family: Theme.fontUi
+                background: FieldFrame {}
+                onAccepted: addColumnPopup.commit()
+            }
+            Row {
+                spacing: Theme.spSm
+                Repeater {
+                    model: addColumnPopup.swatches
+                    delegate: Rectangle {
+                        id: newSwatch
+                        required property string modelData
+                        required property int index
+                        readonly property bool isPicked: String(addColumnPopup.picked).toLowerCase() === modelData.toLowerCase()
+                        width: Theme.px(22); height: width; radius: width / 2
+                        color: modelData
+                        border.color: newSwatch.isPicked ? Theme.text : Theme.border
+                        border.width: 2
+                        ClickArea {
+                            label: I18n.t("kanban.swatch").arg(newSwatch.index + 1)
+                            showTip: false
+                            role: Accessible.RadioButton
+                            checkable: true
+                            checked: newSwatch.isPicked
+                            onActivated: addColumnPopup.picked = newSwatch.modelData
+                        }
+                    }
+                }
+            }
+        }
+
+        footer: RowLayout {
+            spacing: Theme.spMd
+            Item { Layout.fillWidth: true }
+            PillButton { text: I18n.t("common.cancel"); onClicked: addColumnPopup.close() }
+            PillButton { objectName: "add-column-create"; text: I18n.t("kanban.create"); primary: true; onClicked: addColumnPopup.commit() }
+            Item { Layout.preferredWidth: 10 }
+        }
     }
 
     // ── Work-in-progress limit ────────────────────────────────────────
