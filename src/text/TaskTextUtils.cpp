@@ -99,12 +99,14 @@ struct PriorityWord {
   const char* priority;
 };
 
-// "не срочно" is listed before "срочно", which it contains.
+// "не срочно" is listed before "срочно", which it contains. Todoist's lowest,
+// "p4", is our lowest (A5-4); "з1" is "p1" typed in the Russian layout (A4-21).
 constexpr PriorityWord kPriorityWords[] = {
     {"не срочно", "P3"}, {"несрочно", "P3"},     {"критично", "P0"}, {"критичный", "P0"}, {"критичная", "P0"}, {"блокер", "P0"},
     {"critical", "P0"},  {"blocker", "P0"},      {"p0", "P0"},       {"!!!", "P0"},       {"срочно", "P1"},    {"срочная", "P1"},
     {"срочный", "P1"},   {"горит", "P1"},        {"urgent", "P1"},   {"asap", "P1"},      {"p1", "P1"},        {"!!", "P1"},
-    {"p2", "P2"},        {"low priority", "P3"}, {"p3", "P3"},
+    {"p2", "P2"},        {"low priority", "P3"}, {"p3", "P3"},       {"p4", "P3"},        {"з0", "P0"},        {"з1", "P1"},
+    {"з2", "P2"},        {"з3", "P3"},           {"з4", "P3"},
 };
 
 bool hasHandle(QStringView text) {
@@ -276,8 +278,9 @@ TaskMeta extractMeta(QStringView raw, bool keepTicketKey) {
   //    only: "covid-19" or "utf-8" in a sentence are not tickets. A key the
   //    caller cannot use as the id stays where it was typed: "APP-101 follow
   //    up" used to become "follow up" with the ticket gone (TASKS-22, audit
-  //    2026-09-30).
-  static const QRegularExpression keyRx(QStringLiteral("(?:^|[\\s,;(\\[])([A-Z][A-Z0-9]{1,9}-\\d{1,7})(?=$|[\\s,;:)\\]])"));
+  //    2026-09-30). "UTC-5" / "GMT-5" is a time zone said with a time
+  //    (A6-6), not a ticket.
+  static const QRegularExpression keyRx(QStringLiteral("(?:^|[\\s,;(\\[])((?!(?:UTC|GMT)-)[A-Z][A-Z0-9]{1,9}-\\d{1,7})(?=$|[\\s,;:)\\]])"));
   const auto km = keyRx.match(body);
   if(km.hasMatch()) {
     out.ticketKey = km.captured(1);

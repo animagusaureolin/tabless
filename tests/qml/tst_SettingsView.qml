@@ -651,4 +651,83 @@ TestCase {
         area.activated();
         compare(block.open, was);
     }
+
+    // ─── 0.9 acceptance polish (B6) ───────────────────────────────────
+
+    // A7-3: the options say who checks, and the hint follows the choice:
+    // "only by hand" does not promise a check on launch.
+    function test_update_hint_follows_the_choice() {
+        if (!settingsSaved) { savedSettings = AppController.appSettingsJson; settingsSaved = true; }
+        const sv = make();
+        sv.activeSection = "about";
+        tryVerify(function () { return findChild(sv, "settings-updates") !== null; }, 2000);
+        const row = findChild(sv, "settings-updates");
+        sv.set("updates", "autoCheck", false);
+        compare(row.hint, sv.updatesHint(AppController.updateStatus, false));
+        compare(sv.updatesHint("", true), I18n.t("settings.about.updates.hint"));
+        compare(sv.updatesHint("", false), I18n.t("settings.about.updates.hint.manual"));
+        compare(sv.updatesHint("Up to date", false), "Up to date", "a status in flight wins");
+        compare(I18n.dict.en["settings.about.updates.auto"], "Automatically");
+        compare(I18n.dict.ru["settings.about.updates.auto"], "Автоматически");
+        verify(I18n.dict.en["settings.about.whatsNew.hint"].indexOf("ru/en") < 0);
+        verify(I18n.dict.ru["settings.about.whatsNew.hint"].indexOf("ru/en") < 0);
+    }
+
+    // A7-6 / A5-26: a backup row says when it was taken the way the rest
+    // of the app does, never the raw ISO stamp; the row button that opens
+    // the time machine is called that.
+    function test_backup_times_are_human() {
+        const sv = make();
+        sv.activeSection = "data";
+        tryVerify(function () { return findChild(sv, "settings-data-root") !== null; }, 2000);
+        const data = findChild(sv, "settings-data-root");
+        const iso = "2026-10-12T14:45:01";
+        const said = data.whenTaken(iso);
+        verify(said.indexOf("T14") < 0 && said.indexOf("2026-10-12") < 0, "raw stamp: " + said);
+        verify(said.indexOf(I18n.fmtTime(new Date(iso))) >= 0, "no time in " + said);
+        const now = new Date();
+        compare(data.whenTaken(now.toISOString()), I18n.t("settings.data.today").arg(I18n.fmtTime(now)));
+        compare(I18n.dict.en["settings.data.restoreDots"], "Time machine…");
+        compare(I18n.dict.ru["settings.data.restoreDots"], "Машина времени…");
+    }
+
+    // A6-16: scale and contrast stand on the sheet, not under "more";
+    // A7-11: the window and start-up rows have a group of their own.
+    function test_scale_and_contrast_are_not_folded() {
+        const sv = make();
+        sv.activeSection = "appearance";
+        tryVerify(function () { return findChild(sv, "settings-ui-scale") !== null; }, 2000);
+        const more = findChild(findChild(sv, "settings-block-appearance"), "settings-more-toggle").parent;
+        verify(!more.open, "the fold is open");
+        for (const name of ["settings-ui-scale", "settings-contrast"]) {
+            const row = findChild(sv, name);
+            verify(row.visible, name + " is folded away");
+            verify(!_inside(row, more), name + " is under more");
+        }
+        verify(findChild(sv, "settings-ui-scale").hint.indexOf(AppController.keyText(AppController.shortcutFor("zoom.in"))) >= 0,
+               "the scale hint names the zoom key");
+        const tray = findChild(sv, "settings-close-to-tray");
+        verify(!_inside(tray, more), "close to tray is under more");
+        verify(_inside(tray, findChild(sv, "settings-window-group")));
+        verify(I18n.dict.ru["close.ask.body"].indexOf("в Настройках → Внешний вид → Окно и запуск") >= 0);
+    }
+
+    // A7-8: after a key is recorded the focus stays on that key, so Tab
+    // goes on to the next row instead of starting over at the sidebar.
+    function test_focus_stays_on_the_key_just_recorded() {
+        AppController.resetAllShortcuts();
+        const sv = make();
+        sv.activeSection = "shortcuts";
+        tryVerify(function () { return findChild(sv, "hotkey-chip-task.copyId") !== null; }, 3000);
+        let chip = findChild(sv, "hotkey-chip-task.copyId");
+        chip.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_9, Qt.ControlModifier | Qt.AltModifier);
+        compare(AppController.shortcutFor("task.copyId"), "Ctrl+Alt+9");
+        tryVerify(function () {
+            const c = findChild(sv, "hotkey-chip-task.copyId");
+            return c !== null && c.activeFocus;
+        }, 1000, "focus left the key just recorded");
+        AppController.resetAllShortcuts();
+    }
 }

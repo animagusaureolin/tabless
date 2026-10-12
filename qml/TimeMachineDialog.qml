@@ -61,10 +61,37 @@ Popup {
         if (iso === root._key(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1))) return "yesterday";
         return "earlier";
     }
+    // Tasks and notes in every profile now: what each snapshot would change
+    // is said on its row, and the list opens on the newest one that differs
+    // (A5-12). It opened on the newest, "no changes", and finding the lost
+    // tasks meant arrowing through every snapshot.
+    property var _now: ({ tasks: 0, notes: 0 })
+    function _nowCounts() {
+        let t = 0, n = 0;
+        const ps = AppController.profiles;
+        for (let i = 0; i < ps.length; i++) {
+            t += ps[i].tasks || 0;
+            n += ps[i].notes || 0;
+        }
+        return { tasks: t, notes: n };
+    }
+    function _differs(s) { return (s.tasks || 0) !== root._now.tasks || (s.notes || 0) !== root._now.notes; }
+    // "+15" / "−3": tasks a restore would bring back or take away.
+    function deltaText(s) {
+        const d = (s.tasks || 0) - root._now.tasks;
+        return d === 0 ? "" : (d > 0 ? "+" : "−") + Math.abs(d);
+    }
     function reload() {
         const keep = root.current ? root.current.name : "";
+        root._now = root._nowCounts();
         root.snapshots = AppController.listSnapshots().map(s => Object.assign({ grp: root.groupOf(s.day) }, s));
         let idx = root.snapshots.length > 0 ? 0 : -1;
+        for (let i = 0; i < root.snapshots.length; i++) {
+            if (root._differs(root.snapshots[i])) {
+                idx = i;
+                break;
+            }
+        }
         for (let i = 0; i < root.snapshots.length; i++)
             if (root.snapshots[i].name === keep) idx = i;
         snapList.currentIndex = idx;
@@ -282,6 +309,16 @@ Popup {
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsMd
                             font.weight: snapRow.on ? Theme.fwTitle : Theme.fwBody
+                        }
+                        Text {
+                            objectName: "tm-row-delta"
+                            visible: text.length > 0
+                            text: root.deltaText(snapRow.modelData)
+                            color: Theme.text
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
+                            font.pixelSize: Theme.fsXs
+                            font.weight: Theme.fwTitle
                         }
                         Text {
                             text: I18n.count(snapRow.modelData.tasks, "tm.tasksN")

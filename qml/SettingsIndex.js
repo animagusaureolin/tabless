@@ -53,11 +53,12 @@ var ITEMS = [
     ["appearance", "row", "style.flag.icons"],
     ["appearance", "row", "settings.appearance.scale"],
     ["appearance", "row", "settings.appearance.contrast"],
-    ["appearance", "row", "settings.appearance.cursorColor"],
-    ["appearance", "group", "settings.appearance.group.themes"],
+    ["appearance", "group", "settings.appearance.group.window"],
     ["appearance", "row", "settings.system.closeToTray"],
     ["appearance", "row", "settings.system.startAtLogin"],
     ["appearance", "row", "settings.system.startMinimized"],
+    ["appearance", "row", "settings.appearance.cursorColor"],
+    ["appearance", "group", "settings.appearance.group.themes"],
     ["tasks", "row", "settings.tasks.idPrefix"],
     ["tasks", "row", "settings.tasks.defaultColumn"],
     ["tasks", "row", "settings.tasks.archiveDone"],
@@ -142,6 +143,14 @@ var ITEMS = [
     ["about", "row", "settings.about.logs"],
 ];
 
+// Words people search by that the interface no longer says (never shown):
+// the glossary retired "бэкап" for "резервная копия" (A5-26), but a user
+// still types it, and the guide used to say it.
+var SYNONYMS = {
+    "settings.data.backups": ["бэкап", "backup"],
+    "settings.data.autoBackup": ["бэкап", "backup"]
+};
+
 function _en(i18n, key) {
     const v = i18n.dict.en[key];
     return v === undefined ? "" : String(v);
@@ -168,7 +177,8 @@ function build(i18n, lang, catalog) {
             title: fill(i18n.t(key), ""),
             titleEn: fill(_en(i18n, key), "en"),
             hint: hasHint ? i18n.t(key + ".hint") : "",
-            hintEn: hasHint ? _en(i18n, key + ".hint") : ""
+            hintEn: hasHint ? _en(i18n, key + ".hint") : "",
+            also: (SYNONYMS[key] || []).join(" ")
         });
     }
     const providers = catalog || [];
@@ -211,7 +221,8 @@ function textMatches(q, a, b) {
 
 function itemMatches(item, q) {
     if (q.length === 0) return false;
-    return textMatches(q, item.title, item.titleEn) || textMatches(q, item.hint, item.hintEn);
+    return textMatches(q, item.title, item.titleEn) || textMatches(q, item.hint, item.hintEn)
+        || textMatches(q, item.also, "");
 }
 
 // The items `query` finds, in page order: title matches before hint-only
@@ -223,7 +234,7 @@ function search(items, query) {
     const byHint = [];
     for (let i = 0; i < items.length; i++) {
         const it = items[i];
-        if (textMatches(q, it.title, it.titleEn)) byTitle.push(it);
+        if (textMatches(q, it.title, it.titleEn) || textMatches(q, it.also, "")) byTitle.push(it);
         else if (textMatches(q, it.hint, it.hintEn)) byHint.push(it);
     }
     return byTitle.concat(byHint);

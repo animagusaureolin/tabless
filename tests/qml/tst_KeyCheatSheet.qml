@@ -119,4 +119,21 @@ TestCase {
             s.close();
         }
     }
+
+    // A6-13 / EYES-2: after the arrival the sheet stands centred and wholly
+    // inside the window; it used to stay 3 % of its size right and down of
+    // the centre (placed from its 0.94 arrival size) and ran past the edge.
+    function test_the_sheet_is_centred_after_it_arrives() {
+        const s = make();
+        s.open();
+        tryCompare(s, "opened", true);
+        wait(Theme.durMove + 200);
+        const ov = s.contentItem.parent.parent;  // the overlay, while open
+        verify(ov !== null);
+        const p = s.contentItem.parent.mapToItem(ov, 0, 0);
+        verify(Math.abs(p.x - (ov.width - s.width) / 2) <= 1, "left " + p.x + " width " + s.width + " in " + ov.width);
+        verify(Math.abs(p.y - (ov.height - s.height) / 2) <= 1, "top " + p.y + " height " + s.height + " in " + ov.height);
+        verify(p.x + s.width <= ov.width && p.y + s.height <= ov.height, "inside the window");
+        s.close();
+    }
 }

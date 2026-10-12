@@ -95,12 +95,43 @@ TEST(CliVerbScan, FirstPositionalDecides) {
 TEST(CliVerbScan, WindowLaunchesStayWindowLaunches) {
   EXPECT_EQ(classifyArgs({}), Invocation::Window);
   EXPECT_EQ(classifyArgs({"--view", "board"}), Invocation::Window);
-  EXPECT_EQ(classifyArgs({"board"}), Invocation::Window);  // refused later, as before
+  // A notification click hands the window its URI.
+  EXPECT_EQ(classifyArgs({"tabless://notify?task=TASK-1"}), Invocation::Window);
   // An option's value is never the verb: a data dir called "add".
   EXPECT_EQ(classifyArgs({"--data-dir", "add"}), Invocation::Window);
   EXPECT_EQ(classifyArgs({"-platform", "now"}), Invocation::Window);
   EXPECT_EQ(classifyArgs({"--", "add"}), Invocation::Window);
   EXPECT_EQ(classifyArgs({"--smoke"}), Invocation::Window);
+}
+
+// A typo is not a window launch: `tabless tody` printed nothing, exited 0 and
+// opened the window (A3-17, A4-18).
+TEST(CliVerbScan, AnyOtherWordIsAnUnknownCommand) {
+  EXPECT_EQ(classifyArgs({"frobnicate"}), Invocation::Command);
+  EXPECT_EQ(classifyArgs({"tody"}), Invocation::Command);
+  EXPECT_EQ(classifyArgs({"board"}), Invocation::Command);
+  EXPECT_EQ(classifyArgs({"--data-dir", "C:/x", "frobnicate"}), Invocation::Command);
+  const ParsedArgs p = parseArgs({QStringLiteral("frobnicate")});
+  EXPECT_FALSE(p.ok);
+  EXPECT_EQ(p.error, QStringLiteral("unknown command 'frobnicate'"));
+}
+
+// A stray word after a window option, or a path, is the window launch's own
+// mistake: the window refuses it as an unexpected argument instead of the
+// command line reporting "Unknown option 'view'".
+TEST(CliVerbScan, StrayWordAfterAWindowOptionStaysTheWindows) {
+  EXPECT_EQ(classifyArgs({"--view", "board", "extra"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--capture", "extra"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--minimized", "extra"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--data-dir", "C:/x", "C:/tmp/dd"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--view", "board", "add"}), Invocation::Command);
+}
+
+TEST(CliVerbScan, VersionIsAVerb) {
+  EXPECT_EQ(classifyArgs({"version"}), Invocation::Command);
+  const ParsedArgs p = parseArgs({QStringLiteral("version")});
+  EXPECT_TRUE(p.ok) << p.error.toStdString();
+  EXPECT_EQ(p.request.verb, Verb::Version);
 }
 
 // ── Arguments ─────────────────────────────────────────────────────────────
@@ -677,6 +708,10 @@ TEST(CliPlanVerbs, EstimatesAndDurations) {
   EXPECT_EQ(parseEstimate(QStringLiteral("none")), 0);
   EXPECT_EQ(parseEstimate(QStringLiteral("soon")), -1);
   EXPECT_EQ(parseEstimate(QStringLiteral("0m")), -1);
+  // A bare number is minutes (A4-19).
+  EXPECT_EQ(parseEstimate(QStringLiteral("90")), 90);
+  EXPECT_EQ(parseEstimate(QStringLiteral("~25")), 25);
+  EXPECT_EQ(parseEstimate(QStringLiteral("99999")), -1);
   EXPECT_EQ(humanMinutes(120, QStringLiteral("en")), QStringLiteral("2h"));
   EXPECT_EQ(humanMinutes(90, QStringLiteral("en")), QStringLiteral("1h 30m"));
   EXPECT_EQ(humanMinutes(45, QStringLiteral("ru")), QStringLiteral("45м"));
@@ -786,7 +821,7 @@ TEST_F(CliHeadlessTest, SchedDueEstSomedayChangeTheTask) {
     r.verb = Verb::Due;
     r.value = QStringLiteral("2026-10-09");
     resp = execute(c, r, now);
-    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: deadline → Fri, Oct 9\n")) << qPrintable(resp.err);
+    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: due → Fri, Oct 9\n")) << qPrintable(resp.err);
 
     r.verb = Verb::Est;
     r.value = QStringLiteral("1h30m");

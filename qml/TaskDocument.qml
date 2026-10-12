@@ -55,6 +55,42 @@ FocusScope {
     readonly property var _ticket: root._exists && root.task.ticket ? root.task.ticket : ({})
     readonly property bool _isTicket: !!root._ticket.provider
     readonly property var _badge: root._isTicket ? (AppController.providerBadges[root._ticket.provider] || ({})) : ({})
+    // A field changed both here and in the tracker since the last sync: the
+    // tracker's side of each, as the editor shows it (A3-8). The document
+    // said nothing; only the card carried a small "решить".
+    readonly property bool _hasConflict: root.hasConflictOf(root.task)
+    readonly property var _conflictRows: root.conflictRowsOf(root.task)
+    function hasConflictOf(task) {
+        return !!(task && task.ticket && task.ticket.provider && task.ticket.conflict);
+    }
+    function conflictRowsOf(task) {
+        if (!root.hasConflictOf(task)) return [];
+        const t = task.ticket;
+        const fields = t.conflicts || [];
+        const out = [];
+        for (let i = 0; i < fields.length; ++i) {
+            const f = fields[i];
+            if (f === "title") out.push({ label: I18n.t("ticket.conflict.title"), value: String(t.remoteTitle || "") });
+            else if (f === "body") out.push({ label: I18n.t("ticket.conflict.body"), value: String(t.remoteBody || "") || "—" });
+            else if (f === "priority") out.push({ label: I18n.t("ticket.conflict.priority"), value: String(t.remotePriority || "") });
+            else if (f === "status")
+                out.push({ label: I18n.t("ticket.conflict.status"),
+                           value: root._statusName(String(t.remoteColumn || "")) + (t.remoteStatus ? " (" + t.remoteStatus + ")" : "") });
+        }
+        return out;
+    }
+    // Keep mine, or take the tracker's: what is typed is saved first, then
+    // the fields show the outcome.
+    function resolveConflict(useTracker) {
+        if (!root._hasConflict) return;
+        // The buttons hide once it is resolved; focus left on them was
+        // stranded on an invisible control.
+        const fromButton = conflictUseTracker.activeFocus || conflictKeepMine.activeFocus;
+        root.flush();
+        AppController.resolveTrackerConflict(root.taskId, useTracker);
+        root._load();
+        if (fromButton) titleField.forceActiveFocus();
+    }
 
     // ── opening and closing ──
     function open(id, intoTitle) {
@@ -511,6 +547,54 @@ FocusScope {
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSm
                 wrapMode: Text.WordWrap
+            }
+
+            ColumnLayout {
+                objectName: "task-doc-conflict"
+                Layout.fillWidth: true
+                Layout.bottomMargin: Theme.spMd
+                visible: root._hasConflict
+                spacing: Theme.spXs
+                Text {
+                    Layout.fillWidth: true
+                    text: I18n.t("ticket.conflict.head")
+                    textFormat: Text.PlainText
+                    color: Theme.warning
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    font.weight: Theme.fwTitle
+                    wrapMode: Text.WordWrap
+                }
+                Repeater {
+                    model: root._conflictRows
+                    delegate: Text {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        text: modelData.label + ": " + modelData.value
+                        textFormat: Text.PlainText
+                        color: Theme.text
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 4
+                        elide: Text.ElideRight
+                    }
+                }
+                RowLayout {
+                    spacing: Theme.spSm
+                    PillButton {
+                        id: conflictUseTracker
+                        objectName: "task-doc-conflict-use-tracker"
+                        text: I18n.t("ticket.conflict.useTracker")
+                        onClicked: root.resolveConflict(true)
+                    }
+                    PillButton {
+                        id: conflictKeepMine
+                        objectName: "task-doc-conflict-keep-mine"
+                        text: I18n.t("ticket.conflict.keepMine")
+                        onClicked: root.resolveConflict(false)
+                    }
+                }
             }
 
             QQC.TextArea {

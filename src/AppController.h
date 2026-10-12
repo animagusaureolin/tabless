@@ -1895,6 +1895,10 @@ class AppController : public QObject {
   // Whether the step Ctrl+Z would take back next is the one that made task
   // \p id — undoing it deletes the task (IDIOT-DOC-17).
   Q_INVOKABLE bool undoWouldRemoveTask(const QString& id) const;
+  // Whether that step touches only notes, doc pages and the Docs catalogue:
+  // the bare "u" in Knowledge takes back nothing done on another screen
+  // (IDIOT-KNOW-5, A4-4).
+  Q_INVOKABLE bool undoIsKnowledgeOnly() const;
   Q_INVOKABLE void redo();
 
   Q_INVOKABLE void undoLastDeletion() {

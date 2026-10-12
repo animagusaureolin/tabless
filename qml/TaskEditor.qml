@@ -298,6 +298,7 @@ Popup {
         _error = "";
         discardPrompt.close();
         _baseline = _snapshot();
+        _refreshTitleChips();
         open();
         // Keyboard-first: Ctrl+N and type. Nothing had focus, so whatever was
         // typed before reaching for the mouse went nowhere and the task was
@@ -454,6 +455,7 @@ Popup {
             return;
         }
         _deadlinePreview = AppController.parseDateTime(s, new Date()) || {ok: false};
+        root._refreshTitleChips();
     }
 
     // Forwards to heap::text::extractMeta (C++, unit-tested).
@@ -469,8 +471,10 @@ Popup {
     // description — but only when all of them can be applied: a priority picked
     // in the box that disagrees, an id typed by hand or a ticket key already
     // taken leaves the title as typed (minus the "//" tail), so no word is lost.
-    // Dates stay in the title; the editor has its own date fields.
-    function _titleTokens(meta, typedId) {
+    // Dates, a length and a repeat are read too, the way quick capture reads
+    // them (A1-4, A5-1): "Call bank tomorrow 3pm p1" was saved with the date
+    // still in the title and no date at all. `read` is _readTitle()'s answer.
+    function _titleTokens(meta, typedId, read) {
         const raw = titleField.text || "";
         if (!root.isNew)
             return { title: raw.trim(), priority: "", labels: [], id: "" };
@@ -489,7 +493,68 @@ Popup {
         // Nothing but tokens ("p0 #ops") is not a title.
         if (String(meta.title || "").trim().length === 0)
             return asTyped;
-        return { title: meta.title, priority: meta.priority || "", labels: meta.labels || [], id: id };
+        const out = { title: meta.title, priority: meta.priority || "", labels: meta.labels || [], id: id };
+        // A date alone ("tomorrow 3pm") is not a title either: then it stays.
+        const r = read || ({});
+        if (String(r.title || "").trim().length > 0) {
+            const valid = (d) => !!(d && d.getTime && !isNaN(d.getTime()));
+            out.title = r.title;
+            if (valid(r.when)) { out.when = r.when; out.whenHasTime = !!r.whenHasTime; }
+            if (valid(r.due)) { out.due = r.due; out.dueHasTime = !!r.dueHasTime; }
+            if (r.estimateMinutes > 0) out.estimate = r.estimateMinutes;
+            if (r.recurrence) out.recurrence = r.recurrence;
+        }
+        return out;
+    }
+
+    // A new task's title read as quick capture reads it. A part whose own
+    // field is already filled in (a deadline typed below, a plan, a length, a
+    // repeat) stays words in the title: what was typed there wins.
+    function _readTitle(raw) {
+        if (!root.isNew || !raw || String(raw).trim().length === 0) return ({});
+        const now = new Date();
+        let p = AppController.captureParse(raw, now, []);
+        const schedTyped = scheduledField.text.trim().length > 0;
+        const dueTyped = deadlineField.text.trim().length > 0;
+        const estTyped = (parseInt(estimateField.text || "0") || 0) > 0;
+        const recurTyped = recurBox.currentIndex > 0;
+        const rejected = [];
+        const spans = p.spans || [];
+        for (let i = 0; i < spans.length; ++i) {
+            const k = spans[i].kind;
+            if ((k === "when" && (schedTyped || (recurTyped && p.recurrence))) || (k === "due" && dueTyped)
+                || (k === "estimate" && estTyped))
+                rejected.push(spans[i].text);
+        }
+        if (rejected.length > 0) p = AppController.captureParse(raw, now, rejected);
+        return p;
+    }
+
+    // What the title will give on save, as the chips quick capture shows.
+    property var _titleChips: []
+    function _refreshTitleChips() {
+        if (!root.isNew || titleField.text.trim().length === 0) {
+            root._titleChips = [];
+            return;
+        }
+        const meta = root._extractMeta(titleField.text);
+        const typedId = idField.text.trim() || root.draft.id || "";
+        const t = root._titleTokens(meta, typedId, root._readTitle(titleField.text));
+        const when = (d, hasTime) => I18n.fmtDate(d, "weekdayDay") + (hasTime ? " · " + I18n.fmtTime(d) : "");
+        const chips = [];
+        if (t.when) chips.push({ kind: "when", key: I18n.t("capture.when"), value: when(t.when, t.whenHasTime) });
+        if (t.due) chips.push({ kind: "due", key: I18n.t("capture.due"), value: when(t.due, t.dueHasTime) });
+        if (t.recurrence) chips.push({ kind: "repeat", key: I18n.t("capture.repeat"), value: root._recurText(t.recurrence) });
+        if (t.estimate) chips.push({ kind: "estimate", key: I18n.t("capture.estimate"), value: I18n.fmtMinutes(t.estimate) });
+        if (t.priority) chips.push({ kind: "priority", key: I18n.t("capture.priority"), value: t.priority });
+        for (const l of (t.labels || [])) chips.push({ kind: "label", key: I18n.t("capture.label"), value: "#" + l });
+        root._titleChips = chips;
+    }
+    function _recurText(r) {
+        const m = /^every:month:(\d+)$/.exec(String(r || ""));
+        if (m) return I18n.t("editor.recur.monthlyOn").arg(m[1]);
+        const i = recurBox._base.indexOf(r);
+        return i >= 0 ? recurBox.model[i] : r;
     }
 
     function _mergeLabels(typed, fromTitle) {
@@ -579,18 +644,21 @@ Popup {
         const meta = root._extractMeta(titleField.text);
         const inlineDesc = root.isNew ? meta.desc : "";
         const handleNames = root._resolvePeopleNames(meta.handles);
-        const parsed = root._titleTokens(meta, finalId);
+        const parsed = root._titleTokens(meta, finalId, root._readTitle(titleField.text));
         const cleanedTitle = parsed.title;
         if (parsed.id) finalId = parsed.id;
 
         // Due and scheduled are typed independently; a task with only
         // a due date is scheduled for that day, which is what the
-        // single deadline field always meant.
-        const dueAt = root.parseDate(deadlineField.text);
+        // single deadline field always meant. A date read from a new
+        // task's title fills a field left empty.
+        const dueTyped = root.parseDate(deadlineField.text);
         const schedTyped = root.parseDate(scheduledField.text);
-        const scheduledAt = schedTyped || dueAt;
-        const dueHasTime = !!dueAt && root.parseHasTime(deadlineField.text);
-        const scheduledHasTime = schedTyped ? root.parseHasTime(scheduledField.text) : dueHasTime;
+        const dueAt = dueTyped || parsed.due;
+        const scheduledAt = schedTyped || parsed.when || dueTyped;
+        const dueHasTime = dueTyped ? root.parseHasTime(deadlineField.text) : (parsed.due ? parsed.dueHasTime : false);
+        const scheduledHasTime = schedTyped ? root.parseHasTime(scheduledField.text)
+                                            : (parsed.when ? parsed.whenHasTime : (dueTyped ? dueHasTime : false));
 
         const d = {
             _isNew: root.isNew,
@@ -614,10 +682,10 @@ Popup {
             dueHasTime: dueHasTime,
             scheduledHasTime: scheduledHasTime,
             branch: branchField.text,
-            recurrence: recurBox.value(),
+            recurrence: recurBox.value() || parsed.recurrence || "",
             // Plain names; saveTask keeps each existing label's colour.
             labels: root._mergeLabels(root.labelsFromText(labelsField.text), parsed.labels),
-            estimateMinutes: parseInt(estimateField.text || "0") || 0,
+            estimateMinutes: parseInt(estimateField.text || "0") || parsed.estimate || 0,
             someday: somedayBox.checked
         };
         // A new task's files ride along with the draft; an existing task's
@@ -888,8 +956,13 @@ Popup {
                     placeholderTextColor: Theme.textDim
                     Keys.onPressed: (event) => {
                         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                            // Ctrl+Enter is the save shortcut's.
-                            if (!(event.modifiers & Qt.ControlModifier)) event.accepted = true;
+                            // Ctrl+Enter is the save shortcut's. Plain Enter in a
+                            // new task's title creates it, as quick capture does;
+                            // it used to do nothing and say nothing (A2-11, A5-2).
+                            if (!(event.modifiers & Qt.ControlModifier)) {
+                                event.accepted = true;
+                                if (root.isNew && !(event.modifiers & Qt.ShiftModifier)) root._save();
+                            }
                             return;
                         }
                         if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) return;
@@ -899,10 +972,38 @@ Popup {
                         event.accepted = true;
                     }
                     onTextChanged: {
+                        titleReadTimer.restart();
                         if (!/[\r\n\t]/.test(text)) return;
                         const at = cursorPosition;
                         text = text.replace(/[\r\n\t]+/g, " ");
                         cursorPosition = Math.min(at, text.length);
+                    }
+                    Timer {
+                        id: titleReadTimer
+                        interval: 80
+                        repeat: false
+                        onTriggered: root._refreshTitleChips()
+                    }
+                }
+
+                // What a new task's title will give on save (A1-4): the chips
+                // quick capture shows, so "tomorrow 3pm p1" is seen being read.
+                Flow {
+                    objectName: "te-title-read"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    visible: root.isNew && root._titleChips.length > 0
+                    spacing: Theme.spSm
+                    Repeater {
+                        model: root._titleChips
+                        delegate: PropertyChip {
+                            required property var modelData
+                            objectName: "te-read-" + modelData.kind
+                            outlined: true
+                            small: true
+                            key: modelData.key
+                            value: modelData.value
+                        }
                     }
                 }
 
@@ -956,6 +1057,7 @@ Popup {
                         spacing: Theme.spSm
                         TextField {
                             id: deadlineField
+                            objectName: "te-deadline"
                             ContextMenu.menu: TextEditMenu { editor: deadlineField }
                             Layout.fillWidth: true
                             placeholderText: I18n.t("editor.ph.deadline")
@@ -1031,6 +1133,7 @@ Popup {
                     // What the deadline field was read as.
                     Text {
                         id: chipLabel
+                        objectName: "te-deadline-read"
                         visible: text.length > 0
                         Layout.fillWidth: true
                         font.family: Theme.fontUi
@@ -1041,8 +1144,13 @@ Popup {
                             if (!root._deadlinePreview || !root._deadlinePreview.ok ||
                                 !root._deadlinePreview.start) return "";
                             const d = root._deadlinePreview.start;
-                            return "↑ " + (root._deadlinePreview.hasTime ? I18n.fmtDateTime(d, "weekdayDayYear")
-                                                                          : I18n.fmtDate(d, "weekdayDayYear"));
+                            const when = "↑ " + (root._deadlinePreview.hasTime ? I18n.fmtDateTime(d, "weekdayDayYear")
+                                                                                : I18n.fmtDate(d, "weekdayDayYear"));
+                            // With no plan of its own, the task is planned at its
+                            // deadline too; say so, the plan field is folded away (A5-23).
+                            const planned = scheduledField.text.trim().length > 0
+                                            || root._titleChips.some(c => c.kind === "when");
+                            return planned ? when : when + " · " + I18n.t("editor.deadline.alsoPlanned");
                         }
                     }
                 }
@@ -1354,6 +1462,7 @@ Popup {
                     FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.recurrence") }
                     TextField {
                         id: scheduledField
+                        onTextChanged: titleReadTimer.restart()
                         ContextMenu.menu: TextEditMenu { editor: scheduledField }
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
@@ -1366,6 +1475,7 @@ Popup {
                     }
                     AppComboBox {
                         id: recurBox
+                        onCurrentIndexChanged: titleReadTimer.restart()
                         objectName: "te-recurrence"
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
@@ -1413,6 +1523,7 @@ Popup {
                         spacing: Theme.spMd
                         TextField {
                             id: estimateField
+                        onTextChanged: titleReadTimer.restart()
                             ContextMenu.menu: TextEditMenu { editor: estimateField }
                             Layout.fillWidth: true
                             placeholderText: "45"
