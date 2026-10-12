@@ -419,7 +419,8 @@ TestCase {
         verify(line !== null);
         compare(line.visible, AppController.welcomeSeen, "shown only once the first run is over");
         // The "My views" head goes with it: no bare heading on the first run.
-        const head = byName("sidebar-views-head");
+        const head = find(tc.win.contentItem, function (it) { return it.objectName === "sidebar-views-head"; });
+        verify(head !== null);
         compare(head.visible, AppController.welcomeSeen, "a bare head over nothing on the first run");
         // Past the first run (as tst_TodayView does): the line is there.
         AppController.markWelcomeSeen();
