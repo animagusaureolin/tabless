@@ -418,6 +418,14 @@ ApplicationWindow {
         Qt.callLater(damagedFile.showIfNeeded);
         // Once after an update to a new release line (R2-054).
         Qt.callLater(whatsNew.showIfUpdated);
+        // A patch release: one quiet line, with the changelog a key away (A5-19).
+        Qt.callLater(win._showUpdatedFrom);
+    }
+    function _showUpdatedFrom() {
+        const from = AppController.takeUpdatedFrom();
+        if (from.length === 0) return;
+        toast.showWithAction(I18n.t("update.patched").arg(from).arg(AppController.appVersion),
+                             I18n.t("update.line.whatsNew"), 10, function () { whatsNew.showNow(); });
     }
     function _showShellNotice() {
         const msg = AppController.shellNotice;
@@ -1184,7 +1192,12 @@ ApplicationWindow {
                 onLeaveRequested: win.focusActiveView()
                 onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
                 resultCount: section === "tasks" ? filterBar._fc.total : -1
-                onSaveViewRequested: savedViewsHost.openSave()
+                // Ctrl S in the field (A6-25): the typed filter applies first.
+                onSaveViewRequested: {
+                    searchApply.stop();
+                    win.searchText = topBar.searchText;
+                    savedViewsHost.openSave();
+                }
                 profileName: rail.profileSwitcher.active.name || ""
                 onProfileChipClicked: rail.profileSwitcher.openMenu()
             }
@@ -2016,7 +2029,9 @@ ApplicationWindow {
         // filter shown in Tasks or saved as a view, nothing found → a task.
         contextProvider: function () { return win._keyTaskIds(); }
         onQueryRequested: (query, mode) => {
-            win.showQuery(query, mode === "board" ? "board" : "list");
+            // Saving keeps the lens the user is on: Ctrl S on the board threw
+            // them to the list (A3-15).
+            win.showQuery(query, mode === "board" || (mode === "save" && AppController.currentView === "board") ? "board" : "list");
             if (mode === "save") Qt.callLater(savedViewsHost.openSave);
         }
         onCreateRequested: (text) => quickCapture.openWithText(text)
@@ -2029,6 +2044,7 @@ ApplicationWindow {
         onNavigateToContacts: (text) => notesBridge.requestedFilter = text
         onNavigateToNoteLine: (line) => notesBridge.requestedLine = line
         onNavigateToDocPage: (pageId) => notesBridge.requestedPage = pageId
+        onSearchNotes: (text) => notesBridge.requestedFilter = text
     }
 
     // A search hit sets the line it wants, NotesView watches and puts the
@@ -3465,7 +3481,7 @@ ApplicationWindow {
         width: mainColumn.width
         areaWidth: mainColumn.width
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24 + win._selectionBarSpace
+        anchors.bottomMargin: 24 + win._selectionBarSpace + taskDoc.toastLift
         z: 100
     }
 

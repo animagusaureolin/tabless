@@ -574,6 +574,8 @@ Item {
             Layout.preferredWidth: Math.min(root.width - 96, 360)
             visible: root.taskCount === 0
             title: root.nothingFound ? I18n.t("view.empty.noMatchFor").arg(root.filterLabel) : I18n.t("list.empty")
+            // Where the filter would find something (A3-13).
+            hint: root.nothingFound ? AppController.matchesElsewhere(root.searchText) : ""
             line: root.nothingFound ? I18n.t("view.empty.resetFilter") : I18n.t("tasks.empty.line").arg(AppController.shortcutText("task.new"))
             lineLink: root.nothingFound
             onLineActivated: root.resetFilterRequested()

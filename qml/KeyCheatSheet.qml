@@ -52,6 +52,7 @@ Popup {
             { label: "keys.row.goList", ids: ["view.timeline"] },
             { label: "keys.row.goCalendar", ids: ["view.calendar"] },
             { label: "keys.row.goKnowledge", ids: ["section.knowledge.alt", "section.knowledge"] },
+            { label: "keys.row.goDocs", ids: ["view.docs"] },
             { label: "keys.row.goView", range: true, ids: ["savedView.1.alt", "savedView.2.alt", "savedView.3.alt",
                 "savedView.4.alt", "savedView.5.alt", "savedView.6.alt", "savedView.7.alt", "savedView.8.alt",
                 "savedView.9.alt"] },

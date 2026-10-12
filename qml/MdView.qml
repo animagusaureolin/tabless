@@ -79,7 +79,8 @@ ListView {
     // Indent per list level and per quote level, in pixels.
     readonly property int indentStep: view.noteType ? 12 : 22
     readonly property int quoteStep: 14
-    readonly property int sideMargin: 24
+    // Scaled like the -Theme.px(24) the task document pulls it back by (A6-28).
+    readonly property int sideMargin: Theme.px(24)
     // The rule under the top two heading levels. Knowledge draws the note
     // as a plain document without them (sheet H2-Knowledge, DG-071).
     property bool headingRules: true

@@ -17,6 +17,8 @@ Column {
     property bool compact: false
     // The line as a link ("сбросить фильтр · Esc", DG-160).
     property bool lineLink: false
+    // A quiet fact under the line ("In other profiles: 6 in Personal").
+    property string hint: ""
     signal lineActivated()
     // Whole multiples of the icons' 18px grid (APP-195), so their 1px lines
     // land on device pixels.
@@ -77,5 +79,15 @@ Column {
             role: Accessible.Link
             onActivated: root.lineActivated()
         }
+    }
+    Text {
+        objectName: "empty-state-hint"
+        visible: root.hint.length > 0
+        width: root.width
+        horizontalAlignment: Text.AlignHCenter
+        text: root.hint
+        color: Theme.textDim
+        font.pixelSize: root.compact ? Theme.fsXs : Theme.fsSm
+        wrapMode: Text.WordWrap
     }
 }

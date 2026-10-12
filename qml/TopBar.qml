@@ -725,6 +725,14 @@ Rectangle {
                     // every chip and done tasks flooded in (IDIOT-TASKS-10).
                     // Its × still removes it.
                     Keys.onPressed: (event) => {
+                        // Ctrl S saves what the field filters as a view, the key
+                        // the command line shows for it (A6-25).
+                        if (event.key === Qt.Key_S && (event.modifiers & Qt.ControlModifier)) {
+                            root.commitTyped();
+                            root.saveViewRequested();
+                            event.accepted = true;
+                            return;
+                        }
                         if (event.key === Qt.Key_Backspace && searchField.text.length === 0 && root.conditions.length > 0) {
                             for (let i = root.conditions.length - 1; i >= 0; i--) {
                                 if (root.conditions[i].raw.toLowerCase() === "is:open") continue;

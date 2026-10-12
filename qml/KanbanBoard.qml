@@ -2101,6 +2101,8 @@ Item {
         visible: root._boardTotal === 0 || root._nothingFound
         title: root._nothingFound ? I18n.t("view.empty.noMatchFor").arg(root.filterLabel)
              : root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
+        // Where the filter would find something (A3-13).
+        hint: root._nothingFound ? AppController.matchesElsewhere(root.searchText) : ""
         // The keys as bound now, not as they shipped (design audit DES-15).
         lineLink: root._nothingFound
         onLineActivated: root.resetFilterRequested()

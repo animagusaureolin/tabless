@@ -190,7 +190,9 @@ Rectangle {
             visible: root.savedViewName.length === 0 && !root.slim
             glyph: "☆"
             text: I18n.t("filter.saveView")
-            tip: I18n.t("filter.saveViewTip")
+            // The keys that really apply a view (A6-24): Alt+1…9 are free now.
+            tip: I18n.t("filter.saveViewTip").arg(AppController.keyText("Ctrl+S"))
+                     .arg(AppController.shortcutText("savedView.1")).arg(AppController.shortcutText("savedView.1.alt"))
             onActivated: root.saveViewRequested()
         }
         BarChip {

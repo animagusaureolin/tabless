@@ -881,7 +881,7 @@ Popup {
                 id: ticketCA
                 label: parent.text
                 onActivated: {
-                    const id = root._parsed.ticketKey;
+                    const id = root._parsed.ticketTakenId || root._parsed.ticketKey;
                     root.close();
                     root.openTaskRequested(id);
                 }

@@ -2273,6 +2273,8 @@ Item {
             property string conflictId: ""
             property bool conflictBuiltin: false
             property string reserved: ""
+            // A key every app uses for one thing: taken after a question (A7-9).
+            property string soft: ""
             readonly property bool capturing: capturingId.length > 0
             onCapturingChanged: {
                 if (typeof settingsBus !== "undefined" && settingsBus.setKeyCapture) settingsBus.setKeyCapture(keysRoot.capturing);
@@ -2306,8 +2308,9 @@ Item {
                 keysRoot.conflictId = "";
                 keysRoot.conflictBuiltin = false;
                 keysRoot.reserved = "";
+                keysRoot.soft = "";
             }
-            function cancel() { keysRoot.capturingId = ""; keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; }
+            function cancel() { keysRoot.capturingId = ""; keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; keysRoot.soft = ""; }
             function commit() {
                 const id = keysRoot.capturingId;
                 const seq = keysRoot.candidate;
@@ -2316,7 +2319,7 @@ Item {
             }
             // A key heard while recording. Enter with nothing heard keeps the
             // old key; a conflict waits for the box below.
-            readonly property bool pending: keysRoot.conflictId.length > 0 || keysRoot.reserved.length > 0
+            readonly property bool pending: keysRoot.conflictId.length > 0 || keysRoot.reserved.length > 0 || keysRoot.soft.length > 0
             readonly property bool canReplace: keysRoot.reserved.length === 0 && !keysRoot.conflictBuiltin
             function hear(event) {
                 if (event.key === Qt.Key_Escape) { keysRoot.cancel(); return; }
@@ -2330,7 +2333,7 @@ Item {
                 // Backspace clears what was heard, as in the Hotkeys panel; only
                 // Delete takes the key off (IDIOT-SHELL-11).
                 if (event.key === Qt.Key_Backspace) {
-                    keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = "";
+                    keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; keysRoot.soft = "";
                     return;
                 }
                 if (event.key === Qt.Key_Delete) {
@@ -2345,11 +2348,12 @@ Item {
                 if (!chord) return;
                 keysRoot.candidate = chord;
                 keysRoot.reserved = AppController.reservedShortcutReason(chord);
+                keysRoot.soft = keysRoot.reserved.length > 0 ? "" : AppController.commonShortcutWarning(keysRoot.capturingId, chord);
                 keysRoot.conflictId = AppController.findShortcutConflict(keysRoot.capturingId, chord);
                 keysRoot.conflictBuiltin = keysRoot.conflictId.length > 0
                     && (AppController.builtinShortcutConflict(keysRoot.capturingId, chord).length > 0
                         || AppController.prefixShortcutConflict(keysRoot.capturingId, chord).length > 0);
-                if (keysRoot.reserved.length === 0 && keysRoot.conflictId.length === 0) keysRoot.commit();
+                if (!keysRoot.pending) keysRoot.commit();
             }
 
             Rectangle {
@@ -2497,7 +2501,7 @@ Item {
                     // The key heard is someone else's: replace it there, or pick another.
                     Rectangle {
                         objectName: "settings-keys-conflict"
-                        visible: keyRow.rec && (keysRoot.conflictId.length > 0 || keysRoot.reserved.length > 0)
+                        visible: keyRow.rec && keysRoot.pending
                         Layout.fillWidth: true
                         Layout.topMargin: Theme.spSm
                         Layout.bottomMargin: Theme.spLg
@@ -2519,6 +2523,7 @@ Item {
                                 color: Theme.textMuted
                                 font.pixelSize: Theme.fsSm
                                 text: keysRoot.reserved.length > 0 ? keysRoot.reserved
+                                    : keysRoot.soft.length > 0 && keysRoot.conflictId.length === 0 ? keysRoot.soft
                                     : keysRoot.conflictBuiltin
                                       ? I18n.t("hotkeys.conflict.builtin").arg(AppController.shortcutLabel(keysRoot.conflictId))
                                       : I18n.t("settings.keys.conflict").arg(AppController.keyText(keysRoot.candidate)).arg(AppController.shortcutLabel(keysRoot.conflictId))
@@ -2529,7 +2534,8 @@ Item {
                                     id: replaceBtn
                                     objectName: "settings-keys-replace"
                                     visible: keysRoot.reserved.length === 0 && !keysRoot.conflictBuiltin
-                                    text: I18n.t("settings.keys.replace")
+                                    text: keysRoot.soft.length > 0 && keysRoot.conflictId.length === 0
+                                          ? I18n.t("settings.keys.takeAnyway") : I18n.t("settings.keys.replace")
                                     primary: true
                                     onClicked: keysRoot.commit()
                                 }
@@ -2538,7 +2544,7 @@ Item {
                                     objectName: "settings-keys-other"
                                     text: I18n.t("settings.keys.other")
                                     onClicked: {
-                                        keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = "";
+                                        keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; keysRoot.soft = "";
                                         capFocus.forceActiveFocus();  // and listen again
                                     }
                                 }
