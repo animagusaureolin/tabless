@@ -14,6 +14,12 @@ import TodoCpp
 // on top, whether a press fell beside it, which capture to switch away
 // from). This plays on the popup while it is already open, so keys, focus
 // and `opened` are live from the first frame. A dialog closes at once.
+//
+// The growth is a Scale transform on the popup's own item, never
+// `popup.scale`: Qt places a centred popup from its scaled size and does
+// not place it again when the scale returns to 1, so a dialog that grew
+// from 0.94 stayed 3 % of its size right and down of the centre and ran
+// past the window edge (A6-13).
 ParallelAnimation {
     id: arrival
 
@@ -27,13 +33,39 @@ ParallelAnimation {
         function onAboutToShow() {
             arrival.stop();
             if (Theme.motion === 0) { arrival._rest(); return; }
+            arrival._install();
             arrival.popup.opacity = 0;
-            arrival.popup.scale = arrival.dialog ? Theme.dialogScaleFrom : 1;
+            arrival.grow = arrival.dialog ? Theme.dialogScaleFrom : 1;
             arrival.start();
         }
         function onAboutToHide() { arrival.stop(); arrival._rest(); }
     }
-    function _rest() { arrival.popup.opacity = 1; arrival.popup.scale = 1; }
+    function _rest() { arrival.popup.opacity = 1; arrival.grow = 1; }
+
+    // The size the dialog grows through, 1 at rest.
+    property real grow: 1
+    readonly property Scale _scale: Scale {
+        origin.x: arrival.popup ? arrival.popup.width / 2 : 0
+        origin.y: arrival.popup ? arrival.popup.height / 2 : 0
+        xScale: arrival.grow
+        yScale: arrival.grow
+    }
+    // The popup's item is the parent of its content item; the transform
+    // goes on it once, next to any it already carries.
+    function _install() {
+        const content = arrival.popup ? arrival.popup.contentItem : null;
+        const item = content ? content.parent : null;
+        if (!item)
+            return;
+        const list = [];
+        for (let i = 0; i < item.transform.length; ++i) {
+            if (item.transform[i] === arrival._scale)
+                return;
+            list.push(item.transform[i]);
+        }
+        list.push(arrival._scale);
+        item.transform = list;
+    }
 
     NumberAnimation {
         target: arrival.popup; property: "opacity"; to: 1
@@ -41,7 +73,7 @@ ParallelAnimation {
         easing.type: Theme.easeEnter
     }
     NumberAnimation {
-        target: arrival.popup; property: "scale"; to: 1
+        target: arrival; property: "grow"; to: 1
         duration: arrival.dialog ? Theme.durMove : Theme.durPop
         easing.type: Theme.easeEnter
     }
