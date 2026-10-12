@@ -725,18 +725,28 @@ FocusScope {
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
                 }
-                Text {
+                // Drawn by md4c like a note (APP-292): Qt's own Markdown
+                // gave the tracker's text a default look of its own.
+                MdDocument {
+                    id: trackerDoc
+                    text: String(root.task.desc || "")
+                    allowRemoteImages: false
+                    imageBaseDir: AppController.dataDir + "/attachments"
+                    palette: Theme.mdPalette
+                    ticketTitles: AppController.taskTitles
+                }
+                MdView {
                     objectName: "task-doc-tracker-body"
                     Layout.fillWidth: true
-                    Layout.maximumHeight: Theme.px(220)
+                    Layout.leftMargin: -Theme.px(24)
+                    Layout.rightMargin: -Theme.px(24)
+                    Layout.preferredHeight: Math.min(Theme.px(220), contentHeight)
                     clip: true
-                    text: String(root.task.desc || "")
-                    textFormat: Text.MarkdownText
-                    wrapMode: Text.Wrap
-                    color: Theme.textMuted
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsMd
-                    onLinkActivated: (link) => Qt.openUrlExternally(link)
+                    interactive: contentHeight > height
+                    document: trackerDoc
+                    noteType: true
+                    headingRules: false
+                    onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
                 }
             }
             // My notes on a tracker card: never sent, never pulled over.
@@ -781,7 +791,10 @@ FocusScope {
                 Layout.rightMargin: -Theme.px(24)
                 placeholder: I18n.t("taskdoc.bodyPh")
                 menuTitle: I18n.t("textmenu.title.taskBody")
-                paragraphLineHeight: 1.65
+                // The note look (APP-292): the same md4c drawing as Knowledge.
+                noteType: true
+                headingRules: false
+                wikiTargets: AppController.wikiTargets(body.source.text)
                 wholeDocument: true
                 onEdited: if (!root._loading) { root._dirtyBody = true; saveTimer.restart(); }
                 onEscaped: root.close()
