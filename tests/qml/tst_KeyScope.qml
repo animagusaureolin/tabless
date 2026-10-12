@@ -118,25 +118,20 @@ TestCase {
     function board() { return tc.win.activeViewItem(); }
 
     // UX-1 / TASKS-10: Ctrl+N and type — the title gets every character.
-    // APP-266: Ctrl+N is the one task input; Tab takes what was typed into
-    // the full editor, its title already there.
-    // APP-266/265: Ctrl+N is the one task input; Tab makes the task and
-    // opens it as a document with its title there.
+    // APP-286: in the app Ctrl+N opens the ticket editor, not quick capture.
     function test_new_task_editor_focuses_title() {
         const qc = popup("QuickCapturePopup");
-        const doc = byName(tc.win.contentItem, "task-doc");
+        const te = popup("TaskEditor");
         keyClick(Qt.Key_N, Qt.ControlModifier);
-        tryCompare(qc, "opened", true);
+        tryCompare(te, "opened", true);
+        compare(qc.opened, false, "Ctrl+N opened quick capture");
+        const title = byName(te.contentItem, "te-title");
+        tryVerify(function () { return title.activeFocus; }, 1000, "the title does not have the keyboard");
         keyClick(Qt.Key_A); keyClick(Qt.Key_B); keyClick(Qt.Key_C);
-        keyClick(Qt.Key_Tab);
-        tryCompare(doc, "opened", true);
-        tryCompare(qc, "opened", false);
-        const id = doc.taskId;
-        compare(byName(doc, "task-doc-title").text, "abc");
-        verify(byName(doc, "task-doc-title").activeFocus, "the title does not have the keyboard");
-        keyClick(Qt.Key_Escape);
-        tryCompare(doc, "opened", false);
-        AppController.deleteTask(id);
+        compare(title.text, "abc");
+        te.close();
+        tryCompare(te, "opened", false);
+        tc.win.focusActiveView();
         AppController.clearPendingUndo();
     }
 
@@ -154,7 +149,8 @@ TestCase {
         const title = AppController.taskById(cursor).title;
         tc.win.focusActiveView();
         const before = AppController.tasks.rowCount();
-        keyClick(Qt.Key_N, Qt.ControlModifier);
+        // Quick capture's own key (APP-286: Ctrl+N is the editor now).
+        keyClick(Qt.Key_Space, Qt.ControlModifier | Qt.ShiftModifier);
         tryCompare(qc, "opened", true);
         keyClick(Qt.Key_X); keyClick(Qt.Key_Y);
         keyClick(Qt.Key_Return);
