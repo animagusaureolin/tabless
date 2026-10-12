@@ -30,6 +30,8 @@ FocusScope {
     signal taskClicked(string id)
     // "N tasks without a date": Tasks · List with that condition.
     signal undatedRequested()
+    // "N overdue" under Deadlines: Tasks · List with overdue deadlines (APP-287).
+    signal overdueRequested()
     signal recapRequested()
     // The first-run screen (APP-271): a task made from its line, and where
     // tasks from elsewhere come in.
@@ -678,7 +680,7 @@ FocusScope {
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsSm
                             font.underline: odCA.hovered
-                            ClickArea { id: odCA; label: parent.text; onActivated: root.undatedRequested() }
+                            ClickArea { id: odCA; label: parent.text; onActivated: root.overdueRequested() }
                         }
                     }
 
