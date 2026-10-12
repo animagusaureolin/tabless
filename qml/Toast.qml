@@ -120,9 +120,11 @@ Item {
             }
         }
         if (_items.length >= maxVisible) {
-            // Make room by retiring the oldest plain notice.
+            // Make room by retiring the oldest plain notice, or an action
+            // toast that only offers more to read ("Updated · What's new"):
+            // it held an Undo back for its ten seconds (A5-19).
             let drop = -1;
-            for (let i = 0; i < _items.length; i++) if (!_items[i].actionLabel) { drop = i; break; }
+            for (let i = 0; i < _items.length; i++) if (!_items[i].actionLabel || _items[i].yields) { drop = i; break; }
             if (drop < 0) { _queue = _queue.concat([entry]); return; }
             const next = _items.slice();
             next.splice(drop, 1);
@@ -138,9 +140,11 @@ Item {
                 ms: _duration(k || "info", 0, false), tag: tag || "" });
     }
     // `key`: the shortcut that does the action too, shown after it ("Ctrl Z").
-    function showWithAction(s, label, seconds, fn, k, key) {
+    // `yields`: a newcomer pushes it off as it would a plain notice — for an
+    // action nobody loses anything by missing.
+    function showWithAction(s, label, seconds, fn, k, key, yields) {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",
-                actionFn: fn, action2Label: "", action2Fn: null, key: key || "",
+                actionFn: fn, action2Label: "", action2Fn: null, key: key || "", yields: !!yields,
                 ms: _duration(k || "info", seconds, !!label) });
     }
     // An Undo for the action just done (Main.onUndoableToast): replaces an

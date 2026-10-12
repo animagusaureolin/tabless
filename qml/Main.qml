@@ -425,7 +425,7 @@ ApplicationWindow {
         const from = AppController.takeUpdatedFrom();
         if (from.length === 0) return;
         toast.showWithAction(I18n.t("update.patched").arg(from).arg(AppController.appVersion),
-                             I18n.t("update.line.whatsNew"), 10, function () { whatsNew.showNow(); });
+                             I18n.t("update.line.whatsNew"), 10, function () { whatsNew.showNow(); }, "info", "", true);
     }
     function _showShellNotice() {
         const msg = AppController.shellNotice;
@@ -2014,7 +2014,7 @@ ApplicationWindow {
         topBar.focusSearch();
     }
 
-    // Saved views: the active one, applying one, Alt+1…9, the name dialog.
+    // Saved views: the active one, applying one, Ctrl 4… / g 1…, the name dialog.
     SavedViewsHost {
         id: savedViewsHost
         objectName: "saved-views-host"
@@ -2029,10 +2029,11 @@ ApplicationWindow {
         // filter shown in Tasks or saved as a view, nothing found → a task.
         contextProvider: function () { return win._keyTaskIds(); }
         onQueryRequested: (query, mode) => {
-            // Saving keeps the lens the user is on: Ctrl S on the board threw
-            // them to the list (A3-15).
-            win.showQuery(query, mode === "board" || (mode === "save" && AppController.currentView === "board") ? "board" : "list");
-            if (mode === "save") Qt.callLater(savedViewsHost.openSave);
+            // Saving keeps the lens and the filter the user is on: Ctrl S on
+            // the board threw them to the list and replaced their filter with
+            // the palette's text, even when the dialog was cancelled (A3-15).
+            if (mode === "save") { Qt.callLater(savedViewsHost.openSaveQuery, query); return; }
+            win.showQuery(query, mode === "board" ? "board" : "list");
         }
         onCreateRequested: (text) => quickCapture.openWithText(text)
         onOpenTask: (taskId) => win.showTask(AppController.taskById(taskId))

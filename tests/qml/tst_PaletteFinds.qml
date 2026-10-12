@@ -156,15 +156,109 @@ TestCase {
         AppController.activeProfileId = home;
     }
 
-    // A3-15: Ctrl S from the line on the board saves and stays on the board.
-    function test_save_from_the_line_stays_on_the_board() {
+    // Regression of A4-8: a note found by name and the notes search share one
+    // "Notes, docs, people" header.
+    function test_note_by_name_and_notes_search_share_one_header() {
+        const a = AppController.newNote("zqvsql cheatsheet");
+        tc.notes.push(a);
+        const b = AppController.newNote("b4 other note");
+        tc.notes.push(b);
+        AppController.setNoteBody(b, "# b4 other note\n\nrun zqvsql on prod");
+        const cmd = openWith("zqvsql");
+        tryVerify(function () { return cmd._matches.some(m => m.action === "searchNotes"); }, 1000,
+                  JSON.stringify(cmd._rows.map(r => r.header ? "[" + r.label + "]" : (r.action || r.kind))));
+        const other = headers(cmd).filter(h => h === I18n.t("cmd.group.other"));
+        compare(other.length, 1, JSON.stringify(headers(cmd)));
+        cmd.close();
+    }
+
+    function savedHost() {
+        const find = function (it) {
+            if (!it) return null;
+            if (it.objectName === "saved-views-host") return it;
+            const kids = it.children || [];
+            for (let i = 0; i < kids.length; i++) { const r = find(kids[i]); if (r) return r; }
+            return null;
+        };
+        return find(tc.win.contentItem);
+    }
+    function dropViews(before) {
+        const list = AppController.savedViews;
+        for (let i = 0; i < list.length; i++)
+            if (before.indexOf(list[i].id) < 0) AppController.deleteSavedView(list[i].id);
+    }
+
+    // A3-15: Ctrl S from the line on the board saves what the line says,
+    // stays on the board and leaves the board's filter alone — cancelled or
+    // saved.
+    function test_save_from_the_line_keeps_the_board_and_its_filter() {
+        const before = AppController.savedViews.map(v => v.id);
         AppController.currentView = "board";
-        const cmd = openWith("p0 ");
+        wait(100);
+        tc.win.searchText = "status:blocked p0";
+        let cmd = openWith("p1 ");
         tryVerify(function () { return cmd._parse.query.length > 0; }, 1000);
+        const q = cmd._parse.query;
         keyClick(Qt.Key_S, Qt.ControlModifier);
         tryCompare(cmd, "opened", false);
-        wait(200);
+        const dlg = savedHost().nameDialog;
+        tryCompare(dlg, "opened", true);
+        compare(dlg.query, q, "the dialog says what will be saved");
+        compare(tc.win.searchText, "status:blocked p0", "opening the dialog changed the filter");
+        keyClick(Qt.Key_Escape);
+        tryCompare(dlg, "opened", false);
+        compare(tc.win.searchText, "status:blocked p0", "Esc lost the filter");
+        compare(AppController.savedViews.length, before.length, "Esc saved a view");
+
+        cmd = openWith("p1 ");
+        tryVerify(function () { return cmd._parse.query.length > 0; }, 1000);
+        keyClick(Qt.Key_S, Qt.ControlModifier);
+        tryCompare(dlg, "opened", true);
+        keyClick(Qt.Key_Return);
+        tryCompare(dlg, "opened", false);
+        compare(AppController.savedViews.length, before.length + 1);
+        const v = AppController.savedViews[AppController.savedViews.length - 1];
+        compare(v.query, q);
+        compare(v.view, "board");
         compare(AppController.currentView, "board");
-        closeAll();
+        compare(tc.win.searchText, "status:blocked p0", "saving replaced the filter");
+        dropViews(before);
+        tc.win.searchText = "";
+    }
+
+    // A6-24: the save dialog names the keys a view really gets, not Alt.
+    function test_save_dialog_names_the_real_keys() {
+        const dlg = savedHost().nameDialog;
+        dlg.openFor("save", "x", "p0", 1);
+        tryCompare(dlg, "opened", true);
+        verify(dlg.fact.indexOf("Alt") < 0, dlg.fact);
+        verify(dlg.fact.indexOf(AppController.shortcutText("savedView.1")) >= 0, dlg.fact);
+        verify(dlg.fact.indexOf(AppController.shortcutText("savedView.1.alt")) >= 0, dlg.fact);
+        dlg.close();
+        tryCompare(dlg, "opened", false);
+    }
+
+    // A6-24: a view's key on a view whose filters were changed since brings
+    // it back; only on the view as it was does it turn it off.
+    function test_view_key_restores_a_changed_view() {
+        const before = AppController.savedViews.map(v => v.id);
+        AppController.currentView = "list";
+        wait(100);
+        const host = savedHost();
+        const id = AppController.saveView("b4 key view", { query: "is:open priority:p0", priorities: [], sort: "manual",
+                                                           archived: false, showDone: false, view: "list" });
+        verify(id.length > 0);
+        const n = AppController.savedViews.map(v => v.id).indexOf(id) + 1;
+        verify(host.apply(id));
+        compare(tc.win.searchText, "is:open priority:p0");
+        tc.win.searchText = "is:open";
+        verify(host.modified);
+        host.applyAt(n);
+        compare(tc.win.searchText, "is:open priority:p0", "the key cleared a changed view instead of restoring it");
+        compare(host.activeId, id);
+        host.applyAt(n);
+        compare(host.activeId, "", "pressed again on the view as it is, it turns off");
+        dropViews(before);
+        tc.win.searchText = "";
     }
 }

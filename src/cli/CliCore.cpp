@@ -733,13 +733,10 @@ QVector<int> todayTasks(const ProfileData& p, const QDate& today) {
 
 // ── Output ─────────────────────────────────────────────────────────────────
 
-namespace {
-// The name the app shows a task by: a tracker card's key, else its id (A3-10).
 QString shownKey(const Task& t) {
   const QString key = externalKeyOf(t);
   return key.isEmpty() ? t.id : key;
 }
-}  // namespace
 
 QJsonObject taskJson(const ProfileData& p, const Task& t, const QDateTime& now) {
   QJsonObject o;

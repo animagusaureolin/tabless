@@ -708,21 +708,22 @@ Popup {
             // "Notes, docs, people" (A1-16).
             const elsewhere = other.filter(e => e.kind === "task");
             const rest = other.filter(e => e.kind !== "task");
-            if (rest.length > 0) header(I18n.t("cmd.group.other"));
-            for (const e of rest) rows.push(Object.assign({}, e, { keys: "" }));
-            if (elsewhere.length > 0) header(I18n.t("cmd.group.otherProfiles"));
-            for (const e of elsewhere) rows.push(Object.assign({}, e, { keys: "" }));
             // Words met only inside notes: the full text is one Enter away in
-            // the notes list (DG-081), not a junk task (A4-8).
+            // the notes list (DG-081), not a junk task (A4-8). It sits in the
+            // same group as a note found by name: one header, not two.
             const inBodies = scored.filter(e => e._bodyOnly && (e.kind === "note" || e.kind === "docPage")).length;
             const typed = raw.trim();
-            if (inBodies > 0 && words.length > 0 && found.length === 0) {
-                header(I18n.t("cmd.group.other"));
+            const offerNotes = inBodies > 0 && words.length > 0 && found.length === 0;
+            if (rest.length > 0 || offerNotes) header(I18n.t("cmd.group.other"));
+            for (const e of rest) rows.push(Object.assign({}, e, { keys: "" }));
+            if (offerNotes) {
                 rows.push({ kind: "action", action: "searchNotes", text: words, keys: "", sub: "",
                             label: I18n.t("cmd.searchNotes").arg(words).arg(inBodies) });
                 rows.push({ kind: "action", action: "create", text: typed, keys: "", sub: "",
                             label: I18n.t("cmd.createRow").arg(typed) });
             }
+            if (elsewhere.length > 0) header(I18n.t("cmd.group.otherProfiles"));
+            for (const e of elsewhere) rows.push(Object.assign({}, e, { keys: "" }));
             // Nothing found: the same keys in the other keyboard layout
             // ("gjxbybnm" is "починить") before offering a task (A4-20).
             if (rows.length === 0 && root.chips.length === 0) {

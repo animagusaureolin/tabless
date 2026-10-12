@@ -490,6 +490,58 @@ TEST_F(CliHeadlessTest, DoneMovesToDoneAndIsIdempotent) {
   EXPECT_EQ(s.profiles.at(ref.profile).tasks.at(ref.task).status, QStringLiteral("done"));
 }
 
+// A3-10: `list` names a tracker card by its key, so the lines that answer a
+// change do too — "Done INC-100", never the local id behind it.
+TEST_F(CliHeadlessTest, ChangeLinesNameATrackerCardByItsKey) {
+  {
+    AppController c;
+    Request add;
+    add.verb = Verb::Add;
+    add.text = QStringLiteral("raise the k8s limits");
+    ASSERT_EQ(execute(c, add, QDateTime::currentDateTime()).exitCode, kExitOk);
+    c.flushSave();
+  }
+  {
+    QFile f(dataFile());
+    ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+    QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
+    f.close();
+    QJsonArray profiles = root.value(QStringLiteral("profiles")).toArray();
+    QJsonObject prof = profiles.at(0).toObject();
+    QJsonArray tasks = prof.value(QStringLiteral("tasks")).toArray();
+    ASSERT_EQ(tasks.size(), 1);
+    QJsonObject t = tasks.at(0).toObject();
+    t.insert(QStringLiteral("externalId"), QStringLiteral("INC-100"));
+    t.insert(QStringLiteral("externalProvider"), QStringLiteral("jira"));
+    tasks.replace(0, t);
+    prof.insert(QStringLiteral("tasks"), tasks);
+    profiles.replace(0, prof);
+    root.insert(QStringLiteral("profiles"), profiles);
+    ASSERT_TRUE(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    f.write(QJsonDocument(root).toJson());
+  }
+  const QDateTime now(QDate(2026, 10, 6), QTime(9, 0));
+  AppController c;
+  Request r;
+  r.taskId = QStringLiteral("INC-100");
+  r.verb = Verb::Est;
+  r.value = QStringLiteral("2h");
+  Response resp = execute(c, r, now);
+  EXPECT_EQ(resp.exitCode, kExitOk) << qPrintable(resp.err);
+  EXPECT_EQ(resp.out, QStringLiteral("INC-100: estimate 2h\n"));
+  r.verb = Verb::Sched;
+  r.value = QStringLiteral("tomorrow");
+  EXPECT_TRUE(execute(c, r, now).out.startsWith(QStringLiteral("INC-100: when"))) << qPrintable(execute(c, r, now).out);
+  r.verb = Verb::Done;
+  r.value.clear();
+  resp = execute(c, r, now);
+  EXPECT_EQ(resp.exitCode, kExitOk) << qPrintable(resp.err);
+  EXPECT_TRUE(resp.out.startsWith(QStringLiteral("Done INC-100"))) << qPrintable(resp.out);
+  EXPECT_TRUE(execute(c, r, now).out.contains(QStringLiteral("INC-100")));
+  r.verb = Verb::Open;
+  EXPECT_TRUE(execute(c, r, now).out.contains(QStringLiteral("INC-100")));
+}
+
 TEST_F(CliHeadlessTest, AddToAnotherProfileLeavesTheActiveOne) {
   QString other;
   {

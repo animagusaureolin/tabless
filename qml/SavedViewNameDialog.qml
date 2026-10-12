@@ -11,7 +11,7 @@ SmallDialog {
 
     // "save" | "rename" | "edit" (name and query of a saved view)
     property string mode: "save"
-    // The Alt digit the view will get (0 = none, past 9).
+    // The number the view will get in My views (0 = none, past 9).
     property int slot: 0
     readonly property alias text: nameField.text
     readonly property alias query: queryField.text
@@ -22,7 +22,16 @@ SmallDialog {
 
     title: root.mode === "rename" ? I18n.t("savedview.dialog.renameTitle")
          : root.mode === "edit" ? I18n.t("savedview.dialog.editTitle") : I18n.t("savedview.dialog.saveTitle")
-    fact: root.slot > 0 && root.slot <= 9 ? I18n.t("savedview.dialog.fact").arg(root.slot) : I18n.t("savedview.dialog.factNoKey")
+    // The keys the view really gets (A6-24): Ctrl 4… for the first six and
+    // g 1… for all nine, as bound now. Alt 1… are free since 0.8.
+    fact: {
+        if (root.slot < 1 || root.slot > 9) return I18n.t("savedview.dialog.factNoKey");
+        const keys = [AppController.shortcutText("savedView." + root.slot),
+                      AppController.shortcutText("savedView." + root.slot + ".alt")].filter(k => k.length > 0);
+        if (keys.length === 0) return I18n.t("savedview.dialog.factNoKey");
+        return keys.length === 1 ? I18n.t("savedview.dialog.fact").arg(keys[0])
+                                 : I18n.t("savedview.dialog.fact2").arg(keys[0]).arg(keys[1]);
+    }
 
     function openFor(mode, name, query, slot) {
         root.mode = mode;
