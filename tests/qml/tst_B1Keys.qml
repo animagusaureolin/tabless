@@ -484,10 +484,10 @@ TestCase {
         verify(b.cursorTaskId === "BK-0" || b.cursorTaskId === "BK-2", "j/k walk the column: " + b.cursorTaskId);
         // The pure rule: next, else above, else the nearest column (right
         // first), else nothing.
-        compare(b._neighbourOf([{ ids: ["a"] }, { ids: ["x"] }, { ids: ["p", "q"] }], { col: 1, row: 0 }), "p");
-        compare(b._neighbourOf([{ ids: ["a"] }, { ids: ["x"] }, { ids: [] }], { col: 1, row: 0 }), "a");
-        compare(b._neighbourOf([{ ids: ["x", "y"] }], { col: 0, row: 1 }), "x");
-        compare(b._neighbourOf([{ ids: ["x"] }, { ids: [] }], { col: 0, row: 0 }), "");
+        compare(b._neighbourOf([{ ids: ["a"] }, { ids: ["x"] }, { ids: ["p", "q"] }], 1, 0), "p");
+        compare(b._neighbourOf([{ ids: ["a"] }, { ids: ["x"] }, { ids: [] }], 1, 0), "a");
+        compare(b._neighbourOf([{ ids: ["x", "y"] }], 0, 1), "x");
+        compare(b._neighbourOf([{ ids: ["x"] }, { ids: [] }], 0, 0), "");
         tc.win.searchText = "";
         tc.win.typeAheadHoldMs = 250;
         // The next test's d on BK-1 is not this one's "dd".

@@ -138,7 +138,7 @@ Item {
         if (c < 0 && colRepeater.count > 0) c = 0;
         const col = c >= 0 ? colRepeater.itemAt(c) : null;
         if (!col) return;
-        root.toggleCollapsed(col.statusId);
+        root.toggleCollapsed(String(col["statusId"]));
         // The column that just opened (Done, off at the right edge) comes
         // into view; z a used to change nothing on screen (A2-5).
         root._revealColumnSoon(c);
@@ -189,21 +189,21 @@ Item {
         const cols = _visibleByColumn();
         const pos = _cursorPos(cols);
         if (!pos) return;
-        root.cursorTaskId = root._neighbourOf(cols, pos);
+        root.cursorTaskId = root._neighbourOf(cols, Number(pos["col"]), Number(pos["row"]));
     }
     // The card the cursor takes when the one at `pos` leaves: the next one
     // in its column, else the one above; a lone card hands the cursor to the
     // nearest column with cards (right first), at the same row or its last.
     // "" when the board has no other card, so j starts afresh instead of
     // the cursor sitting in a folded Done where j/k/l do nothing.
-    function _neighbourOf(cols, pos) {
-        const ids = cols[pos.col].ids;
-        if (pos.row + 1 < ids.length) return ids[pos.row + 1];
-        if (pos.row > 0) return ids[pos.row - 1];
+    function _neighbourOf(cols, col: int, row: int): string {
+        const ids = cols[col].ids;
+        if (row + 1 < ids.length) return ids[row + 1];
+        if (row > 0) return ids[row - 1];
         for (let d = 1; d < cols.length; d++) {
-            for (const c of [pos.col + d, pos.col - d]) {
+            for (const c of [col + d, col - d]) {
                 if (c < 0 || c >= cols.length || cols[c].ids.length === 0) continue;
-                return cols[c].ids[Math.min(pos.row, cols[c].ids.length - 1)];
+                return cols[c].ids[Math.min(row, cols[c].ids.length - 1)];
             }
         }
         return "";
