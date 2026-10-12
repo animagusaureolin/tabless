@@ -342,12 +342,12 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"undo.changedSince", {"Can't undo that — it has been changed since", "Нельзя отменить — это уже изменили после"}},
       {"undo.column", {"Column change undone: %1", "Изменение колонки отменено: %1"}},
       {"undo.schedule", {"Scheduling undone: %1", "Планирование отменено: %1"}},
-      {"undo.deadline", {"Deadline change undone: %1", "Изменение срока отменено: %1"}},
+      {"undo.deadline", {"Due date change undone: %1", "Изменение срока отменено: %1"}},
       // Drag-to-reschedule (APP-249).
       {"reschedule.scheduled", {"%1: when → %2", "%1: когда → %2"}},
-      {"reschedule.due", {"%1: deadline → %2", "%1: срок → %2"}},
+      {"reschedule.due", {"%1: due → %2", "%1: срок → %2"}},
       {"reschedule.scheduledCleared", {"%1: no longer planned for a day", "%1: больше не запланировано на день"}},
-      {"reschedule.dueCleared", {"%1: deadline removed", "%1: срок снят"}},
+      {"reschedule.dueCleared", {"%1: due date removed", "%1: срок снят"}},
       {"reschedule.localOnly", {"changed here only, not in the tracker", "изменено только здесь, не в трекере"}},
       {"reschedule.block", {"%1: %2–%3", "%1: %2–%3"}},
       {"undo.carry", {"Carry undone", "Перенос отменён"}},
@@ -651,13 +651,22 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Укажите ветку — этого требуют настройки"}},
-      {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
+      {"deadline.snoozed", {"%1: due date snoozed", "%1: срок отложен"}},
       {"notify.action.open", {"Open", "Открыть"}},
       {"notify.action.done", {"Mark done", "Готово"}},
       {"notify.snoozedUntil", {"Reminder snoozed until %1", "Напоминание отложено до %1"}},
       {"notify.reminderTitle", {"Reminder", "Напоминание"}},
       {"notify.test.title", {"Tabless test reminder", "Tabless — проверка напоминания"}},
       {"notify.test.body", {"Buttons work like on a real reminder.", "Кнопки работают как у настоящего напоминания."}},
+      {"notify.test.sent",
+       {"Test reminder sent. Nothing showed up? Check the system's notification settings for Tabless.",
+        "Пробное напоминание отправлено. Ничего не появилось — проверьте настройки уведомлений системы для Tabless."}},
+      {"notify.test.sentSystemOff",
+       {"Test reminder sent. “Desktop notifications” is off, so real reminders show only here in the app.",
+        "Пробное напоминание отправлено. «Уведомления в системе» выключены — настоящие напоминания будут только здесь, в приложении."}},
+      {"notify.test.noNotifier",
+       {"This system has no notification service for Tabless: reminders show only here in the app.",
+        "В этой системе Tabless не может показывать уведомления: напоминания будут только здесь, в приложении."}},
       {"settings.system.startAtLogin.failed",
        {"Could not change the login start: the system refused", "Не удалось изменить автозапуск: система не дала"}},
       // Timeline row badge — the only date arithmetic rendered from C++.
@@ -766,8 +775,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.task.schedule.label", {"Schedule", "Запланировать"}},
       {"shortcut.task.schedule.desc",
        {"Put the task in the next free slot of the selected day.", "Поставить задачу в ближайшее свободное окно выбранного дня."}},
-      {"shortcut.task.due.label", {"Deadline", "Срок"}},
-      {"shortcut.task.due.desc", {"Set the task's deadline.", "Задать срок задачи."}},
+      {"shortcut.task.due.label", {"Due date", "Срок"}},
+      {"shortcut.task.due.desc", {"Set the task's due date.", "Задать срок задачи."}},
       {"shortcut.task.priority0.label", {"Priority P0", "Приоритет P0"}},
       {"shortcut.task.priority0.desc", {"Urgent: drop everything.", "Срочно: всё остальное потом."}},
       {"shortcut.task.priority1.label", {"Priority P1", "Приоритет P1"}},
@@ -825,7 +834,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.view.week.label", {"Go to Week", "Перейти к неделе"}},
       {"shortcut.view.week.desc", {"Seven-day planner.", "Семидневный планировщик."}},
       {"shortcut.view.month.label", {"Go to Month", "Перейти к месяцу"}},
-      {"shortcut.view.month.desc", {"Month grid of deadlines and events.", "Сетка месяца: дедлайны и события."}},
+      {"shortcut.view.month.desc", {"Month grid of due dates and events.", "Сетка месяца: сроки и события."}},
       {"shortcut.view.docs.label", {"Go to Docs", "Перейти к докам"}},
       {"shortcut.view.docs.desc", {"Specs, links, snippets, contacts.", "Спеки, ссылки, сниппеты, контакты."}},
       {"shortcut.view.notes.label", {"Go to Notes", "Перейти к заметкам"}},
@@ -9431,6 +9440,14 @@ bool AppController::undoWouldRemoveTask(const QString& id) const {
   return std::any_of(top->tasks.cbegin(), top->tasks.cend(), [&id](const heap::undo::Edit<::Task>& e) {
     return e.id == id && !e.existedBefore && e.existsAfter;
   });
+}
+
+bool AppController::undoIsKnowledgeOnly() const {
+  const heap::undo::Entry* top = m_undo.peekUndo();
+  if(top == nullptr || top->profileRemoved || top->statusesTouched || top->savedViewsTouched) {
+    return false;
+  }
+  return top->tasks.isEmpty() && top->events.isEmpty() && top->people.isEmpty();
 }
 
 void AppController::undo() {

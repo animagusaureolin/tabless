@@ -227,9 +227,14 @@ bool AppController::handleNotificationUri(const QString& uri) {
 }
 
 void AppController::sendTestNotification() {
+  // The button always answers in the app (A7-5): a test that may not show
+  // up anywhere has to say what happened and what real reminders will do.
   if(!m_notifier) {
+    emit toast(tr_(QStringLiteral("notify.test.noNotifier")));
     return;
   }
+  const QJsonObject notif = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object().value(QStringLiteral("notifications")).toObject();
+  const bool systemOn = notif.value(QStringLiteral("desktopNotif")).toBool(true);
   heap::notify::Notification n;
   n.id = heap::notify::routingId(QStringLiteral("test"), QStringLiteral("heap"));
   n.title = tr_(QStringLiteral("notify.test.title"));
@@ -241,6 +246,7 @@ void AppController::sendTestNotification() {
   }
   m_shownReminders.insert(n.id, {n.title, n.body, n.category, QDate()});
   m_notifier->post(n);
+  emit toast(tr_(systemOn ? QStringLiteral("notify.test.sent") : QStringLiteral("notify.test.sentSystemOff")));
 }
 
 void AppController::snoozeReminderAt(const QString& notificationId, int minutes, const QDateTime& now) {

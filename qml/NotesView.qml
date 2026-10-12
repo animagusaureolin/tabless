@@ -118,8 +118,13 @@ Item {
         }
         return out;
     }
+    // Something to list beside the note (or under it, when narrow).
+    readonly property bool _hasLinks: root._taskRefs.length + root._incoming.length + root._taskLinks.length
+                                      + (Style.quiet ? 0 : root._external.length) > 0
     function _refreshLinks() {
-        if (!root.showBacklinks) {
+        // Beside the note when there is room, under its text when there is
+        // not (A4-12): computed whenever a note is on screen.
+        if (!root._noteShown) {
             root._incoming = []; root._taskRefs = []; root._taskLinks = []; root._external = [];
             return;
         }
@@ -344,7 +349,7 @@ Item {
         root._pageUpdated = row >= 0 ? m.data(m.index(row, 0), m.roleOf("updated")) : null;
         if (root.pageId.length > 0 && row < 0) root.pageId = "";
     }
-    onPageIdChanged: _refreshPage()
+    onPageIdChanged: { _refreshPage(); linksTimer.restart(); }
     Connections {
         target: AppController.docPages
         function onDataChanged() { root._refreshPage() }
@@ -373,11 +378,21 @@ Item {
     readonly property string _metaLine: {
         const page = root.pageId.length > 0;
         if (root.docs && !page) return "";
+        // No note at all: no lonely "Note" over an empty pane (A4-25).
+        if (!page && AppController.activeNoteId.length === 0) return "";
         const ago = root.agoText(page ? root._pageUpdated : root._activeUpdated, root._now);
         const edited = ago.length > 0 ? I18n.t("know.edited").arg(ago) : "";
-        if (Style.quiet) return edited;
-        const kind = I18n.t(page ? "know.kind.page" : "know.kind.note");
-        return edited.length > 0 ? kind + " · " + edited : kind;
+        // The keyboard on the drawn document, not in its text: the line
+        // says how to write (A4-4).
+        const reading = page ? pageEditor.liveEditor.documentFocused
+                             : root.viewMode === "live" && liveEditor.documentFocused;
+        const hint = reading ? I18n.t("know.hint.write") : "";
+        let out = edited;
+        if (!Style.quiet) {
+            const kind = I18n.t(page ? "know.kind.page" : "know.kind.note");
+            out = edited.length > 0 ? kind + " · " + edited : kind;
+        }
+        return hint.length === 0 ? out : out.length > 0 ? out + " · " + hint : hint;
     }
     // Where the document starts: the sheet's 44 px from the list, of which
     // the drawn note's own side margin is 24.
@@ -503,15 +518,97 @@ Item {
     // Where the keyboard goes when the view is switched to (PERA-5): the
     // editor, caret where it was left; in preview there is nothing to type
     // into, so the notes list.
-    // Into the text, not onto the drawn document: there letters went
-    // nowhere and a bare "u" undid something on a hidden board
-    // (IDIOT-KNOW-5/6). An open page is the document on screen.
+    // Onto the drawn document, as every other view and the task document
+    // take the keyboard: the keymap's chords are keys there and ↵ opens the
+    // text. In the text, g n then g t wrote "gt" into the note (A4-4). A
+    // letter that is no key still lands in the note (IDIOT-KNOW-6), and a
+    // bare "u" never reaches a change made on another screen (IDIOT-KNOW-5,
+    // undoKeyLive). An open page is the document on screen.
     function takeFocus() {
-        if (root.pageId.length > 0) pageEditor.focusEditor();
-        else if (root.viewMode === "live") liveEditor.focusEnd();
-        else if (root.viewMode !== "preview") editor.forceActiveFocus();
+        if (notesList.reclaimFocus()) return;
+        if (root.pageId.length > 0) pageEditor.focusDocument();
+        else if (root.viewMode === "live" && root._noteShown) liveEditor.focusDocument();
+        else if (root.viewMode !== "preview" && root._noteShown) editor.forceActiveFocus();
         else if (root._listShown) notesList.takeFocus();
         else root.forceActiveFocus();
+    }
+    // The drawn editor on screen (a page's or the note's), or null.
+    function _shownLive() {
+        if (root.pageId.length > 0) return pageEditor.liveEditor;
+        if (root.viewMode === "live" && root._noteShown) return liveEditor;
+        return null;
+    }
+    // The keymap's bare "u" (Main asks): on the drawn document the
+    // document's own edit first; past that, only what was done to notes and
+    // pages. A change made on a screen not in sight is Ctrl+Z's, which says
+    // what it took back (IDIOT-KNOW-5).
+    function undoKeyLive() {
+        const ed = root._shownLive();
+        if (ed && ed.documentFocused && ed.canUndoHere) return true;
+        return AppController.hasPendingUndo && AppController.undoIsKnowledgeOnly();
+    }
+    // On the drawn note the bare key is always the note's: with nothing of
+    // its own to take back and a change elsewhere on top, "u" was typed into
+    // the note as a letter (VB5-R1). It stays a key, and says so.
+    function undoKeyOwned() {
+        const ed = root._shownLive();
+        return !!ed && ed.documentFocused && !ed.readOnly;
+    }
+    // False when nothing was taken back (Main says why).
+    function undoKey() {
+        const ed = root._shownLive();
+        if (ed && ed.documentFocused && ed.undoHere()) return true;
+        if (!AppController.hasPendingUndo || !AppController.undoIsKnowledgeOnly()) return false;
+        AppController.undo();
+        return true;
+    }
+    // A row of the links column followed: the note opens and the keyboard
+    // goes on to it. Done here, not in the row: the row is rebuilt for the
+    // note opened and its own code had no `root` left to call (VB5-R3).
+    function _openLinkedNote(noteId) {
+        root._flushPending();
+        AppController.activeNoteId = noteId;
+        Qt.callLater(root.takeFocus);
+    }
+    // F6 walks the parts of the screen (Main asks, A4-27): the list, the
+    // document, the links beside it. `entering`: F6 has just come in from
+    // the sidebar or the header — the first part, the last going back.
+    // Returns the part that took the keyboard, or null where F6 leaves.
+    function _firstStop(it) {
+        if (!it || !it.visible || it.enabled === false) return null;
+        if (it.activeFocusOnTab === true) return it;
+        const kids = it.children;
+        for (let i = 0; i < kids.length; i++) {
+            const r = root._firstStop(kids[i]);
+            if (r) return r;
+        }
+        return null;
+    }
+    function _regionParts() {
+        const out = [];
+        if (root._listShown) out.push(notesList);
+        out.push(docColumn);
+        if (linksPane.visible && root._firstStop(linksPane)) out.push(linksPane);
+        return out;
+    }
+    function stepRegion(dir, entering) {
+        const parts = root._regionParts();
+        let i;
+        if (entering) {
+            i = dir > 0 ? 0 : parts.length - 1;
+        } else {
+            let at = -1;
+            for (let p = root.Window.activeFocusItem; p && at < 0; p = p.parent)
+                at = parts.indexOf(p);
+            if (at < 0) return null;
+            i = at + dir;
+            if (i < 0 || i >= parts.length) return null;
+        }
+        const part = parts[i];
+        if (part === notesList) notesList.focusList();
+        else if (part === linksPane) root._firstStop(linksPane).forceActiveFocus(Qt.TabFocusReason);
+        else root.takeFocus();
+        return part;
     }
     // The cursor keys (APP-276): j / k (↑ ↓) walk the list of notes, Enter
     // opens the note to write in. Only while the focus is not in the text,
@@ -522,6 +619,14 @@ Item {
         notesList.focusList();
     }
     function openCursor() { root._focusEditorAtEnd(); }
+    // m / the Menu key (the keymap's card menu): the open note's menu in
+    // the list — pin, rename, delete from the keyboard.
+    function openCursorMenu() {
+        if (root.docs || !root._listShown) return;
+        notesList.focusList();
+        const r = notesList._activeRowItem();
+        if (r) r.openMenu();
+    }
 
     // Ctrl+F in Notes filters the notes, not the task search in the top bar.
     function focusSearch() {
@@ -909,8 +1014,11 @@ Item {
             }
             // "+" makes a note to write in: the cursor goes there.
             onNoteCreated: (id) => root._focusNewNote()
-            // Return on the list, Esc on an empty filter (IDIOT-KNOW-7/8).
+            // Return on the list (IDIOT-KNOW-8); Esc on an empty filter goes
+            // back to the note drawn (IDIOT-KNOW-7, A4-6).
             onEditRequested: root._focusEditorAtEnd()
+            onDocumentRequested: root.takeFocus()
+            onImportRequested: root.importRequested()
             // A page or a snippet opens here in the document, a reference
             // under the link rules; a contact's handle is copied.
             onRefActivated: (url) => preview.openExternal(url)
@@ -924,6 +1032,7 @@ Item {
 
         // ── The document (DG-071) ─────────────────────────────────
         ColumnLayout {
+            id: docColumn
             objectName: "notes-document"
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -1032,7 +1141,7 @@ Item {
                             root._scheduleSave();
                             if (editor.activeFocus) root._detectAutocomplete();
                             statsTimer.restart();
-                            if (root.showBacklinks) linksTimer.restart();
+                            linksTimer.restart();
                         }
                         onCursorPositionChanged: if (editor.activeFocus) root._detectAutocomplete()
                         Keys.priority: Keys.BeforeItem
@@ -1171,6 +1280,8 @@ Item {
                     noteType: true
                     typeToEdit: true
                     attachOnPaste: true
+                    // No room beside the note: its links under the text.
+                    tail: !root.showBacklinks && root._hasLinks ? inlineLinks : null
                     onBlockKey: (event) => { if (root._acKey(event)) event.accepted = true; }
                     onEdited: (t) => root._applyFromLive(t)
                     onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
@@ -1192,8 +1303,13 @@ Item {
                 EmptyState {
                     objectName: "docs-no-page"
                     visible: root.docs && root.pageId.length === 0 && !root.shownDocData
+                    // A short block in the middle, not one line to the
+                    // window's edge (EYES-8).
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
+                    Layout.maximumWidth: Theme.px(420)
+                    Layout.leftMargin: Theme.sp2xl
+                    Layout.rightMargin: Theme.sp2xl
+                    Layout.alignment: Qt.AlignTop | Qt.AlignHCenter
                     Layout.topMargin: Theme.px(80)
                     title: I18n.t("knowledge.docs.noPage")
                     line: I18n.t("knowledge.docs.noPage.line")
@@ -1282,6 +1398,7 @@ Item {
         // here, its links out of Tabless. Sheet order: bold leads with the
         // tasks, quiet with the backlinks; an empty group is not drawn.
         Item {
+            id: linksPane
             objectName: "notes-links-pane"
             visible: root.showBacklinks && root._noteShown
             Layout.preferredWidth: Theme.px(220)
@@ -1360,6 +1477,31 @@ Item {
         }
     }
 
+    // Below 1000 px there is no room beside the note: the same groups sit
+    // under its text instead of vanishing with no trace (A4-12).
+    Component {
+        id: inlineLinks
+        ColumnLayout {
+            objectName: "notes-links-inline"
+            spacing: 0
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                Layout.topMargin: Theme.sp2xl
+                Layout.bottomMargin: Theme.sp2xl
+                color: Theme.border
+            }
+            Loader { Layout.fillWidth: true; sourceComponent: tasksGroup }
+            Loader { Layout.fillWidth: true; sourceComponent: backlinksGroup }
+            Loader {
+                Layout.fillWidth: true
+                active: !Style.quiet
+                visible: active
+                sourceComponent: externalGroup
+            }
+        }
+    }
+
     // "APP-101 · В работе": the tasks this note names, with their column now.
     Component {
         id: tasksGroup
@@ -1401,10 +1543,8 @@ Item {
                     objectName: "incoming-" + modelData.noteId
                     text: modelData.title
                     tip: modelData.title + " — " + modelData.text
-                    onActivated: {
-                        root._flushPending();
-                        AppController.activeNoteId = modelData.noteId;
-                    }
+                    // The keyboard goes on to the note opened (A4-7).
+                    onActivated: root._openLinkedNote(modelData.noteId)
                 }
             }
             Repeater {
@@ -1681,6 +1821,8 @@ Item {
     // expected to exist.
     signal taskRequested(string taskId)
     signal personRequested(string personId)
+    // "Import Markdown" under an empty list (A4-25): Main owns the picker.
+    signal importRequested()
 
     function _followLink(kind, target) {
         // A ticket in a note is a task: opening it is the whole reason for
@@ -1701,9 +1843,14 @@ Item {
         }
         if (kind !== "note") return;
         const hit = AppController.resolveNoteLink(target);
+        // Followed from the keyboard (a link's Tab stop, A4-7): the keyboard
+        // goes on to the note opened, not a link of the one left.
+        const f = root.Window.activeFocusItem;
+        const fromKeys = !!f && f.objectName === "mdLinkStop";
         if (hit.kind === "note") {
             root._flushPending();
             AppController.activeNoteId = hit.noteId;
+            if (fromKeys) Qt.callLater(root.takeFocus);
             return;
         }
         if (hit.kind === "heading") {

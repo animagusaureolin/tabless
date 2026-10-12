@@ -935,8 +935,8 @@ QString cliText(const QString& key, const QString& language) {
       {QStringLiteral("opening"), {"Opening %1", "Открываю %1"}},
       {QStringLiteral("sched"), {"%1: when → %2", "%1: когда → %2"}},
       {QStringLiteral("schedCleared"), {"%1: no longer planned for a day", "%1: больше не запланировано на день"}},
-      {QStringLiteral("due"), {"%1: deadline → %2", "%1: срок → %2"}},
-      {QStringLiteral("dueCleared"), {"%1: deadline removed", "%1: срок снят"}},
+      {QStringLiteral("due"), {"%1: due → %2", "%1: срок → %2"}},
+      {QStringLiteral("dueCleared"), {"%1: due date removed", "%1: срок снят"}},
       {QStringLiteral("dueMine"), {"your date; the tracker keeps its own", "ваш срок; в трекере остаётся свой"}},
       {QStringLiteral("est"), {"%1: estimate %2", "%1: оценка %2"}},
       {QStringLiteral("estCleared"), {"%1: estimate removed", "%1: оценка снята"}},
@@ -983,7 +983,8 @@ int parseEstimate(const QString& text) {
   }
   t.remove(QChar(' '));
   static const QRegularExpression kHours(QStringLiteral(R"(^(\d+(?:[.,]\d+)?)(?:h|ч|час|часа|часов)(?:(\d+)(?:m|м|мин|min))?$)"));
-  static const QRegularExpression kMinutes(QStringLiteral(R"(^(\d+)(?:m|м|мин|min)$)"));
+  // A bare number is minutes, the commonest way to say it (A4-19).
+  static const QRegularExpression kMinutes(QStringLiteral(R"(^(\d+)(?:m|м|мин|min)?$)"));
   if(const QRegularExpressionMatch m = kHours.match(t); m.hasMatch()) {
     QString hours = m.captured(1);
     hours.replace(QChar(','), QChar('.'));

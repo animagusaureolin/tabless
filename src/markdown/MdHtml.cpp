@@ -51,6 +51,12 @@ QString internalLink(
            label);
 }
 
+// A link to a note or a task is underlined in every theme: in the default
+// one its colour is the body text's, and it read as plain text (A2-35).
+QString underlined() {
+  return QStringLiteral("underline");
+}
+
 // Text with heap's decorations applied. The input is raw document text; every
 // piece of it is escaped here, including the parts that end up inside a tag.
 QString decorate(const QString& text, const MdHtmlOptions& options) {
@@ -76,10 +82,26 @@ QString decorate(const QString& text, const MdHtmlOptions& options) {
     } else if(match.capturedStart(5) >= 0) {
       // A known ticket reads as its title; the link still carries the id.
       const QString title = options.ticketTitles.value(match.captured(6)).simplified();
-      out += internalLink(
-          QStringLiteral("task"), match.captured(6), escapeHtml(title.isEmpty() ? match.captured(5) : title), options.palette.ticket);
+      out += internalLink(QStringLiteral("task"),
+                          match.captured(6),
+                          escapeHtml(title.isEmpty() ? match.captured(5) : title),
+                          options.palette.ticket,
+                          underlined());
     } else if(match.capturedStart(7) >= 0) {
-      out += internalLink(QStringLiteral("tag"), match.captured(8), escapeHtml(match.captured(7)), options.palette.tag);
+      // A tracker task's id has its provider in front ("#jira-APP-123", what
+      // the # autocomplete inserts): it has the shape of a tag, so a known
+      // task id is told apart by name and reads as its title (OWN-1).
+      const auto known = options.ticketTitles.constFind(match.captured(8));
+      if(known != options.ticketTitles.constEnd()) {
+        const QString title = known->simplified();
+        out += internalLink(QStringLiteral("task"),
+                            match.captured(8),
+                            escapeHtml(title.isEmpty() ? match.captured(7) : title),
+                            options.palette.ticket,
+                            underlined());
+      } else {
+        out += internalLink(QStringLiteral("tag"), match.captured(8), escapeHtml(match.captured(7)), options.palette.tag);
+      }
     } else if(match.capturedStart(9) >= 0) {
       out += internalLink(QStringLiteral("person"), match.captured(10), escapeHtml(match.captured(9)), options.palette.mention);
     }
@@ -240,13 +262,13 @@ void appendInline(const MdAst& ast, int index, const MdHtmlOptions& options, QSt
                              node.href.trimmed(),
                              chip,
                              colorOr(options.palette.text, options.palette.ticket),
-                             options.palette.taskDecoration);
+                             colorOr(options.palette.taskDecoration, underlined()));
         break;
       }
       if(target != options.wikiTargets.constEnd() && target->kind == QStringLiteral("missing")) {
         // Still a link: a click offers to write the note.
-        *out +=
-            internalLink(QStringLiteral("note"), node.href, escapeHtml(target->label), colorOr(options.palette.dim, options.palette.link));
+        *out += internalLink(
+            QStringLiteral("note"), node.href, escapeHtml(target->label), colorOr(options.palette.dim, options.palette.link), underlined());
         break;
       }
       QString label;
@@ -254,7 +276,7 @@ void appendInline(const MdAst& ast, int index, const MdHtmlOptions& options, QSt
       if(label.isEmpty()) {
         label = escapeHtml(node.href);
       }
-      *out += internalLink(QStringLiteral("note"), node.href, label, options.palette.link);
+      *out += internalLink(QStringLiteral("note"), node.href, label, options.palette.link, underlined());
       break;
     }
 

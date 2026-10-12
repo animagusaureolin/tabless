@@ -129,4 +129,37 @@ TestCase {
         verify(views.indexOf("Month") >= 0 || views.indexOf("месяц") >= 0, views);
         verify(views.indexOf("Archive") >= 0 || views.indexOf("архив") >= 0, views);
     }
+
+    // A1-5 / A7-7 / A5-26: the guide uses the same words as the app — "Due",
+    // not "deadline"; "Notes", not "Knowledge"; "резервная копия", not
+    // "бэкап"; "Who to message" — in both languages, TOC included.
+    function test_guide_speaks_the_glossary() {
+        const saved = AppController.language;
+        const hc = make('import TodoCpp; HelpContent { width: 480 }');
+        const banned = {
+            // Ctrl K is the command line; "palette" stays only for colours.
+            en: [/\bdeadlines?\b/i, /\bknowledge\b/i, /who to write/i, /command palette/i,
+                 /(opens|in) the palette/i, /the palette (has|searches)/i, /K — palette/i],
+            ru: [/дедлайн/i, /знани[яй]/i, /бэкап/i, /палитр[аы] команд/i,
+                 /открывает палитру/i, /в палитре/i, /— палитра/i, /путь к нему/i]
+        };
+        const bad = [];
+        const walk = function (it, lang) {
+            if (!it) return;
+            if (typeof it.text === "string")
+                for (const rx of banned[lang])
+                    if (rx.test(it.text)) bad.push(lang + ": " + it.text.slice(0, 80));
+            const kids = it.children || [];
+            for (let k = 0; k < kids.length; k++) walk(kids[k], lang);
+        };
+        for (const lang of ["en", "ru"]) {
+            AppController.language = lang;
+            walk(hc, lang);
+            for (const row of hc.tocModel)
+                for (const rx of banned[lang])
+                    if (rx.test(row.label)) bad.push(lang + " toc: " + row.label);
+        }
+        AppController.language = saved;
+        compare(bad.length, 0, "old terms in the guide:\n" + bad.join("\n"));
+    }
 }
