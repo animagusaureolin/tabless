@@ -12,7 +12,7 @@ import TodoCpp
 // Names: search, filter, calendar, flag, chevron-down, chevron-up,
 // chevron-left, chevron-right, branch, lock, expand, collapse, info, link,
 // attachment, timer, check, plus, close, more, arrow-out, arrow-up,
-// arrow-down, arrow-left, arrow-right, sun (Today), settings, list, doc,
+// arrow-down, arrow-left, arrow-right, today, sun, settings, list, doc,
 // person, archive, bolt, undo, sidebar, ring, progress, pending, pause.
 Item {
     id: root
@@ -64,8 +64,11 @@ Item {
         "arrow-right":   { s: "M3 8h10M9 4l4 4-4 4" },
         // An empty board column: thin column lines, no filled tiles.
         "columns":       { s: "M3.5 2.5v7M8 2.5v4.5M12.5 2.5v11" },
+        // Today (APP-296): a calendar page with the day marked — the sun
+        // read as the theme switch.
+        "today":         { s: "M4 3h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM2 6.5h12M5.5 1.5v3M10.5 1.5v3", f: _c(8, 10.2, 1.6) },
         "sun":           { s: _c(8, 8, 3) + "M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" },
-        "settings":      { s: _c(8, 8, 2.2) + "M12.76 6.45 14.45 6.59 14.45 9.41 12.76 9.55 12.46 10.27 13.56 11.56 11.56 13.56 10.27 12.46 9.55 12.76 9.41 14.45 6.59 14.45 6.45 12.76 5.73 12.46 4.44 13.56 2.44 11.56 3.54 10.27 3.24 9.55 1.55 9.41 1.55 6.59 3.24 6.45 3.54 5.73 2.44 4.44 4.44 2.44 5.73 3.54 6.45 3.24 6.59 1.55 9.41 1.55 9.55 3.24 10.27 3.54 11.56 2.44 13.56 4.44 12.46 5.73Z" },  // a cog: rays read as the Today sun
+        "settings":      { s: _c(8, 8, 2.2) + "M12.76 6.45 14.45 6.59 14.45 9.41 12.76 9.55 12.46 10.27 13.56 11.56 11.56 13.56 10.27 12.46 9.55 12.76 9.41 14.45 6.59 14.45 6.45 12.76 5.73 12.46 4.44 13.56 2.44 11.56 3.54 10.27 3.24 9.55 1.55 9.41 1.55 6.59 3.24 6.45 3.54 5.73 2.44 4.44 4.44 2.44 5.73 3.54 6.45 3.24 6.59 1.55 9.41 1.55 9.55 3.24 10.27 3.54 11.56 2.44 13.56 4.44 12.46 5.73Z" },  // a cog: rays read as a sun
         "list":          { s: "M6 4h8M6 8h8M6 12h8", f: _c(2.5, 4, 1) + _c(2.5, 8, 1) + _c(2.5, 12, 1) },
         "doc":           { s: "M3 2.5h7l3 3v8H3zM10 2.5v3h3M5.5 8.5h5M5.5 11h5" },
         "pen":           { s: "M3 13l.8-3L10.5 3.3l2.2 2.2L6 12.2zM9.3 4.5l2.2 2.2" },

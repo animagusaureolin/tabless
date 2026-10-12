@@ -184,6 +184,36 @@ QStringList closingReferences(const QString& body) {
   return out;
 }
 
+QString linkedIssueKey(const QString& sourceBranch, const QString& title, const QString& body, const QSet<QString>& knownKeys) {
+  if(knownKeys.isEmpty()) {
+    return {};
+  }
+  // A key stands on its own: not the tail of a longer word, not the head of a
+  // longer number. Branches are often lower-case, so case does not matter.
+  static const QRegularExpression kKey(QStringLiteral(R"((?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]*-\d+)(?![0-9]))"));
+  static const QRegularExpression kBodyKey(
+      QStringLiteral(
+          R"((?:(?:close[sd]?|closing|fix(?:e[sd])?|fixing|resolve[sd]?|resolving|implement(?:s|ed)?|refs?|part of)\s*:?\s+|/browse/)([A-Za-z][A-Za-z0-9]*-\d+)(?![0-9]))"),
+      QRegularExpression::CaseInsensitiveOption);
+  const auto firstKnown = [&knownKeys](const QRegularExpression& re, const QString& text) -> QString {
+    auto it = re.globalMatch(text);
+    while(it.hasNext()) {
+      const QString key = it.next().captured(1).toUpper();
+      if(knownKeys.contains(key)) {
+        return key;
+      }
+    }
+    return {};
+  };
+  for(const QString& text : {sourceBranch, title}) {
+    const QString key = firstKnown(kKey, text);
+    if(!key.isEmpty()) {
+      return key;
+    }
+  }
+  return firstKnown(kBodyKey, body);
+}
+
 QString joinObjectField(const QJsonValue& array, const QString& key) {
   QStringList names;
   for(const auto& v : array.toArray()) {

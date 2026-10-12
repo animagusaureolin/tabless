@@ -183,26 +183,54 @@ TestCase {
         verify(!findChild(nv, "docs-no-page").visible);
         compare(findChild(nv, "docs-item-text").text, "make up");
         compare(list.shownKey, "snippet:" + sn.idx);
-        verify(!findChild(nv, "docs-item-open").visible, "a snippet has nothing to open");
         // A page takes the document back.
         nv.openPage("");
         verify(!view.visible);
     }
 
-    function test_a_link_shows_its_address_and_follows_its_edit() {
+    // A link has nothing inside but its address: a click opens it (after
+    // the double-click time), a double click copies it and opens nothing.
+    function test_a_link_opens_and_a_double_click_copies() {
+        const nv = docsOf();
+        const list = findChild(nv, "notes-list-pane");
+        list.rebuildNow();
+        let row = null;
+        tryVerify(function () { row = findChild(nv, "knowledge-ref-row"); return row !== null; }, 2000, "no link row");
+        let area = null;
+        for (let i = 0; i < row.children.length; i++)
+            if (row.children[i].doubleActivated !== undefined) area = row.children[i];
+        verify(area !== null);
+        const opened = createTemporaryQmlObject('import QtQuick; import QtTest; SignalSpy { signalName: "refActivated" }', host);
+        opened.target = list;
+        area.activated();
+        verify(!findChild(nv, "docs-item-view").visible, "a link opened in the document");
+        tryCompare(opened, "count", 1, 2000);
+        area.activated();
+        area.doubleActivated();
+        wait(Qt.styleHints.mouseDoubleClickInterval + 100);
+        compare(opened.count, 1, "a double click opened the link");
+    }
+
+    // A double click copies what any row holds; a snippet shown follows its
+    // edit and clears when it is deleted.
+    function test_every_row_copies_and_a_snippet_follows_its_edit() {
         const nv = docsOf();
         const keep = AppController.docsState;
         const list = findChild(nv, "notes-list-pane");
-        list.itemShown(rowsOf(nv, "ref")[0]);
-        verify(findChild(nv, "docs-item-view").visible);
-        verify(findChild(nv, "docs-item-open").visible);
-        compare(findChild(nv, "docs-item-title").text, "HTTP Semantics");
-        // Edited elsewhere: the pane reads the new text; gone: it clears.
+        const toasts = createTemporaryQmlObject('import QtQuick; import QtTest; SignalSpy { signalName: "toast" }', host);
+        toasts.target = AppController;
+        for (const kind of ["snippet", "ref"]) {
+            const r = rowsOf(nv, kind)[0];
+            list.copyItem(r);
+            compare(toasts.signalArguments[toasts.count - 1][0],
+                    I18n.t("docs.toast.copied").arg(kind === "snippet" ? r.title : r.url), kind);
+        }
+        list.itemShown(rowsOf(nv, "snippet")[0]);
         const d = JSON.parse(keep);
-        d.sections[0].items[0].desc = "the semantics of HTTP";
+        d.snippets[0].code = "make down";
         AppController.docsState = JSON.stringify(d);
-        compare(findChild(nv, "docs-item-text").text, "the semantics of HTTP");
-        d.sections[0].items = [];
+        compare(findChild(nv, "docs-item-text").text, "make down");
+        d.snippets = [];
         AppController.docsState = JSON.stringify(d);
         verify(!findChild(nv, "docs-item-view").visible);
         verify(findChild(nv, "docs-no-page").visible);

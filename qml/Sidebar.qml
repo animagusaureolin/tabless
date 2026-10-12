@@ -412,7 +412,7 @@ Rectangle {
             objectName: "sidebar-section-today"
             section: "today"
             label: I18n.t("sidebar.today")
-            iconName: "sun"
+            iconName: "today"
             shortcutId: "section.today"
         }
         NavRow {
