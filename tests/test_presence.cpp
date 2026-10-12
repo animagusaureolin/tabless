@@ -153,6 +153,25 @@ TEST(ReminderButtons, SnoozeBringsTheSameReminderBackLater) {
   EXPECT_EQ(refired(spy, id), 1) << "once";
 }
 
+// A7-5: the test button always answers in the app, and says when real
+// reminders will not reach the system because the switch is off.
+TEST(ReminderButtons, TestReminderSaysWhatHappened) {
+  dropSavedSnoozes();
+  AppController c;
+  c.setAppSettingsJson(QStringLiteral("{}"));
+  QSignalSpy spy(&c, &AppController::toast);
+  c.sendTestNotification();
+  ASSERT_EQ(spy.size(), 1);
+  EXPECT_EQ(spy.at(0).at(0).toString(), c.tr_(QStringLiteral("notify.test.sent")));
+
+  c.setAppSettingsJson(QStringLiteral("{\"notifications\":{\"desktopNotif\":false}}"));
+  spy.clear();
+  c.sendTestNotification();
+  ASSERT_EQ(spy.size(), 1);
+  EXPECT_EQ(spy.at(0).at(0).toString(), c.tr_(QStringLiteral("notify.test.sentSystemOff")));
+  c.setAppSettingsJson(QStringLiteral("{}"));
+}
+
 // The click arrives as a heap://notify URI; the durations come from settings.
 TEST(ReminderButtons, SnoozeButtonFromUriUsesTheSetting) {
   dropSavedSnoozes();

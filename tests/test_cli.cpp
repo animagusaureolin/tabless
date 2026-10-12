@@ -786,7 +786,7 @@ TEST_F(CliHeadlessTest, SchedDueEstSomedayChangeTheTask) {
     r.verb = Verb::Due;
     r.value = QStringLiteral("2026-10-09");
     resp = execute(c, r, now);
-    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: deadline → Fri, Oct 9\n")) << qPrintable(resp.err);
+    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: due → Fri, Oct 9\n")) << qPrintable(resp.err);
 
     r.verb = Verb::Est;
     r.value = QStringLiteral("1h30m");

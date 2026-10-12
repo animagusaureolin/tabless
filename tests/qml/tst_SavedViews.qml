@@ -341,6 +341,9 @@ TestCase {
     // X-Menus-Other (DG-150): no Duplicate row; a copy is "Сохранить как
     // вид" on the open view. The menu still deletes the row it was opened on.
     function test_context_menu_duplicate_and_delete() {
+        // The copy's name is localized; the shared test profile may be left in ru.
+        const lang = AppController.language;
+        AppController.language = "en";
         const a = mkView("Alpha", "svprobe");
         mouseClick(railRow(0), 20, 10, Qt.RightButton);
         const menu = railMenu();
@@ -363,6 +366,7 @@ TestCase {
         tryVerify(function () { return AppController.savedViews.length === 1; });
         compare(AppController.savedViews[0].id, a, "the copy went, the original stayed");
         if (menu.opened) menu.close();
+        AppController.language = lang;
     }
     function railMenu() {
         let rail = byName("sidebar-views-head");
@@ -412,10 +416,22 @@ TestCase {
     }
 
     // heap 2 (APP-258): nothing saved is one grey line, not a button.
+    // EYES-3: a sentence with a subject, and not on the first run next to
+    // the hero.
     function test_empty_list_says_where_views_come_from() {
-        const line = byName("sidebar-views-empty");
-        verify(line !== null && line.visible, "no empty line");
+        const line = find(tc.win.contentItem, function (it) { return it.objectName === "sidebar-views-empty"; });
+        verify(line !== null);
+        compare(line.visible, AppController.welcomeSeen, "shown only once the first run is over");
+        // The "My views" head goes with it: no bare heading on the first run.
+        const head = find(tc.win.contentItem, function (it) { return it.objectName === "sidebar-views-head"; });
+        verify(head !== null);
+        compare(head.visible, AppController.welcomeSeen, "a bare head over nothing on the first run");
+        // Past the first run (as tst_TodayView does): the line is there.
+        AppController.markWelcomeSeen();
+        tryVerify(function () { return line.visible; }, 1000, "no empty line");
+        verify(head.visible, "the head is back past the first run");
         compare(line.text, I18n.t("sidebar.myViews.empty"));
+        compare(I18n.dict.en["sidebar.myViews.empty"], "Saved views appear here");
     }
 
     function test_profile_switch_leaves_the_view() {
