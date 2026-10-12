@@ -3172,7 +3172,11 @@ ApplicationWindow {
     // The calendar's "Без даты" tray, when the view shows one: a region of
     // its own, so "pick one and press s" needs no 47 Tabs (A1-18).
     function _trayItem() {
-        const v = win.activeViewItem();
+        // The calendar lens hands its inner grid to activeViewItem(); the
+        // tray sits beside that grid, so look from the lens itself.
+        const outer = viewLoader.item;
+        const inner = win.activeViewItem();
+        const v = outer && outer.objectName === "calendar-view" && outer["calendarView"] === inner ? outer : inner;
         if (!v) return null;
         const stack = [v];
         while (stack.length > 0) {

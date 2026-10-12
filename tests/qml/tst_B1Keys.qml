@@ -460,4 +460,117 @@ TestCase {
         compare(toast._items[0].message, "Done: BK-0", "the newest action's toast is on screen");
         toast.clear();
     }
+
+    // A2-4, A4-16: d on the last card of a column hands the cursor to the
+    // nearest column with cards; it used to stay on the card, now in the
+    // folded Done column, and j/k/l did nothing until h.
+    function test_d_on_a_lone_card_moves_the_cursor_to_another_column() {
+        tc.win.typeAheadHoldMs = 0;
+        const sts = AppController.statuses;
+        let other = "";
+        for (let i = 0; i < sts.length && !other; i++)
+            if (sts[i].id !== "todo" && AppController.statusCategory(sts[i].id) !== "done") other = sts[i].id;
+        verify(other.length > 0, "a second open column");
+        AppController.moveTask("BK-1", other);
+        tc.win.searchText = "bkprobe";
+        wait(150);
+        const b = boardWithCursor("BK-1");
+        keyClick(Qt.Key_D);
+        tryVerify(function () { return category("BK-1") === "done"; }, 1000);
+        verify(b.cursorTaskId === "BK-0" || b.cursorTaskId === "BK-2", "cursor " + b.cursorTaskId);
+        const before = b.cursorTaskId;
+        keyClick(Qt.Key_J);
+        keyClick(Qt.Key_K);
+        verify(b.cursorTaskId === "BK-0" || b.cursorTaskId === "BK-2", "j/k walk the column: " + b.cursorTaskId);
+        // The pure rule: next, else above, else the nearest column (right
+        // first), else nothing.
+        compare(b._neighbourOf([{ ids: ["a"] }, { ids: ["x"] }, { ids: ["p", "q"] }], { col: 1, row: 0 }), "p");
+        compare(b._neighbourOf([{ ids: ["a"] }, { ids: ["x"] }, { ids: [] }], { col: 1, row: 0 }), "a");
+        compare(b._neighbourOf([{ ids: ["x", "y"] }], { col: 0, row: 1 }), "x");
+        compare(b._neighbourOf([{ ids: ["x"] }, { ids: [] }], { col: 0, row: 0 }), "");
+        tc.win.searchText = "";
+        tc.win.typeAheadHoldMs = 250;
+        // The next test's d on BK-1 is not this one's "dd".
+        tc.win._lastDoneKey = "";
+        verify(before.length > 0);
+    }
+
+    // A1-18: in the calendar lens the undated tray is a region of its own.
+    function test_f6_reaches_the_calendar_tray() {
+        AppController.currentView = "week";
+        tryVerify(function () { return tc.win._trayItem() !== null; }, 3000, "the tray is found beside the grid");
+        verify(tc.win._regions().indexOf("tray") >= 0, String(tc.win._regions()));
+        tc.win.focusActiveView();
+        let reached = false;
+        for (let i = 0; i < 6 && !reached; i++) {
+            keyClick(Qt.Key_F6);
+            wait(30);
+            reached = tc.win._regionOf(tc.win.activeFocusItem) === "tray";
+        }
+        verify(reached, "F6 never landed in the tray");
+        AppController.currentView = "board";
+        tryVerify(function () { return tc.win.activeViewItem() && tc.win.activeViewItem().moveCursor; }, 3000);
+    }
+
+    // A1-15: "потом", "park", "later" name the someday command, not only its
+    // label.
+    function test_someday_command_answers_to_its_other_names() {
+        const pal = dataByName("command-line");
+        verify(pal !== null);
+        const e = { kind: "command", label: I18n.t("palette.cmd.someday"), aliases: I18n.t("palette.cmd.someday.words") };
+        verify(pal._nameHit("someday", e));
+        verify(pal._nameHit("later", e));
+        verify(pal._nameHit("отложить", e));
+        verify(!pal._nameHit("deploy", e));
+    }
+
+    // A4-3 residue: "zap" typed on the board searches; z a does not fold the
+    // column first.
+    function test_a_word_starting_with_a_sequence_searches() {
+        const b = boardWithCursor("BK-0");
+        const folded = JSON.stringify(b.collapsed);
+        typeText("zap");
+        wait(400);
+        compare(byName(tc.win.contentItem, "topbar-search").text, "zap");
+        compare(JSON.stringify(b.collapsed), folded, "z a folded a column under the word");
+    }
+
+    // A4-3 residue: u with nothing to undo is still nobody's key, but a word
+    // starting with it searches whole.
+    function test_a_word_starting_with_an_idle_u_searches_whole() {
+        AppController.clearPendingUndo();
+        verify(!AppController.hasPendingUndo);
+        boardWithCursor("BK-0");
+        typeText("update");
+        wait(400);
+        compare(byName(tc.win.contentItem, "topbar-search").text, "update");
+        tc.win.searchText = "";
+        byName(tc.win.contentItem, "topbar-search").text = "";
+        tc.win.focusActiveView();
+        keyClick(Qt.Key_U);
+        wait(400);
+        compare(byName(tc.win.contentItem, "topbar-search").text, "", "a lone idle u types nothing");
+    }
+
+    // A3-21 / A6-15 follow-up: the card's due line picks its short form by
+    // its own box, with no binding loop on "text".
+    function test_card_due_line_has_no_binding_loop() {
+        failOnWarning(/Binding loop detected/);
+        const d = new Date(AppController.today);
+        d.setDate(d.getDate() - 19);
+        const t = AppController.taskById("BK-0");
+        t.dueAt = d;
+        t.dueHasTime = false;
+        AppController.saveTask(t);
+        tc.win.width = 900;
+        wait(300);
+        tc.win.width = 1456;
+        wait(300);
+        const b = boardWithCursor("BK-0");
+        const card = b._cardItem("BK-0");
+        verify(card !== null);
+        const due = byName(card, "tc-due");
+        verify(due !== null && due.visible);
+        verify(due.text.length > 0);
+    }
 }

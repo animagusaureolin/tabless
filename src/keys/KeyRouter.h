@@ -166,6 +166,8 @@ class KeyRouter : public QObject, public QQmlParserStatus {
   void setPending(const QString& chord);
   // Runs the held command now (its wait is over, or another key came).
   void flushHeld();
+  // Holds a key (with the command it would run, or none) for typingHoldMs.
+  void holdKey(const QStringList& ids, const QString& chord, const QString& text);
   // A held key that a typed letter turned into text: drops the command.
   QString takeHeldText();
 
@@ -181,6 +183,7 @@ class KeyRouter : public QObject, public QQmlParserStatus {
   QTimer m_timeout;
   QTimer m_holdTimer;
   QStringList m_heldIds;
+  // Non-empty while a key is held, even one with no command to run.
   QString m_heldChord;
   QString m_heldText;
   // The text the waiting prefix typed ("g"), for "github" typed on the board.

@@ -99,18 +99,30 @@ void KeyRouter::setTypingHoldMs(int ms) {
 
 void KeyRouter::flushHeld() {
   m_holdTimer.stop();
-  if(m_heldIds.isEmpty()) {
+  if(m_heldChord.isEmpty()) {
     return;
   }
   const QStringList ids = m_heldIds;
   m_heldIds.clear();
+  m_heldChord.clear();
   m_heldText.clear();
-  callHandler(ids, false);
+  // A key held with nothing to act on (u with no history) stays swallowed.
+  if(!ids.isEmpty()) {
+    callHandler(ids, false);
+  }
+}
+
+void KeyRouter::holdKey(const QStringList& ids, const QString& chord, const QString& text) {
+  m_heldIds = ids;
+  m_heldChord = chord;
+  m_heldText = text;
+  m_holdTimer.start();
 }
 
 QString KeyRouter::takeHeldText() {
   m_holdTimer.stop();
   m_heldIds.clear();
+  m_heldChord.clear();
   QString text;
   text.swap(m_heldText);
   return text;
@@ -224,10 +236,12 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
   }
 
   // A command key is waiting to see whether a word follows (A4-3).
-  if(!m_heldIds.isEmpty()) {
+  if(!m_heldChord.isEmpty()) {
     // The same key again is Vim's "dd", not a word: the command runs and
-    // this press goes on as a key of its own.
-    if(!ke->isAutoRepeat() && m_holdUnlive && !focusTyping && typesText(ke) && chord != m_heldChord) {
+    // this press goes on as a key of its own. Only a letter or digit
+    // carries the word on: "u[" is two dead keys, not a search.
+    if(!ke->isAutoRepeat() && m_holdUnlive && !focusTyping && typesText(ke) && ke->text().at(0).isLetterOrNumber() &&
+       chord != m_heldChord) {
       const QString text = takeHeldText() + ke->text();
       emit typedText(text);
       return true;
@@ -260,6 +274,15 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
       }
     }
     if(!ids.isEmpty()) {
+      // "zap" typed on the board: z a would fold a column and search "p".
+      // A finished sequence waits as a single command letter does.
+      if(wordLetter) {
+        const QString live = callHandler(ids, true);
+        if(!live.isEmpty() && !heap::keys::isCursorMove(live)) {
+          holdKey(QStringList{live}, chord, prefixText + ke->text());
+          return true;
+        }
+      }
       callHandler(ids, false);
       return true;
     }
@@ -326,10 +349,13 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
   if(wordLetter && !ids.isEmpty()) {
     const QString live = callHandler(ids, true);
     if(!live.isEmpty() && !heap::keys::isCursorMove(live)) {
-      m_heldIds = QStringList{live};
-      m_heldChord = chord;
-      m_heldText += ke->text();
-      m_holdTimer.start();
+      holdKey(QStringList{live}, chord, m_heldText + ke->text());
+      return true;
+    }
+    // Nothing to act on (u with no history): swallowed as before, unless a
+    // word follows ("update" searched "pdate").
+    if(live.isEmpty()) {
+      holdKey(QStringList{}, chord, m_heldText + ke->text());
       return true;
     }
   }

@@ -189,9 +189,24 @@ Item {
         const cols = _visibleByColumn();
         const pos = _cursorPos(cols);
         if (!pos) return;
+        root.cursorTaskId = root._neighbourOf(cols, pos);
+    }
+    // The card the cursor takes when the one at `pos` leaves: the next one
+    // in its column, else the one above; a lone card hands the cursor to the
+    // nearest column with cards (right first), at the same row or its last.
+    // "" when the board has no other card, so j starts afresh instead of
+    // the cursor sitting in a folded Done where j/k/l do nothing.
+    function _neighbourOf(cols, pos) {
         const ids = cols[pos.col].ids;
-        const next = pos.row + 1 < ids.length ? ids[pos.row + 1] : (pos.row > 0 ? ids[pos.row - 1] : "");
-        if (next) root.cursorTaskId = next;
+        if (pos.row + 1 < ids.length) return ids[pos.row + 1];
+        if (pos.row > 0) return ids[pos.row - 1];
+        for (let d = 1; d < cols.length; d++) {
+            for (const c of [pos.col + d, pos.col - d]) {
+                if (c < 0 || c >= cols.length || cols[c].ids.length === 0) continue;
+                return cols[c].ids[Math.min(pos.row, cols[c].ids.length - 1)];
+            }
+        }
+        return "";
     }
 
     // True while any card's menu is up; Main.qml holds the board keys back.
@@ -2052,16 +2067,25 @@ Item {
     // Under the chip, the cut column's header (its ring, its "show") read
     // as one jumble with it (A4-24): the header line there is plain.
     Rectangle {
+        id: hiddenBand
         objectName: "board-hidden-columns-band"
         visible: root.hiddenColumnsRight > 0
         anchors.right: parent.right
         anchors.rightMargin: Theme.sp2xl
         anchors.top: hscroll.top
-        width: Math.max(Theme.sp3xl * 2, hiddenCols.width + Theme.spXl * 2) + Theme.spXl
+        // Solid under the chip, fading in on the left: a hard edge cut the
+        // cut column's name and count in half ("Triage (", "Blocked 3").
+        readonly property real solidWidth: Math.max(Theme.sp3xl * 2, hiddenCols.width + Theme.spXl * 2) + Theme.spXl
+        width: solidWidth + Theme.sp3xl
         // The header line and the folded column's "show" under it.
         height: Theme.px(52)
         z: 899
-        color: Theme.bg
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: Theme.withAlpha(Theme.bg, 0) }
+            GradientStop { position: Theme.sp3xl / Math.max(1, hiddenBand.width); color: Theme.bg }
+            GradientStop { position: 1; color: Theme.bg }
+        }
     }
     Rectangle {
         id: hiddenCols

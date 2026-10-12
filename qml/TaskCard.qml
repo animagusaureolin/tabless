@@ -489,9 +489,22 @@ Rectangle {
                 font.pixelSize: Theme.fsXs
                 wrapMode: Text.NoWrap
             }
+            // The due line's box: its width comes from the row alone, so the
+            // text can pick the short form by it without feeding its own
+            // width back into the layout (a binding loop on "text").
+            Item {
+                id: dueBox
+                visible: dueT.dlText.length > 0
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: dueFull.advanceWidth + 1
+                implicitHeight: dueT.implicitHeight
             Text {
                 id: dueT
                 objectName: "tc-due"
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 readonly property int days: {
                     if (!card.task || !card.task.deadline) return 99999;
                     const dl = card.task.deadline;
@@ -532,19 +545,16 @@ Rectangle {
                     return I18n.t("task.due.overdueShort").arg(-days) + clock;
                 }
                 TextMetrics { id: dueFull; font: dueT.font; text: dueT.dlText }
-                visible: dlText.length > 0
-                text: dueT.width >= dueFull.advanceWidth || !overdue ? dlText : shortText
+                text: dueBox.width >= dueFull.advanceWidth || !overdue ? dlText : shortText
                 Accessible.name: dlText
                 // Never under the card edge: the Russian overdue text ran past
                 // it with the number cut off (EYES-2).
-                Layout.fillWidth: true
-                Layout.minimumWidth: 0
-                Layout.preferredWidth: dueFull.advanceWidth + 1
                 elide: Text.ElideRight
                 color: overdue ? Theme.signalUrgent : near ? Theme.signalNow : Theme.textDim
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
+            }
             }
             // A task with only a plan, no deadline, says when it is planned
             // here, or it looked undated (TASKS-12). With a deadline too, the
