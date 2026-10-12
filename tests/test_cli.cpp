@@ -677,6 +677,10 @@ TEST(CliPlanVerbs, EstimatesAndDurations) {
   EXPECT_EQ(parseEstimate(QStringLiteral("none")), 0);
   EXPECT_EQ(parseEstimate(QStringLiteral("soon")), -1);
   EXPECT_EQ(parseEstimate(QStringLiteral("0m")), -1);
+  // A bare number is minutes (A4-19).
+  EXPECT_EQ(parseEstimate(QStringLiteral("90")), 90);
+  EXPECT_EQ(parseEstimate(QStringLiteral("~25")), 25);
+  EXPECT_EQ(parseEstimate(QStringLiteral("99999")), -1);
   EXPECT_EQ(humanMinutes(120, QStringLiteral("en")), QStringLiteral("2h"));
   EXPECT_EQ(humanMinutes(90, QStringLiteral("en")), QStringLiteral("1h 30m"));
   EXPECT_EQ(humanMinutes(45, QStringLiteral("ru")), QStringLiteral("45м"));
