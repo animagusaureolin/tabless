@@ -83,9 +83,13 @@ FocusScope {
     // the fields show the outcome.
     function resolveConflict(useTracker) {
         if (!root._hasConflict) return;
+        // The buttons hide once it is resolved; focus left on them was
+        // stranded on an invisible control.
+        const fromButton = conflictUseTracker.activeFocus || conflictKeepMine.activeFocus;
         root.flush();
         AppController.resolveTrackerConflict(root.taskId, useTracker);
         root._load();
+        if (fromButton) titleField.forceActiveFocus();
     }
 
     // ── opening and closing ──
@@ -579,11 +583,13 @@ FocusScope {
                 RowLayout {
                     spacing: Theme.spSm
                     PillButton {
+                        id: conflictUseTracker
                         objectName: "task-doc-conflict-use-tracker"
                         text: I18n.t("ticket.conflict.useTracker")
                         onClicked: root.resolveConflict(true)
                     }
                     PillButton {
+                        id: conflictKeepMine
                         objectName: "task-doc-conflict-keep-mine"
                         text: I18n.t("ticket.conflict.keepMine")
                         onClicked: root.resolveConflict(false)
