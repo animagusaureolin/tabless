@@ -1342,6 +1342,29 @@ TEST(ClosingReferences, ReadsTheUsualPhrasings) {
   EXPECT_TRUE(closingReferences(QString()).isEmpty());
 }
 
+// APP-293: the Jira issue a review is about — branch, then title, then a
+// closing phrase or a /browse/ link in the description.
+TEST(LinkedIssueKey, BranchThenTitleThenBody) {
+  const QSet<QString> known{QStringLiteral("PROJ-12"), QStringLiteral("PROJ-7"), QStringLiteral("OPS-3")};
+  EXPECT_EQ(linkedIssueKey(QStringLiteral("feature/proj-12-login"), QStringLiteral("OPS-3 tweak"), QString(), known),
+            QStringLiteral("PROJ-12"));
+  EXPECT_EQ(linkedIssueKey(QStringLiteral("fix-proj-7"), QString(), QString(), known), QStringLiteral("PROJ-7"));
+  EXPECT_EQ(linkedIssueKey(QStringLiteral("main"), QStringLiteral("[OPS-3] Rotate keys"), QString(), known), QStringLiteral("OPS-3"));
+  EXPECT_EQ(linkedIssueKey(QString(), QStringLiteral("Login"), QStringLiteral("Closes PROJ-7"), known), QStringLiteral("PROJ-7"));
+  EXPECT_EQ(linkedIssueKey(QString(), QString(), QStringLiteral("https://acme.atlassian.net/browse/OPS-3"), known),
+            QStringLiteral("OPS-3"));
+}
+
+TEST(LinkedIssueKey, NoMatchWithoutAKnownKey) {
+  const QSet<QString> known{QStringLiteral("PROJ-12")};
+  // Not a known issue, a longer number, a word's tail, a passing mention.
+  EXPECT_TRUE(linkedIssueKey(QStringLiteral("feature/proj-99"), QString(), QString(), known).isEmpty());
+  EXPECT_TRUE(linkedIssueKey(QStringLiteral("proj-123"), QString(), QString(), known).isEmpty());
+  EXPECT_TRUE(linkedIssueKey(QString(), QStringLiteral("XPROJ-12"), QString(), known).isEmpty());
+  EXPECT_TRUE(linkedIssueKey(QString(), QString(), QStringLiteral("similar to PROJ-12"), known).isEmpty());
+  EXPECT_TRUE(linkedIssueKey(QStringLiteral("proj-12"), QString(), QString(), {}).isEmpty());
+}
+
 namespace {
 
 // The real GitLab / GitHub descriptors, pointed at the fake server.

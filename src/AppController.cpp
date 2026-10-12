@@ -39,6 +39,7 @@
 #include "integrations/Sprints.h"
 #include "integrations/StatusMap.h"
 #include "integrations/SyncState.h"
+#include "integrations/TrackerFields.h"
 #include "integrations/TrackerMerge.h"
 #include "keys/KeyNames.h"
 #include "local/Effective.h"
@@ -9846,6 +9847,22 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     }
   }
 
+  // A merge / pull request about a Jira issue is that issue's work, not a
+  // card of its own (APP-293): it shows on the issue's card as "PR #n state"
+  // and its own card is not made. Keyed by the issue's key, "PROJ-123".
+  QHash<QString, QString> issueByKey;
+  if(providerId != QLatin1String("jira")) {
+    for(const Task& cur : m_tasks.items()) {
+      if(cur.externalProvider == QLatin1String("jira") && !cur.archived && !cur.externalId.isEmpty()) {
+        issueByKey.insert(cur.externalId.toUpper(), cur.id);
+      }
+    }
+  }
+  const QSet<QString> issueKeys(issueByKey.keyBegin(), issueByKey.keyEnd());
+  // The issue a review was folded into this pull: an open one wins over a
+  // merged or closed one for the same issue.
+  QHash<QString, QString> foldedState;
+
   for(const heap::integrations::ExternalTask& ext : issues) {
     // An issue the user deleted here stays deleted.
     if(ext.externalId.isEmpty() || dismissed.contains(ext.externalId)) {
@@ -9878,6 +9895,48 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
         }
         existingId = cur.id;
         break;
+      }
+    }
+
+    if(!issueKeys.isEmpty()) {
+      const QString reviewKind = ext.details.value(QStringLiteral("kind")).toString();
+      if(reviewKind == QLatin1String("pr") || reviewKind == QLatin1String("mr")) {
+        const QString key = heap::integrations::linkedIssueKey(
+            ext.details.value(QStringLiteral("sourceBranch")).toString(), ext.title, ext.body, issueKeys);
+        if(!key.isEmpty()) {
+          const QString issueId = issueByKey.value(key);
+          const QString stage = ext.details.value(QStringLiteral("state")).toString();
+          const QString prev = foldedState.value(issueId);
+          if(prev.isEmpty() || (prev != QLatin1String("open") && stage == QLatin1String("open"))) {
+            foldedState.insert(issueId, stage);
+            const QString pipeline = ext.details.value(QStringLiteral("pipeline")).toString();
+            QString checks;
+            if(pipeline == QLatin1String("success")) {
+              checks = QStringLiteral("passing");
+            } else if(pipeline == QLatin1String("failed")) {
+              checks = QStringLiteral("failing");
+            } else if(!pipeline.isEmpty() && pipeline != QLatin1String("canceled") && pipeline != QLatin1String("skipped")) {
+              checks = QStringLiteral("pending");
+            }
+            QVariantMap entry;
+            entry["prState"] = stage;
+            entry["prNumber"] = QString(ext.externalId).remove(QChar('!')).toInt();
+            entry["prUrl"] = ext.url;
+            entry["prChecks"] = checks;
+            m_tasks.setGitInfoForId(issueId, entry);
+          }
+          // A card this review got before it was folded goes to the archive
+          // (not deleted: it may hold notes), and stays accounted for.
+          if(!existingId.isEmpty()) {
+            seenIds.insert(existingId);
+            const int at = m_tasks.indexOfId(existingId);
+            if(at >= 0 && !m_tasks.items().at(at).archived) {
+              m_tasks.setArchived(existingId, true);
+              ++stats.updated;
+            }
+          }
+          continue;
+        }
       }
     }
 
