@@ -242,6 +242,7 @@ FocusScope {
         t = t.replace(allDayRe, " ").replace(/\s+/g, " ").trim();
         const len = root.endHour - root.startHour;
         let date = root.pickedDate, start = root.startHour, end = root.endHour, allDay = root.allDay;
+        let span = root._spanDays();
         if (t.length > 0) {
             // A bare time or range stays on the meeting's own day.
             const ref = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 1);
@@ -251,13 +252,21 @@ FocusScope {
             if (r.hasTime) {
                 allDay = false;
                 start = r.start.getHours() + r.start.getMinutes() / 60;
-                const e = r.end && r.end.getTime && r.end.getTime() > r.start.getTime()
-                          ? r.end.getHours() + r.end.getMinutes() / 60 : start + Math.max(0.25, len);
-                end = e <= start ? Math.min(24, start + Math.max(0.25, len)) : e;
+                const hasEnd = r.end && r.end.getTime && r.end.getTime() > r.start.getTime();
+                // "22:00-01:00" ends the next morning (A6-2): it used to be
+                // cut to the meeting's old length without a word.
+                const endDay = hasEnd ? new Date(r.end.getFullYear(), r.end.getMonth(), r.end.getDate()) : date;
+                const days = Math.round((endDay - date) / 86400000);
+                const e = hasEnd ? r.end.getHours() + r.end.getMinutes() / 60 : start + Math.max(0.25, len);
+                if (hasEnd && days > 0) {
+                    span = days;
+                    end = e;
+                } else {
+                    end = e <= start ? Math.min(24, start + Math.max(0.25, len)) : e;
+                }
             }
         }
         if (wantsAllDay) allDay = true;
-        const span = root._spanDays();
         root.pickedDate = date;
         root.pickedEndDate = new Date(date.getFullYear(), date.getMonth(), date.getDate() + span);
         root.startHour = start;
