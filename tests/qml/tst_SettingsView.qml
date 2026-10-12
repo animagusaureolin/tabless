@@ -627,4 +627,28 @@ TestCase {
         tryVerify(function () { return !_recording(sv); }, 1000, "the recording stayed armed after focus left");
         AppController.resetAllShortcuts();
     }
+
+
+    // APP-291: the "statuses → columns" block folds by its heading.
+    function test_status_map_folds() {
+        const sv = make();
+        const card = _card(sv, "jira", {
+            clientId: "cid", connected: true,
+            seenStatuses: ["In Progress", "Done"]
+        });
+        tryVerify(function () { return findChild(card, "status-map-combo") !== null; }, 2000);
+        const block = findChild(card, "status-map-jira");
+        const toggle = findChild(card, "status-map-toggle-jira");
+        verify(block.visible && toggle.visible);
+        const was = block.open;
+        let area = null;
+        for (let i = 0; i < toggle.children.length; i++)
+            if (toggle.children[i].activated !== undefined) area = toggle.children[i];
+        verify(area !== null);
+        area.activated();
+        compare(block.open, !was);
+        compare(findChild(card, "status-map-combo").visible, !was);
+        area.activated();
+        compare(block.open, was);
+    }
 }
