@@ -73,6 +73,13 @@ TEST(TaskQuery, StatusAndPriorityMatchCaseInsensitivelyAndAsSets) {
   EXPECT_FALSE(two.matches(mk(QStringLiteral("C"), QStringLiteral("todo"), QStringLiteral("P2"))));
 }
 
+// "з1" is "p1" typed in the Russian layout (A4-21).
+TEST(TaskQuery, PriorityShorthandInTheRussianLayout) {
+  const TaskQuery query = q(QString::fromUtf8("з1"));
+  EXPECT_TRUE(query.matches(mk(QStringLiteral("A"), QStringLiteral("todo"), QStringLiteral("P1"))));
+  EXPECT_FALSE(query.matches(mk(QStringLiteral("B"), QStringLiteral("todo"), QStringLiteral("P2"))));
+}
+
 TEST(TaskQuery, SeveralClausesAreAnded) {
   const TaskQuery query = q(QStringLiteral("status:prog priority:P0"));
   EXPECT_TRUE(query.matches(mk(QStringLiteral("A"), QStringLiteral("prog"), QStringLiteral("P0"))));

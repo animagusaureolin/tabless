@@ -17,7 +17,8 @@ const QStringList& deadlineWords() {
 
 int estimateMinutes(QStringView token) {
   static const QRegularExpression kRe(
-      QStringLiteral(R"(^~(?:(\d+(?:[.,]\d+)?)\s*(h|ч|час|часа|часов)\s*(?:(\d+)\s*(m|м|мин))?|(\d+)\s*(m|м|мин|min))$)"),
+      QStringLiteral(
+          R"(^~(?:(\d+(?:[.,]\d+)?)\s*(h|ч|час|часа|часов)\s*(?:(\d+)\s*(m|м|мин))?|(\d+)\s*(m|м|мин|минут|минуты|минута|min|mins|minutes))$)"),
       QRegularExpression::CaseInsensitiveOption);
   // Not matchView(): CI builds with Qt 6.9, which does not have it.
   const auto m = kRe.match(token.toString());
@@ -35,6 +36,81 @@ int estimateMinutes(QStringView token) {
 }
 
 namespace {
+
+// A length typed the way people say it, without the "~" (A1-23, A4-2):
+// "25м", "25 мин", "за 50 минут", "на 1ч", "2ч", "1.5h", "на полчаса". A
+// number after a word that makes it a moment ("через 30 мин", "в 2ч", "in
+// 30 min") or before one ("2 часа дня", "5 min ago") is not a length.
+struct BareEstimate {
+  int start = -1;
+  int end = -1;
+  int minutes = 0;
+};
+
+BareEstimate bareEstimate(const QString& text) {
+  static const QRegularExpression kRe(
+      QStringLiteral(R"((?<![\p{L}\d~:.,])(?:(за|на|for)\s+)?)"
+                     R"((?:(\d+(?:[.,]\d+)?)(?:(h|ч)|\s*(час|часа|часов|hours?|hrs?)(?!\p{L}))(?:\s*(\d+)\s*(?:m|м|мин)(?!\p{L}))?)"
+                     R"(|(\d+)(?:(m|м)|\s*(мин|минут|минуты|минута|min|mins|minutes)(?!\p{L}))|(полчаса))(?![\p{L}\d]))"),
+      QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
+  static const QStringList kMomentBefore = {
+      QStringLiteral("через"), QStringLiteral("in"),   QStringLiteral("в"),     QStringLiteral("во"),     QStringLiteral("к"),
+      QStringLiteral("ко"),    QStringLiteral("до"),   QStringLiteral("с"),     QStringLiteral("со"),     QStringLiteral("at"),
+      QStringLiteral("by"),    QStringLiteral("from"), QStringLiteral("to"),    QStringLiteral("after"),  QStringLiteral("после"),
+      QStringLiteral("until"), QStringLiteral("till"), QStringLiteral("every"), QStringLiteral("каждые"), QStringLiteral("каждый"),
+      QStringLiteral("каждую")};
+  static const QStringList kMomentAfter = {QStringLiteral("назад"),
+                                           QStringLiteral("ago"),
+                                           QStringLiteral("дня"),
+                                           QStringLiteral("ночи"),
+                                           QStringLiteral("утра"),
+                                           QStringLiteral("вечера"),
+                                           QStringLiteral("am"),
+                                           QStringLiteral("pm"),
+                                           QStringLiteral("later"),
+                                           QStringLiteral("спустя")};
+  static const QRegularExpression kWordBefore(QStringLiteral(R"((\p{L}+)\s*$)"), QRegularExpression::UseUnicodePropertiesOption);
+  static const QRegularExpression kWordAfter(QStringLiteral(R"(^\s*(\p{L}+))"), QRegularExpression::UseUnicodePropertiesOption);
+  for(auto it = kRe.globalMatch(text); it.hasNext();) {
+    const auto m = it.next();
+    // "полчаса" alone is a word; "на/за полчаса" is the length.
+    if(m.hasCaptured(9) && !m.hasCaptured(1)) {
+      continue;
+    }
+    if(!m.hasCaptured(1)) {
+      const auto before = kWordBefore.match(text.left(static_cast<int>(m.capturedStart())));
+      if(before.hasMatch() && kMomentBefore.contains(before.captured(1).toLower())) {
+        continue;
+      }
+    }
+    const auto after = kWordAfter.match(text.mid(static_cast<int>(m.capturedEnd())));
+    if(after.hasMatch() && kMomentAfter.contains(after.captured(1).toLower())) {
+      continue;
+    }
+    int minutes = 0;
+    if(m.hasCaptured(9)) {
+      minutes = 30;
+    } else if(m.hasCaptured(2)) {
+      QString hours = m.captured(2);
+      hours.replace(QLatin1Char(','), QLatin1Char('.'));
+      // "14ч" is a clock time, not fourteen hours of work.
+      if(hours.toDouble() > 12.0) {
+        continue;
+      }
+      minutes = static_cast<int>(std::lround(hours.toDouble() * 60.0)) + (m.hasCaptured(5) ? m.captured(5).toInt() : 0);
+    } else {
+      minutes = m.captured(6).toInt();
+      if(minutes > 16 * 60) {
+        continue;
+      }
+    }
+    if(minutes <= 0) {
+      continue;
+    }
+    return BareEstimate{static_cast<int>(m.capturedStart()), static_cast<int>(m.capturedEnd()), minutes};
+  }
+  return {};
+}
 
 // "в 9" / "at 9": a bare hour under 12 with no date and no am/pm. The parser
 // takes the next 9:00, which after 9:00 is tomorrow morning; the nearer of
@@ -109,6 +185,14 @@ Parsed parse(const QString& text, const heap::chrono::ChronoParser& chrono, cons
     out.spans.append(
         Span{static_cast<int>(m.capturedStart()), static_cast<int>(m.capturedEnd()), QStringLiteral("estimate"), m.captured()});
     break;
+  }
+  if(out.estimateMinutes == 0) {
+    const BareEstimate b = bareEstimate(text);
+    const QString words = b.minutes > 0 ? text.mid(b.start, b.end - b.start) : QString();
+    if(b.minutes > 0 && !rejected.contains(words)) {
+      out.estimateMinutes = b.minutes;
+      out.spans.append(Span{b.start, b.end, QStringLiteral("estimate"), words});
+    }
   }
 
   // ── dates ──

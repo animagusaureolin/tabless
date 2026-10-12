@@ -7,6 +7,7 @@
 #include <QChar>
 #include <QDate>
 #include <QTime>
+#include <QTimeZone>
 
 #include <algorithm>
 #include <functional>
@@ -84,6 +85,21 @@ class ChronoParser::Impl {
     const ChronoTokenizer tk;
     auto toks = tk.tokenize(input);
 
+    // A repeat the app cannot keep ("every other day", "every 2 weeks",
+    // "every mon, wed") stays whole in the title: reading one word of it
+    // ("wed" → Wednesday, "friday" out of "every other friday") left a
+    // half-eaten title and a date nobody asked for.
+    QVector<bool> blocked(toks.size(), false);
+    for(int p = 0; p < toks.size(); ++p) {
+      const int last = unsupportedRepeatEnd(toks, p, primary, fallback);
+      for(int k = p; k <= last; ++k) {
+        blocked[k] = true;
+      }
+      if(last >= p) {
+        p = last;
+      }
+    }
+
     // ── Primary pass ──
     // Left-to-right, take the first position that yields a date (with an
     // optional adjacent time) or a bare time. Behaviour here is identical to
@@ -95,7 +111,7 @@ class ChronoParser::Impl {
       if(t.kind == TokenKind::End) {
         break;
       }
-      if(t.kind == TokenKind::Punct) {
+      if(t.kind == TokenKind::Punct || blocked[start]) {
         continue;
       }
       const FromMatch m = tryFromEx(toks, start, ref, primary, fallback);
@@ -121,7 +137,7 @@ class ChronoParser::Impl {
       TimeMatch tm;
       int tFirst = -1;
       int tLast = -1;
-      if(findTimeOutside(toks, best.dateFirst, best.dateLast, primary, fallback, tm, tFirst, tLast) &&
+      if(findTimeOutside(toks, blocked, best.dateFirst, best.dateLast, primary, fallback, tm, tFirst, tLast) &&
          gapIsNoise(toks, best.dateFirst, best.dateLast, tFirst, tLast, primary, fallback)) {
         best.hasTime = true;
         best.start = applyMeridiem(tm.time, tm.hasMeridiem, tm.pm);
@@ -137,13 +153,32 @@ class ChronoParser::Impl {
       QString rec;
       int recF = -1;
       int recL = -1;
-      if(findDateOutside(toks, best.timeFirst, best.timeLast, ref, primary, fallback, dm, rec, recF, recL) &&
+      if(findDateOutside(toks, blocked, best.timeFirst, best.timeLast, ref, primary, fallback, dm, rec, recF, recL) &&
          gapIsNoise(toks, best.timeFirst, best.timeLast, (recF >= 0 ? recF : dm.firstTok), dm.lastTok, primary, fallback)) {
         best.hasExplicitDate = true;
         best.date = dm.date;
         best.recurrence = rec;
         best.dateFirst = (recF >= 0 ? recF : dm.firstTok);
         best.dateLast = dm.lastTok;
+      }
+    }
+
+    // "3pm EST", "19:00 UTC+3", "15:00 по мск": a zone said with the time.
+    // The time is that zone's, shown in the local one; the zone left the
+    // title as a word and the meeting landed hours off.
+    if(best.hasTime && best.timeLast >= 0) {
+      QTimeZone zone;
+      const int zoneLast = zoneAt(toks, best.timeLast + 1, zone);
+      if(zoneLast >= 0) {
+        const QDateTime there(best.date, best.start, zone);
+        const QDateTime here = ref.timeSpec() == Qt::LocalTime ? there.toLocalTime() : there.toTimeZone(ref.timeZone());
+        if(best.hasRange) {
+          const QDateTime endThere(best.end < best.start ? best.date.addDays(1) : best.date, best.end, zone);
+          best.end = (ref.timeSpec() == Qt::LocalTime ? endThere.toLocalTime() : endThere.toTimeZone(ref.timeZone())).time();
+        }
+        best.date = here.date();
+        best.start = here.time();
+        best.timeLast = zoneLast;
       }
     }
 
@@ -207,7 +242,8 @@ class ChronoParser::Impl {
     bool hasRange = false;
     bool hasMeridiem = false;
     bool pm = false;
-    bool bare = false;  // true when first hour had no explicit marker
+    bool bare = false;   // true when first hour had no explicit marker
+    bool clock = false;  // written as a 24-hour clock: "14:00", "9:30", "16h"
     int firstTok = -1;
     int lastTok = -1;
   };
@@ -372,6 +408,180 @@ class ChronoParser::Impl {
     return out;
   }
 
+  // ── A time zone right after a clock time ──────────────────────────────
+  // "EST", "PST", "UTC", "UTC+3", "GMT-5", "UTC+5:30", "CET", "MSK"/"мск",
+  // "по мск", "по Москве", and a few cities ("New York", "London"). The
+  // short names count in capitals only ("est" is a word), UTC/GMT/МСК in any
+  // case. Returns the last token of the zone, or -1.
+  static int zoneAt(const QVector<Token>& toks, int k, QTimeZone& zone) {
+    if(k >= toks.size() || toks[k].kind != TokenKind::Word) {
+      return -1;
+    }
+    static const QHash<QString, int> kFixed = {
+        {QStringLiteral("EST"), -5},
+        {QStringLiteral("EDT"), -4},
+        {QStringLiteral("CST"), -6},
+        {QStringLiteral("CDT"), -5},
+        {QStringLiteral("MST"), -7},
+        {QStringLiteral("MDT"), -6},
+        {QStringLiteral("PST"), -8},
+        {QStringLiteral("PDT"), -7},
+        {QStringLiteral("CET"), 1},
+        {QStringLiteral("CEST"), 2},
+        {QStringLiteral("EET"), 2},
+        {QStringLiteral("EEST"), 3},
+        {QStringLiteral("BST"), 1},
+        {QStringLiteral("WET"), 0},
+        {QStringLiteral("JST"), 9},
+        {QStringLiteral("AEST"), 10},
+        {QStringLiteral("AEDT"), 11},
+    };
+    static const QHash<QString, QByteArray> kCities = {
+        {QStringLiteral("new york"), "America/New_York"},
+        {QStringLiteral("london"), "Europe/London"},
+        {QStringLiteral("berlin"), "Europe/Berlin"},
+        {QStringLiteral("paris"), "Europe/Paris"},
+        {QStringLiteral("amsterdam"), "Europe/Amsterdam"},
+        {QStringLiteral("moscow"), "Europe/Moscow"},
+        {QStringLiteral("tokyo"), "Asia/Tokyo"},
+        {QStringLiteral("singapore"), "Asia/Singapore"},
+        {QStringLiteral("chicago"), "America/Chicago"},
+        {QStringLiteral("los angeles"), "America/Los_Angeles"},
+        {QStringLiteral("san francisco"), "America/Los_Angeles"},
+        {QString::fromUtf8("москве"), "Europe/Moscow"},
+        {QString::fromUtf8("москва"), "Europe/Moscow"},
+    };
+    int i = k;
+    // "по мск", "по Москве", "in London".
+    const bool lead = toks[i].lower == QString::fromUtf8("по") || toks[i].lower == QStringLiteral("in");
+    if(lead) {
+      ++i;
+      if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
+        return -1;
+      }
+    }
+    const QString& w = toks[i].lower;
+    if(w == QString::fromUtf8("мск") || w == QStringLiteral("msk")) {
+      zone = QTimeZone(3 * 3600);
+      return i;
+    }
+    if(i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Word) {
+      const auto city = kCities.constFind(w + QLatin1Char(' ') + toks[i + 1].lower);
+      if(city != kCities.cend()) {
+        zone = QTimeZone(city.value());
+        return zone.isValid() ? i + 1 : -1;
+      }
+    }
+    if(const auto city = kCities.constFind(w); city != kCities.cend()) {
+      zone = QTimeZone(city.value());
+      return zone.isValid() ? i : -1;
+    }
+    if(lead) {
+      return -1;  // "по" / "in" before anything else is not a zone
+    }
+    if(w == QStringLiteral("utc") || w == QStringLiteral("gmt") || w == QStringLiteral("z")) {
+      if(w == QStringLiteral("z") && toks[i].text != QStringLiteral("Z")) {
+        return -1;
+      }
+      // "UTC+3", "GMT-5", "UTC+5:30", glued.
+      const int s = i + 1;
+      const bool sign = s + 1 < toks.size() && (toks[s].text == QStringLiteral("+") || toks[s].kind == TokenKind::Dash) &&
+                        toks[s + 1].kind == TokenKind::Number && adjacent(toks[i], toks[s]) && adjacent(toks[s], toks[s + 1]);
+      if(!sign) {
+        zone = QTimeZone(0);
+        return i;
+      }
+      const int hours = toks[s + 1].value;
+      int minutes = 0;
+      int last = s + 1;
+      if(last + 2 < toks.size() && toks[last + 1].kind == TokenKind::Colon && toks[last + 2].kind == TokenKind::Number) {
+        minutes = toks[last + 2].value;
+        last += 2;
+      }
+      if(hours > 14 || minutes > 59) {
+        return -1;
+      }
+      const int secs = (hours * 3600 + minutes * 60) * (toks[s].kind == TokenKind::Dash ? -1 : 1);
+      zone = QTimeZone(secs);
+      return last;
+    }
+    if(const auto fixed = kFixed.constFind(toks[i].text); fixed != kFixed.cend()) {
+      zone = QTimeZone(fixed.value() * 3600);
+      return i;
+    }
+    return -1;
+  }
+
+  // The last token of a repeat the app has no rule for, starting at `i`, or
+  // -1: "every other day/friday", "каждую вторую неделю", "every 2 weeks",
+  // "каждые 3 дня", "every mon, wed", "каждый пн и ср".
+  int unsupportedRepeatEnd(const QVector<Token>& toks, int i, const ChronoLocale* primary, const ChronoLocale* fallback) const {
+    if(i >= toks.size() || toks[i].kind != TokenKind::Word ||
+       !inListAny(toks[i].lower, primary->everyAdjectives, fallback->everyAdjectives)) {
+      return -1;
+    }
+    const int j = i + 1;
+    if(j + 1 >= toks.size()) {
+      return -1;
+    }
+    static const QStringList kOther = {QStringLiteral("other"),
+                                       QStringLiteral("second"),
+                                       QString::fromUtf8("второй"),
+                                       QString::fromUtf8("вторую"),
+                                       QString::fromUtf8("второе"),
+                                       QString::fromUtf8("вторые")};
+    const auto isUnitOrDay = [&](int k) {
+      if(k >= toks.size() || toks[k].kind != TokenKind::Word) {
+        return false;
+      }
+      bool f = false;
+      lookupHashAny(toks[k].lower, primary->unitToDays, fallback->unitToDays, &f);
+      if(!f) {
+        lookupHashAny(toks[k].lower, primary->weekdayNames, fallback->weekdayNames, &f);
+      }
+      return f;
+    };
+    if(toks[j].kind == TokenKind::Word && kOther.contains(toks[j].lower) && isUnitOrDay(j + 1)) {
+      return j + 1;
+    }
+    // "every 2 weeks" — but "every 15th" / "каждое 25 число" is a day of the month.
+    if(toks[j].kind == TokenKind::Number && toks[j].value > 1 && isUnitOrDay(j + 1)) {
+      bool day = false;
+      lookupHashAny(toks[j + 1].lower, primary->weekdayNames, fallback->weekdayNames, &day);
+      return day ? -1 : j + 1;
+    }
+    // "every mon, wed [and fri]".
+    bool isDay = false;
+    lookupHashAny(toks[j].lower, primary->weekdayNames, fallback->weekdayNames, &isDay);
+    if(toks[j].kind != TokenKind::Word || !isDay) {
+      return -1;
+    }
+    int last = j;
+    for(int k = j + 1; k + 1 < toks.size();) {
+      const bool joiner =
+          (toks[k].kind == TokenKind::Punct && toks[k].text == QStringLiteral(",")) ||
+          (toks[k].kind == TokenKind::Word && (toks[k].lower == QStringLiteral("and") || toks[k].lower == QString::fromUtf8("и")));
+      if(!joiner) {
+        break;
+      }
+      int n = k + 1;
+      if(n < toks.size() && toks[n].kind == TokenKind::Word &&
+         (toks[n].lower == QStringLiteral("and") || toks[n].lower == QString::fromUtf8("и"))) {
+        ++n;
+      }
+      bool next = false;
+      if(n < toks.size() && toks[n].kind == TokenKind::Word) {
+        lookupHashAny(toks[n].lower, primary->weekdayNames, fallback->weekdayNames, &next);
+      }
+      if(!next) {
+        break;
+      }
+      last = n;
+      k = n + 1;
+    }
+    return last > j ? last : -1;
+  }
+
   // ── Assemble a ParseResult from a (possibly merged) FromMatch ──────────
   ParseResult assemble(const QString& input, const QVector<Token>& toks, const FromMatch& m) const {
     ParseResult r;
@@ -379,8 +589,10 @@ class ChronoParser::Impl {
     r.recurrence = m.recurrence;
     r.hasTime = m.hasTime;
     r.start = QDateTime(m.date, m.hasTime ? m.start : QTime(0, 0));
-    if(m.hasTime && m.hasRange) {
-      r.end = QDateTime(m.date, m.end);
+    if(m.hasTime && m.hasRange && m.end != m.start) {
+      // "22:00-01:00" ends the next morning; it used to end before it began
+      // and the editor quietly made it an hour long (IDIOT-CAL-11).
+      r.end = QDateTime(m.end < m.start ? m.date.addDays(1) : m.date, m.end);
     }
 
     // Consumed span = union of the date and time halves. B (the time or the
@@ -410,6 +622,7 @@ class ChronoParser::Impl {
   // Find a date anywhere outside [exclFirst, exclLast] (the already-matched
   // time span). Used to recover "13:00 понедельник" (time before date).
   bool findDateOutside(const QVector<Token>& toks,
+                       const QVector<bool>& blocked,
                        int exclFirst,
                        int exclLast,
                        const QDateTime& ref,
@@ -427,7 +640,7 @@ class ChronoParser::Impl {
       if(t.kind == TokenKind::Punct) {
         continue;
       }
-      if(p >= exclFirst && p <= exclLast) {
+      if((p >= exclFirst && p <= exclLast) || blocked[p]) {
         continue;
       }
       DateMatch cand;
@@ -454,6 +667,7 @@ class ChronoParser::Impl {
   // Find a clock time anywhere outside [exclFirst, exclLast] (the matched date
   // span). Recovers "понедельник @el 13:00" where a mention breaks adjacency.
   bool findTimeOutside(const QVector<Token>& toks,
+                       const QVector<bool>& blocked,
                        int exclFirst,
                        int exclLast,
                        const ChronoLocale* primary,
@@ -469,7 +683,7 @@ class ChronoParser::Impl {
       if(t.kind == TokenKind::Punct) {
         continue;
       }
-      if(p >= exclFirst && p <= exclLast) {
+      if((p >= exclFirst && p <= exclLast) || blocked[p]) {
         continue;
       }
       int ti = p;
@@ -1083,6 +1297,22 @@ class ChronoParser::Impl {
         out.date = d;
         out.firstTok = i;
         out.lastTok = j;
+        // "на следующей неделе в пн", "next week on friday": that day of it.
+        if(primary->weekUnits.contains(unit) || fallback->weekUnits.contains(unit)) {
+          int k = j + 1;
+          if(k < toks.size() && toks[k].kind == TokenKind::Word &&
+             (toks[k].lower == QStringLiteral("on") || inListAny(toks[k].lower, primary->atWords, fallback->atWords))) {
+            ++k;
+          }
+          bool day = false;
+          const int iso = k < toks.size() && toks[k].kind == TokenKind::Word
+                              ? lookupHashAny(toks[k].lower, primary->weekdayNames, fallback->weekdayNames, &day)
+                              : 0;
+          if(day) {
+            out.date = d.addDays(iso - 1);
+            out.lastTok = k;
+          }
+        }
         return true;
       }
     }
@@ -1145,6 +1375,8 @@ class ChronoParser::Impl {
                                          QStringLiteral("rd"),
                                          QStringLiteral("th"),
                                          QString::fromUtf8("го"),
+                                         QString::fromUtf8("е"),
+                                         QString::fromUtf8("ое"),
                                          QString::fromUtf8("число"),
                                          QString::fromUtf8("числа"),
                                          QString::fromUtf8("числам")};
@@ -1154,6 +1386,11 @@ class ChronoParser::Impl {
     }
     if(k < toks.size() && toks[k].kind == TokenKind::Word && kMarkers.contains(toks[k].lower)) {
       end = k;
+      // "1-е число", "15-го числа": the noun goes with its ordinal.
+      if(k + 1 < toks.size() && toks[k + 1].kind == TokenKind::Word &&
+         (toks[k + 1].lower == QString::fromUtf8("число") || toks[k + 1].lower == QString::fromUtf8("числа"))) {
+        end = k + 1;
+      }
       return toks[i].value;
     }
     if(needMarker) {
@@ -1187,6 +1424,9 @@ class ChronoParser::Impl {
                       const ChronoLocale* fallback,
                       DateMatch& out,
                       QString& recurrence) const {
+    if(tryDayOfEveryMonth(toks, i, ref, primary, fallback, out, recurrence)) {
+      return true;
+    }
     if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
       return false;
     }
@@ -1195,6 +1435,35 @@ class ChronoParser::Impl {
       monthlyOn(ref.date().day(), ref, recurrence, out);
       out.firstTok = i;
       out.lastTok = i;
+      return true;
+    }
+    // "daily" / "ежедневно", "weekly" / "еженедельно", from today.
+    if(toks[i].lower == QStringLiteral("daily") || toks[i].lower == QString::fromUtf8("ежедневно") ||
+       toks[i].lower == QStringLiteral("weekly") || toks[i].lower == QString::fromUtf8("еженедельно")) {
+      const bool day = toks[i].lower == QStringLiteral("daily") || toks[i].lower == QString::fromUtf8("ежедневно");
+      recurrence = day ? QStringLiteral("every:day") : QStringLiteral("every:week");
+      out.date = ref.date();
+      out.firstTok = i;
+      out.lastTok = i;
+      return true;
+    }
+    // "раз в день / неделю / месяц": once a day, a week, a month.
+    if(toks[i].lower == QString::fromUtf8("раз") && i + 2 < toks.size() && toks[i + 1].kind == TokenKind::Word &&
+       (toks[i + 1].lower == QString::fromUtf8("в") || toks[i + 1].lower == QString::fromUtf8("во")) &&
+       toks[i + 2].kind == TokenKind::Word) {
+      const QString& unit = toks[i + 2].lower;
+      bool isUnit = false;
+      const int unitDays = lookupHashAny(unit, primary->unitToDays, fallback->unitToDays, &isUnit);
+      if(primary->monthUnits.contains(unit) || fallback->monthUnits.contains(unit)) {
+        monthlyOn(ref.date().day(), ref, recurrence, out);
+      } else if(isUnit && (unitDays == 1 || unitDays == 7)) {
+        recurrence = unitDays == 1 ? QStringLiteral("every:day") : QStringLiteral("every:week");
+        out.date = ref.date();
+      } else {
+        return false;
+      }
+      out.firstTok = i;
+      out.lastTok = i + 2;
       return true;
     }
     if(!inListAny(toks[i].lower, primary->everyAdjectives, fallback->everyAdjectives)) {
@@ -1305,6 +1574,40 @@ class ChronoParser::Impl {
     return true;
   }
 
+  // "1st of every month", "the 15th of each month", "1-го числа каждого
+  // месяца": a day of the month that repeats. "1st" alone was read as a
+  // date and "of every month" stayed in the title, not repeating.
+  bool tryDayOfEveryMonth(const QVector<Token>& toks,
+                          int i,
+                          const QDateTime& ref,
+                          const ChronoLocale* primary,
+                          const ChronoLocale* fallback,
+                          DateMatch& out,
+                          QString& recurrence) const {
+    int j = i;
+    if(j < toks.size() && toks[j].kind == TokenKind::Word && toks[j].lower == QStringLiteral("the")) {
+      ++j;
+    }
+    int end = -1;
+    const int day = dayOfMonthAt(toks, j, /*needMarker=*/true, end);
+    if(day <= 0) {
+      return false;
+    }
+    int k = end + 1;
+    if(k < toks.size() && toks[k].kind == TokenKind::Word && inListAny(toks[k].lower, primary->ofWords, fallback->ofWords)) {
+      ++k;
+    }
+    if(k + 1 >= toks.size() || toks[k].kind != TokenKind::Word || toks[k + 1].kind != TokenKind::Word ||
+       !inListAny(toks[k].lower, primary->everyAdjectives, fallback->everyAdjectives) ||
+       !(primary->monthUnits.contains(toks[k + 1].lower) || fallback->monthUnits.contains(toks[k + 1].lower))) {
+      return false;
+    }
+    monthlyOn(day, ref, recurrence, out);
+    out.firstTok = i;
+    out.lastTok = k + 1;
+    return true;
+  }
+
   // ── Time-of-day (single) ──────────────────────────────────────────────
   bool tryTimeOfDay(const QVector<Token>& toks,
                     int i,
@@ -1344,6 +1647,27 @@ class ChronoParser::Impl {
       explicitMarker = true;
     }
 
+    const bool colon = explicitMarker;
+    // The word before the hour, when it says a clock time follows: "в 2",
+    // "at 2", "с 2 до 3". "на" is not one: "на 2ч" is for two hours.
+    const bool clockWordBefore = i > 0 && toks[i - 1].kind == TokenKind::Word && toks[i - 1].lower != QString::fromUtf8("на") &&
+                                 (inListAny(toks[i - 1].lower, primary->atWords, fallback->atWords) ||
+                                  inListAny(toks[i - 1].lower, primary->fromWords, fallback->fromWords) ||
+                                  inListAny(toks[i - 1].lower, primary->toWords, fallback->toWords));
+    const auto meridiemAt = [&](int k, bool& isPm) {
+      if(k >= toks.size() || toks[k].kind != TokenKind::Word) {
+        return false;
+      }
+      const QString& w = toks[k].lower;
+      const bool am = inListAny(w, primary->amWords, fallback->amWords);
+      const bool pmw = inListAny(w, primary->pmWords, fallback->pmWords);
+      if(!am && !pmw) {
+        return false;
+      }
+      isPm = pmw;
+      return true;
+    };
+
     // Optional am/pm or hour-suffix word glued (e.g. "2pm", "14ч").
     if(last + 1 < toks.size() && toks[last + 1].kind == TokenKind::Word) {
       const QString& w = toks[last + 1].lower;
@@ -1364,18 +1688,39 @@ class ChronoParser::Impl {
         pm = true;
         ++last;
       } else if(inListAny(w, primary->hourSuffixes, fallback->hourSuffixes)) {
-        // "2h" is a length ("estimate 2h"), not two at night, unless "at"
-        // says so (IDIOT-TASKS-8); "16h" and "14ч" stay clock times.
-        if(w == QStringLiteral("h") && hour <= 12 && minute == 0 &&
-           !(i > 0 && toks[i - 1].kind == TokenKind::Word && inListAny(toks[i - 1].lower, primary->atWords, fallback->atWords))) {
+        // "2h" / "2ч" / "2 часа" is a length ("оценка 2ч"), not two at
+        // night, unless "at" / "в" says so (IDIOT-TASKS-8) or the half of the
+        // day follows ("2 часа дня"); "16h" and "14ч" stay clock times.
+        bool ignored = false;
+        if(hour <= 12 && !colon && !clockWordBefore && !meridiemAt(last + 2, ignored)) {
           return false;
         }
         explicitMarker = true;
         ++last;
       }
     }
+    // "в 9 утра", "в 11 вечера", "в 3 часа ночи": the Russian half of the
+    // day comes as a word after the hour. "ночи" and "дня" are plain words
+    // too ("3 ночи в отеле"), so they need a connector or an hour word.
+    if(!hasMer && hour <= 12) {
+      bool isPm = false;
+      if(meridiemAt(last + 1, isPm)) {
+        const bool weak = inListAny(toks[last + 1].lower, primary->weakMeridiemWords, fallback->weakMeridiemWords);
+        if(!weak || explicitMarker || clockWordBefore || allowBareHour) {
+          hasMer = true;
+          pm = isPm;
+          ++last;
+        }
+      }
+    }
 
     if(!explicitMarker && !hasMer && !allowBareHour) {
+      return false;
+    }
+    // "на 2 помидора" is a length in tomatoes, not 02:00: a bare hour after
+    // "на" is a time only when nothing but the end of the phrase follows.
+    if(!explicitMarker && !hasMer && i > 0 && toks[i - 1].kind == TokenKind::Word && toks[i - 1].lower == QString::fromUtf8("на") &&
+       last + 1 < toks.size() && toks[last + 1].kind == TokenKind::Word) {
       return false;
     }
 
@@ -1386,6 +1731,7 @@ class ChronoParser::Impl {
     out.pm = pm;
     out.hasRange = false;
     out.bare = (!explicitMarker && !hasMer);
+    out.clock = colon || (explicitMarker && hour > 12) || (!hasMer && hour > 12);
     return true;
   }
 
@@ -1397,6 +1743,7 @@ class ChronoParser::Impl {
                             bool allowBareHour,
                             TimeMatch& out) const {
     if(tryNamedTime(toks, i, primary, fallback, out)) {
+      clockAfterDayPart(toks, primary, fallback, out.time.hour() * 60 + out.time.minute(), out);
       return true;
     }
     // A number inside a dashed run ("2026-13-01") is a date that failed to
@@ -1440,16 +1787,10 @@ class ChronoParser::Impl {
                       fallback,
                       /*allowBareHour=*/true,
                       second)) {
-        // Meridiem on second propagates to first if first had none.
-        const bool hasMer = second.hasMeridiem || first.hasMeridiem;
-        const bool pm = second.hasMeridiem ? second.pm : first.pm;
-
         out = first;
-        out.hasRange = true;
-        out.endTime = second.time;
-        out.hasMeridiem = hasMer;
-        out.pm = pm;
+        resolveRange(first, second, out);
         out.lastTok = second.lastTok;
+        foldDayPart(toks, primary, fallback, out);
         return true;
       }
     }
@@ -1458,6 +1799,87 @@ class ChronoParser::Impl {
       return false;
     }
     out = first;
+    foldDayPart(toks, primary, fallback, out);
+    return true;
+  }
+
+  // Both ends of a range, each with its own half of the day: "9am-5pm" is
+  // 09:00-17:00, not 21:00 (the end's "pm" used to win for both). A start
+  // with none takes the end's, unless that puts it after the end: "2-3pm" is
+  // 14-15, "11-1pm" 11-13. Without any, "9-5" is a working day, 9-17; a
+  // clock written in 24 hours ("22:00-01:00") is taken as written. Resolved
+  // here, so the result carries no meridiem of its own.
+  void resolveRange(const TimeMatch& first, const TimeMatch& second, TimeMatch& out) const {
+    QTime s = applyMeridiem(first.time, first.hasMeridiem, first.pm);
+    QTime e = applyMeridiem(second.time, second.hasMeridiem, second.pm);
+    if(!first.hasMeridiem && second.hasMeridiem) {
+      s = applyMeridiem(first.time, true, second.pm);
+      if(s > e) {
+        s = applyMeridiem(first.time, true, !second.pm);
+      }
+    } else if(!first.hasMeridiem && !second.hasMeridiem && !first.clock && !second.clock && e < s && e.hour() < 12) {
+      const QTime later = e.addSecs(12 * 3600);
+      if(later > s) {
+        e = later;
+      }
+    }
+    out.time = s;
+    out.endTime = e;
+    out.hasRange = true;
+    out.hasMeridiem = false;
+    out.pm = false;
+  }
+
+  // A named part of the day next to a clock time: the clock says when, the
+  // part of the day only which half ("tonight 11pm", "tonight 11", "11pm
+  // tonight", "вечером в 7"). The named time alone used to win, and the clock
+  // stayed in the title.
+  void foldDayPart(const QVector<Token>& toks, const ChronoLocale* primary, const ChronoLocale* fallback, TimeMatch& tm) const {
+    if(tm.hasRange) {
+      return;
+    }
+    const int k = tm.lastTok + 1;
+    if(k >= toks.size() || toks[k].kind != TokenKind::Word) {
+      return;
+    }
+    bool named = false;
+    const int minutes = lookupHashAny(toks[k].lower, primary->namedTimes, fallback->namedTimes, &named);
+    if(!named || tm.firstTok < 0 || toks[tm.firstTok].kind != TokenKind::Number) {
+      return;
+    }
+    QTime t = applyMeridiem(tm.time, tm.hasMeridiem, tm.pm);
+    if(!tm.hasMeridiem && !tm.clock && minutes >= 12 * 60 && t.hour() < 12) {
+      t = t.addSecs(12 * 3600);
+    }
+    tm.time = t;
+    tm.hasMeridiem = false;
+    tm.pm = false;
+    tm.bare = false;
+    tm.lastTok = k;
+  }
+
+  // The other way round: "tonight 11pm", "вечером в 7".
+  bool clockAfterDayPart(
+      const QVector<Token>& toks, const ChronoLocale* primary, const ChronoLocale* fallback, int namedMinutes, TimeMatch& tm) const {
+    int k = tm.lastTok + 1;
+    bool at = false;
+    if(k < toks.size() && toks[k].kind == TokenKind::Word && inListAny(toks[k].lower, primary->atWords, fallback->atWords)) {
+      at = true;
+      ++k;
+    }
+    TimeMatch clock;
+    if(!tryTimeOfDay(toks, k, primary, fallback, /*allowBareHour=*/at, clock)) {
+      return false;
+    }
+    QTime t = applyMeridiem(clock.time, clock.hasMeridiem, clock.pm);
+    if(!clock.hasMeridiem && !clock.clock && namedMinutes >= 12 * 60 && t.hour() < 12) {
+      t = t.addSecs(12 * 3600);
+    }
+    tm.time = t;
+    tm.hasMeridiem = false;
+    tm.pm = false;
+    tm.bare = false;
+    tm.lastTok = clock.lastTok;
     return true;
   }
 
@@ -1485,11 +1907,7 @@ class ChronoParser::Impl {
       return false;
     }
 
-    out.time = first.time;
-    out.endTime = second.time;
-    out.hasRange = true;
-    out.hasMeridiem = first.hasMeridiem || second.hasMeridiem;
-    out.pm = second.hasMeridiem ? second.pm : first.pm;
+    resolveRange(first, second, out);
     out.firstTok = i;
     out.lastTok = second.lastTok;
     return true;

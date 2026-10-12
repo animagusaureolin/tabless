@@ -424,6 +424,11 @@ TEST(ExtractMeta, Priority) {
   // "не срочно" is not "срочно".
   EXPECT_EQ(extractMeta(QStringLiteral("не срочно: почистить логи")).priority, QStringLiteral("P3"));
   EXPECT_TRUE(extractMeta(QStringLiteral("купить хлеб")).priority.isEmpty());
+  // Todoist's "p4" is the lowest (A5-4); "з1" is "p1" in the Russian layout (A4-21).
+  EXPECT_EQ(extractMeta(QStringLiteral("buy milk p4")).priority, QStringLiteral("P3"));
+  EXPECT_EQ(extractMeta(QStringLiteral("buy milk p4")).title, QStringLiteral("buy milk"));
+  EXPECT_EQ(extractMeta(QString::fromUtf8("з1 починить прод")).priority, QStringLiteral("P1"));
+  EXPECT_EQ(extractMeta(QString::fromUtf8("з1 починить прод")).title, QString::fromUtf8("починить прод"));
 }
 
 // ─── The audit's TASKS-13: capture understands priority and labels ───
