@@ -39,15 +39,36 @@ Item {
         return s.replace(/\+(?=.)/g, " ");
     }
 
+    // The placeholder's lead word ("например:"), when the example was typed
+    // out as shown: it is not part of the task (A5-9).
+    function _withoutLead(raw) {
+        for (const key of ["first.placeholder", "first.q.placeholder"]) {
+            const ph = I18n.t(key);
+            const cut = ph.indexOf(":");
+            if (cut <= 0) continue;
+            const lead = ph.slice(0, cut + 1).toLowerCase();
+            if (raw.toLowerCase().startsWith(lead)) return raw.slice(lead.length).trim();
+        }
+        return raw;
+    }
+
     // The same draft Ctrl N saves: title, "when", deadline, priority, labels.
     function submit() {
-        const raw = input.text.trim();
+        const raw = root._withoutLead(input.text.trim());
         if (raw.length === 0) return "";
         const draft = AppController.quickTaskDraft(raw, new Date());
         if (String(draft.title).length === 0) return "";
         AppController.saveTask(draft);
         AppController.markWelcomeSeen();
         input.text = "";
+        // The first task made for another day is shown on its day: Today
+        // went empty, "Nothing planned", and the task was nowhere (A5-10).
+        const on = draft.scheduledAt || draft.dueAt;
+        if (on && on.getTime && !isNaN(on.getTime())) {
+            const day = new Date(on.getFullYear(), on.getMonth(), on.getDate());
+            if (Qt.formatDate(day, "yyyy-MM-dd") !== Qt.formatDate(AppController.today, "yyyy-MM-dd"))
+                AppController.selectedDate = day;
+        }
         root.created(draft.id);
         return draft.id;
     }
@@ -127,6 +148,12 @@ Item {
                     selectByMouse: true
                     Accessible.name: I18n.t("first.title")
                     onAccepted: root.submit()
+                    // Esc leaves the field, so the page keys on the cards
+                    // ("d", "?") work (A5-13).
+                    Keys.onEscapePressed: (e) => {
+                        e.accepted = true;
+                        root.forceActiveFocus();
+                    }
                     // H2-First: "например:" muted, the example brighter.
                     Text {
                         objectName: "first-run-placeholder"
@@ -173,7 +200,7 @@ Item {
             Layout.fillWidth: true
             text: I18n.t("first.q.hintKeys")
                   .arg("<font face=\"" + Theme.fontMono + "\" color=\"" + Theme.textMuted + "\">" + root._keys("palette.open", "Ctrl+K") + "</font>")
-                  .arg("<font face=\"" + Theme.fontMono + "\" color=\"" + Theme.textMuted + "\">" + root._keys("hotkeys.open.alt", "?") + "</font>")
+                  .arg("<font face=\"" + Theme.fontMono + "\" color=\"" + Theme.textMuted + "\">" + root._keys("hotkeys.open", "Ctrl+/") + "</font>")
             textFormat: Text.StyledText
             color: Theme.textDim
             font.family: Theme.fontUi
@@ -183,11 +210,25 @@ Item {
         }
 
         // Bold: three keys, always shown here: this is where they are learnt.
+        // "d" and "?" are page keys: with the caret in the field above they
+        // typed "d?" into it, and Enter made a task of that (A5-13). The line
+        // says so, and Esc takes the caret out of the field.
+        Text {
+            objectName: "first-run-keys-where"
+            visible: !root.quiet
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.sp2xl + Theme.spXl
+            text: I18n.t("first.keys.outside")
+            color: Theme.textDim
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsSm
+            wrapMode: Text.WordWrap
+        }
         RowLayout {
             visible: !root.quiet
             Layout.fillWidth: true
             // H2-First: 28px above and below the cards, 14px inside (R4-008).
-            Layout.topMargin: Theme.sp2xl + Theme.spXl
+            Layout.topMargin: Theme.spMd
             spacing: Theme.spLg
             Repeater {
                 model: [
