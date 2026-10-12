@@ -146,7 +146,7 @@ var HEAP_LIGHT = {
         toastBg: "#ffffff", toastBorder: "#d5d9df", toastText: "#14181d",
         scrim: "#66000000",
         p0: "#b23a33", p1: "#8f520f", p2: "#5b6470", p3: "#5b6470",
-        stBacklog: "#8a919c", stTodo: "#5b6470", stProg: "#2e343c", stHalf: "#2e343c",
+        stBacklog: "#7a828e", stTodo: "#5b6470", stProg: "#2e343c", stHalf: "#2e343c",
         stBlocked: "#b23a33", stReview: "#2e343c", stDone: "#286b44",
         mStandup: "#2f5fb3", mOneone: "#2f5fb3", mSync: "#2f5fb3", mFocus: "#2f5fb3", nowLine: "#8f520f",
         synKeyword: "#2f5fb3", synString: "#286b44", synNumber: "#8f520f", synComment: "#5b6470",

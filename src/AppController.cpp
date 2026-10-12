@@ -4651,6 +4651,9 @@ QVariantList AppController::eventOccurrences(const QDate& from, const QDate& to)
     }
     m["occurrenceDate"] = o.occurrenceDate;
     m["generated"] = o.generated;
+    // Kept in another zone (A6-4): the start on that zone's clock.
+    m["srcTz"] = o.srcTz;
+    m["srcStart"] = o.srcStart;
     out.append(m);
   }
   return out;
@@ -4673,6 +4676,15 @@ QVariantMap blockToVariant(const heap::plan::Block& b) {
           {"past", b.past},
           {"fromPrevDay", b.fromPrevDay},
           {"toNextDay", b.toNextDay},
+          {"srcTz", b.srcTz},
+          {"srcStart", b.srcStart},
+          {"realStart", b.realStart},
+          {"realEnd", b.realEnd},
+          {"totalMinutes", b.totalMinutes},
+          {"firstDay", b.firstDay},
+          {"lastDay", b.lastDay},
+          {"dayNo", b.dayNo},
+          {"dayCount", b.dayCount},
           {"overlapsWith", b.overlapsWith}};
 }
 
@@ -4693,6 +4705,8 @@ QVector<heap::plan::EventIn> dayEvents(const QVector<CalEvent>& all, const QDate
     e.end = o.event.end;
     e.allDay = o.event.allDay;
     e.occurrence = o.occurrenceDate.toString(Qt::ISODate);
+    e.srcTz = o.srcTz;
+    e.srcStart = o.srcStart;
     events.append(e);
   }
   return events;

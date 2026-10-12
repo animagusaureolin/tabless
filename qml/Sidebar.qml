@@ -312,9 +312,12 @@ Rectangle {
             Layout.preferredHeight: on ? Theme.chipH + Theme.spXs : 0
             Layout.bottomMargin: on ? Theme.spLg : 0
             readonly property string clock: {
+                // m:ss, h:mm:ss past an hour: the focus mode's clock, so one
+                // running timer reads the same everywhere (A1-13).
                 const s = Number(timerLine.timer.seconds) || 0;
-                const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-                return h + ":" + (m < 10 ? "0" : "") + m;
+                const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+                const p2 = (n) => (n < 10 ? "0" : "") + n;
+                return h > 0 ? h + ":" + p2(m) + ":" + p2(sec) : m + ":" + p2(sec);
             }
             Rectangle {
                 anchors.fill: parent

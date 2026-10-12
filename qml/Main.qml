@@ -1813,8 +1813,9 @@ ApplicationWindow {
         if (occurrence) eventEditor.showForOccurrence(occurrence);
         else eventEditor.showForId(id);
     }
-    // The occurrence of series `id` (master or override) on ISO day `iso`;
-    // null for a meeting that does not repeat.
+    // The occurrence of meeting `id` (a single one, a series master or an
+    // override) on ISO day `iso`, as the week opens it: a single meeting kept
+    // in another zone carries that zone only here (A6-4); null when none.
     function _occurrenceOf(id, iso) {
         const p = String(iso).split("-");
         if (p.length !== 3) return null;
@@ -1822,7 +1823,7 @@ ApplicationWindow {
         const list = AppController.eventOccurrences(day, day);
         for (let i = 0; i < list.length; i++) {
             const o = list[i];
-            if (String(o.masterId || "").length > 0 && (o.id === id || o.masterId === id)) return o;
+            if (o.id === id || (String(o.masterId || "").length > 0 && o.masterId === id)) return o;
         }
         return null;
     }

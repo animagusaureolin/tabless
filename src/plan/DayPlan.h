@@ -26,6 +26,8 @@ struct EventIn {
   double end = 0;
   bool allDay = false;
   QString occurrence;  // the occurrence's date, ISO, for opening it
+  QString srcTz;       // kept in another zone: that zone, and the start there
+  double srcStart = 0;
 };
 
 // A task with a time on the day.
@@ -54,6 +56,19 @@ struct Block {
   bool past = false;
   bool fromPrevDay = false;  // began the day before ("since 23:00")
   bool toNextDay = false;    // runs into the next day ("until 01:00")
+  // The whole meeting, not the part on this day (A3-3): where a meeting
+  // across midnight really begins and ends, and how long it is in all.
+  QString srcTz;  // a meeting kept in another zone, its start there (A6-4)
+  double srcStart = 0;
+  double realStart = 0;
+  double realEnd = 0;
+  int totalMinutes = 0;
+  // A meeting over several days, drawn all-day (A6-17): its first and last
+  // day, and which of them this one is (1-based).
+  QDate firstDay;
+  QDate lastDay;
+  int dayNo = 0;
+  int dayCount = 0;
   QStringList overlapsWith;  // titles of what shares its time
 };
 

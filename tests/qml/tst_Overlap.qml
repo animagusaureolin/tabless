@@ -107,30 +107,74 @@ TestCase {
         verify(m["b"] !== undefined);
     }
 
-    // VISU-15: lanes tile while each stays readable, and cascade past that —
-    // every lane keeps the minimum width, steps right evenly, and the last one
-    // ends at the day's edge.
+    // Lanes tile while each stays readable (VISU-15); past that only as many
+    // as fit are drawn and the rest fold onto a "+N" chip (A1-7, EYES-1).
     function test_lanes_tile_while_wide_enough() {
         const a = Overlap.lane(1, 2, 200, 64);
         compare(a.x, 100);
         compare(a.w, 100);
+        verify(!a.folded);
         const solo = Overlap.lane(0, 1, 40, 64);
         compare(solo.x, 0);
         compare(solo.w, 40, "a lone event never grows past its day");
     }
 
-    function test_narrow_lanes_cascade_at_the_minimum_width() {
-        const avail = 126, minW = 64, cols = 4;
-        let prevX = -1;
-        for (let c = 0; c < cols; c++) {
+    function test_narrow_lanes_fold_instead_of_cascading() {
+        const avail = 130, minW = 64, cols = 4;
+        compare(Overlap.capacity(avail, minW), 2);
+        const l0 = Overlap.lane(0, cols, avail, minW);
+        const l1 = Overlap.lane(1, cols, avail, minW);
+        compare(l0.w, 65); compare(l0.x, 0); verify(!l0.folded);
+        compare(l1.w, 65); compare(l1.x, 65); verify(!l1.folded);
+        for (let c = 2; c < cols; c++) {
             const l = Overlap.lane(c, cols, avail, minW);
-            compare(l.w, minW, "lane " + c + " is narrower than the minimum");
-            verify(l.x > prevX, "lanes must step right");
-            verify(l.x + l.w <= avail + 1e-9, "lane " + c + " runs past the day");
-            prevX = l.x;
+            verify(l.folded, "lane " + c + " folds");
+            compare(l.x, 65, "drawn in the last lane under the cursor");
         }
-        compare(Overlap.lane(cols - 1, cols, avail, minW).x + minW, avail);
-        compare(Overlap.lane(0, 3, 50, 64).w, 50, "the minimum never exceeds the day");
+        // Nothing drawn overlaps: no title is covered by a neighbour.
+        verify(l0.x + l0.w <= l1.x + 1e-9);
+        compare(Overlap.lane(0, 3, 50, 64).w, 25, "two lanes always stand side by side");
+        verify(!Overlap.lane(1, 3, 50, 64).folded, "the second of two overlapping is drawn");
+    }
+
+    // B3 verify: a 102-120px day (1312-1440px windows) draws two
+    // overlapping meetings side by side; none hides behind "+1".
+    function test_an_ordinary_day_draws_two_lanes() {
+        compare(Overlap.capacity(98), 2);
+        compare(Overlap.capacity(116), 2);
+        compare(Overlap.capacity(30), 2);
+        const items = [{ id: "dev", start: 9, end: 10 }, { id: "ops", start: 9.5, end: 11 }];
+        compare(Overlap.folds(items, Overlap.compute(items), Overlap.capacity(98)).length, 0);
+    }
+
+    // The "+N" chip keeps off the title of the block drawn in the last lane.
+    function test_fold_chip_keeps_off_titles() {
+        const chip = 0.4, title = 1.4;
+        // Nothing in the last lane there: at the first folded start.
+        compare(Overlap.chipStart({ start: 10, lane: [] }, chip, title), 10);
+        // A tall block from 9 to 13: at its bottom, under its title.
+        fuzzyCompare(Overlap.chipStart({ start: 9.5, lane: [{ start: 9, end: 13 }] }, chip, title), 12.6, 1e-9);
+        // A short one (16:00-17:30): under it.
+        compare(Overlap.chipStart({ start: 16.25, lane: [{ start: 16, end: 17.5 }] }, chip, title), 17.5);
+        // The folded start already below the block's title stays put.
+        compare(Overlap.chipStart({ start: 11, lane: [{ start: 9, end: 13 }] }, chip, title), 11);
+        const items = [{ id: "a", start: 9, end: 10 }, { id: "b", start: 9, end: 11 },
+                       { id: "c", start: 9.5, end: 10.5 }];
+        const f = Overlap.folds(items, Overlap.compute(items), 2);
+        compare(f.length, 1);
+        compare(f[0].lane.length, 1, "b is drawn in the last lane");
+        compare(f[0].lane[0].start, 9);
+    }
+
+    function test_folds_count_what_is_not_drawn() {
+        const items = [{ id: "a", start: 9, end: 9.5 }, { id: "b", start: 9, end: 10 },
+                       { id: "c", start: 9.25, end: 9.75 }, { id: "d", start: 9.5, end: 11 },
+                       { id: "e", start: 14, end: 15 }];
+        const slots = Overlap.compute(items);
+        const f = Overlap.folds(items, slots, 2);
+        compare(f.length, 1);
+        compare(f[0].n, 1, "c sits in a third lane; d reuses the first");
+        compare(f[0].start, 9.25);
     }
 
     // APP-199: a week event of half an hour or more is two lines high, the

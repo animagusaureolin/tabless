@@ -930,7 +930,11 @@ Item {
                             objectName: "month-more"
                             readonly property int _extra: dayCell._total - dayCell._tasksShown - dayCell._eventsShown
                             visible: _extra > 0
-                            text: root.chrome ? "+" + _extra : I18n.t("cal.moreN").arg(_extra)
+                            // Says when a meeting is among them (A6-22): at 150%
+                            // the evening sync sat silently inside "+2".
+                            readonly property int _evHidden: dayCell.cell.events.length - dayCell._eventsShown
+                            text: (root.chrome ? "+" + _extra : I18n.t("cal.moreN").arg(_extra))
+                                  + (_evHidden > 0 && !root.chrome ? " · " + I18n.count(_evHidden, "today.n.meetings") : "")
                             color: moreMA.hovered ? Theme.text : Theme.textDim
                             Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             font.family: Theme.fontUi

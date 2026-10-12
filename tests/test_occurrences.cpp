@@ -335,3 +335,28 @@ TEST(Occurrences, AMovedOverrideOfADateTheSeriesNoLongerHasIsNotEmitted) {
   orphan.removeFirst();
   EXPECT_EQ(movedShown(orphan), 0) << "no master";
 }
+
+// A6-4: an occurrence of a series kept in another zone says where it came
+// from - the zone and the start on that zone's clock - so a view can show
+// "19:00 New York" beside the local hour. A floating event says nothing.
+TEST(Occurrences, AZonedSeriesCarriesItsSourceHour) {
+  CalEvent e = master(QStringLiteral("ny"), QStringLiteral("FREQ=DAILY"));
+  e.tz = QStringLiteral("America/New_York");
+  e.start = 19.0;
+  e.end = 19.25;
+  const QTimeZone moscow("Europe/Moscow");
+  const auto out = expandEvents({e}, kMon.addDays(2), kMon.addDays(2), nullptr, moscow);
+  ASSERT_EQ(out.size(), 1);
+  EXPECT_EQ(out.first().srcTz, QStringLiteral("America/New_York"));
+  EXPECT_DOUBLE_EQ(out.first().srcStart, 19.0);
+  EXPECT_TRUE(out.first().event.tz.isEmpty()) << "shown on the viewer's clock";
+  EXPECT_DOUBLE_EQ(out.first().event.start, 2.0) << "19:00 EDT is 02:00 in Moscow";
+
+  const auto same = expandEvents({e}, kMon.addDays(2), kMon.addDays(2), nullptr, QTimeZone("America/New_York"));
+  ASSERT_FALSE(same.isEmpty());
+  EXPECT_TRUE(same.first().srcTz.isEmpty()) << "nothing to say in the zone itself";
+
+  const auto floating = expandEvents({master(QStringLiteral("f"), QStringLiteral("FREQ=DAILY"))}, kMon, kMon);
+  ASSERT_EQ(floating.size(), 1);
+  EXPECT_TRUE(floating.first().srcTz.isEmpty());
+}
