@@ -171,7 +171,7 @@ QString cliText(const QString& key, const QString& language);
 QString humanDate(const QDateTime& dt, bool hasTime, const QString& language, const QDate& today);
 // Minutes as "2h", "1h 30m", "45m" (ru: "2ч", "1ч 30м", "45м").
 QString humanMinutes(int minutes, const QString& language);
-// Minutes in an estimate argument: "2h", "90m", "1.5h", "1h30m", "~2ч"; 0 for
+// Minutes in an estimate argument: "2h", "90m", "90", "1.5h", "1h30m", "~2ч"; 0 for
 // "none"/"0"; -1 when it is not an estimate.
 int parseEstimate(const QString& text);
 

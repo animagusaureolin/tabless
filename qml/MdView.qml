@@ -110,6 +110,13 @@ ListView {
         }
         return "";
     }
+    // The text of a piece of the rows' rich text, as the TextEdit shows it
+    // (no tags, entities read, no-break spaces as spaces).
+    function _unescape(s) {
+        return String(s).replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+                        .replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+    }
+    function _plainOf(html) { return view._unescape(String(html).replace(/<[^>]*>/g, "")); }
     function _handleLink(link, line) {
         if (link.startsWith("heap://")) {
             const rest = link.substring(7);
@@ -282,10 +289,13 @@ ListView {
                     visible: active
                     sourceComponent: rowItem.model.taskState >= 0 ? taskBox : bulletLabel
                 }
+                Item {
+                    Layout.fillWidth: true
+                    implicitHeight: body.implicitHeight
                 TextEdit {
                     id: body
                     objectName: "mdParagraph"
-                    Layout.fillWidth: true
+                    width: parent.width
                     readOnly: true
                     // Off for the mouse in an editable document: a readOnly
                     // TextEdit takes every press, so a click never reached the
@@ -304,7 +314,8 @@ ListView {
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsLg
                     onLinkActivated: (link) => view._handleLink(link, rowItem.model.firstLine)
-                    onWidthChanged: codeFrames.refresh()
+                    onWidthChanged: { codeFrames.refresh(); Qt.callLater(linkStops.refresh); }
+                    Component.onCompleted: Qt.callLater(linkStops.refresh)
                     // Inline code in a pill (R2-020): filled in bold, a
                     // hairline in quiet. Rich text cannot stroke a span, so
                     // the pills are drawn under the text.
@@ -329,6 +340,53 @@ ListView {
                             border.color: Theme.borderStrong
                         }
                     }
+                    onTextChanged: Qt.callLater(linkStops.refresh)
+                    onImplicitHeightChanged: Qt.callLater(linkStops.refresh)
+                }
+                // Every link of the paragraph is a Tab stop, Return follows it
+                // as a click does: a [[note]] could be followed only with the
+                // mouse (A4-7). Clicks still go to the text under them.
+                Repeater {
+                    id: linkStops
+                    model: []
+                    function refresh() {
+                        const out = [];
+                        const html = String(rowItem.model.html || "");
+                        const plain = body.getText(0, body.length).replace(/ /g, " ");
+                        const rx = /<a\s+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
+                        let m, from = 0;
+                        while ((m = rx.exec(html)) !== null && out.length < 50) {
+                            const label = view._plainOf(m[2]).trim();
+                            if (label.length === 0) continue;
+                            const at = plain.indexOf(label, from);
+                            if (at < 0) continue;
+                            from = at + label.length;
+                            const a = body.positionToRectangle(at);
+                            const b = body.positionToRectangle(at + label.length);
+                            const w = b.y === a.y ? b.x - a.x : body.width - a.x;
+                            out.push({ href: view._unescape(m[1]), label: label,
+                                       x: a.x, y: a.y, w: Math.max(4, w), h: a.height });
+                        }
+                        linkStops.model = out;
+                    }
+                    delegate: Item {
+                        id: stop
+                        required property var modelData
+                        x: stop.modelData.x
+                        y: stop.modelData.y
+                        width: stop.modelData.w
+                        height: stop.modelData.h
+                        ClickArea {
+                            objectName: "mdLinkStop"
+                            label: stop.modelData.label
+                            role: Accessible.Link
+                            showTip: false
+                            minTarget: 0
+                            acceptedButtons: Qt.NoButton
+                            onActivated: view._handleLink(stop.modelData.href, rowItem.model.firstLine)
+                        }
+                    }
+                }
                 }
             }
         }

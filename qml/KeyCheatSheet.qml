@@ -103,7 +103,8 @@ Popup {
             { label: "keys.row.commandLine", ids: ["palette.open"] },
             { label: "keys.row.newTask", ids: ["task.new"] },
             { label: "keys.row.anywhere", ids: ["quick-capture"] },
-            { label: "keys.row.undoRedo", ids: ["undo.alt", "redo.alt"] },
+            // One row for undo, every key it has: u and Ctrl Z sat in two groups (A4-26).
+            { label: "keys.row.undoRedo", ids: ["undo.alt", "undo", "redo.alt", "redo"] },
             { label: "keys.row.goSettings", ids: ["view.settings"] }
         ] }
     ]

@@ -101,13 +101,13 @@ TestCase {
         wait(50);
     }
 
-    // PERA-5: Notes takes the keyboard into the editor (into the text, not
-    // onto the drawn note, IDIOT-KNOW-6); back on the board it is the board's.
+    // PERA-5: Notes takes the keyboard into the note (onto the drawn note,
+    // where the keymap works, A4-4, or into the text of an empty one); back
+    // on the board it is the board's.
     function test_view_switch_hands_the_keyboard_to_the_view() {
         tc.win.focusActiveView();
         switchTo("notes");
-        tryVerify(function () { const f = tc.win.activeFocusItem; return f && (f.objectName === "notesEditor" || f.objectName === "md-block-field"); },
-                  2000, "focus after switching to Notes: " + typeName(tc.win.activeFocusItem));
+        tryVerify(focusIsInView, 2000, "focus after switching to Notes: " + typeName(tc.win.activeFocusItem));
         switchTo("board");
         tryVerify(focusIsInView, 2000, "focus after switching to the board: " + typeName(tc.win.activeFocusItem));
         switchTo("week");

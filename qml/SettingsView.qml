@@ -145,6 +145,11 @@ Item {
     function _num(v, fallback) {
         return (v === undefined || v === null || v === false) ? fallback : v;
     }
+    // The line under Updates: what is happening now, else when it checks.
+    function updatesHint(status, autoCheck) {
+        if (status !== "") return status;
+        return I18n.t(autoCheck ? "settings.about.updates.hint" : "settings.about.updates.hint.manual");
+    }
     function _get(group, key, fallback) {
         const g = root.settings[group];
         return g && g[key] !== undefined && g[key] !== null ? g[key] : fallback;
@@ -1227,6 +1232,37 @@ Item {
                                ({ value: "spacious", label: I18n.t("common.density.spacious") }) ]
                     onSelected: (value) => AppController.density = value
                 }
+                // Scale and contrast are what a low-vision user looks for
+                // first: on the sheet, not under "more" (A6-16).
+                SegRow {
+                    objectName: "settings-ui-scale"
+                    label: I18n.t("settings.appearance.scale")
+                    // Unset, the scale is the system's text size (APP-183).
+                    hint: (Theme._appearance.uiScale === undefined && Theme.systemScale() > Theme.defaultScale
+                          ? I18n.t("settings.appearance.scale.system")
+                          : I18n.t("settings.appearance.scale.hint"))
+                          + " " + I18n.t("settings.appearance.scale.keys")
+                              .arg(AppController.keyText(AppController.shortcutFor("zoom.in")))
+                              .arg(AppController.keyText(AppController.shortcutFor("zoom.out")))
+                    value: String(Math.round(Theme.scale * 100))
+                    options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
+                    onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
+                }
+                SegRow {
+                    objectName: "settings-contrast"
+                    label: I18n.t("settings.appearance.contrast")
+                    hint: I18n.t("settings.appearance.contrast.hint")
+                    value: Theme.contrast
+                    options: [
+                        ({ value: "soft",   label: I18n.t("settings.appearance.contrast.soft") }),
+                        ({ value: "normal", label: I18n.t("settings.appearance.contrast.normal") }),
+                        ({ value: "high",   label: I18n.t("settings.appearance.contrast.high") })
+                    ]
+                    onSelected: (value) => {
+                        root.set("appearance", "contrast", value);
+                        root.set("appearance", "highContrast", value === "high");
+                    }
+                }
                 SegRow {
                     objectName: "settings-motion"
                     label: I18n.t("settings.appearance.reducedMotion")
@@ -1327,55 +1363,13 @@ Item {
                     }
                 }
             }
-            MoreBlock {
-                // The finer knobs: scale, contrast, a cursor colour of its own.
-                SegRow {
-                    objectName: "settings-ui-scale"
-                    label: I18n.t("settings.appearance.scale")
-                    // Unset, the scale is the system's text size (APP-183).
-                    hint: Theme._appearance.uiScale === undefined && Theme.systemScale() > Theme.defaultScale
-                          ? I18n.t("settings.appearance.scale.system")
-                          : I18n.t("settings.appearance.scale.hint")
-                    value: String(Math.round(Theme.scale * 100))
-                    options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
-                    onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
-                }
-                SegRow {
-                    objectName: "settings-contrast"
-                    label: I18n.t("settings.appearance.contrast")
-                    hint: I18n.t("settings.appearance.contrast.hint")
-                    value: Theme.contrast
-                    options: [
-                        ({ value: "soft",   label: I18n.t("settings.appearance.contrast.soft") }),
-                        ({ value: "normal", label: I18n.t("settings.appearance.contrast.normal") }),
-                        ({ value: "high",   label: I18n.t("settings.appearance.contrast.high") })
-                    ]
-                    onSelected: (value) => {
-                        root.set("appearance", "contrast", value);
-                        root.set("appearance", "highContrast", value === "high");
-                    }
-                }
-                // "Your own" accent (APP-174): the cursor colour from the swatches.
-                CursorColorRow {
-                    objectName: "settings-cursor-color"
-                    label: I18n.t("settings.appearance.cursorColor")
-                    hint: I18n.t("settings.appearance.cursorColor.hint")
-                    value: Theme.accentTone === "custom" ? Theme.cursorColorPick : ""
-                    onSelected: (color) => root.set("appearance", "cursorColor", color)
-                }
-                SettingsGroup {
-                    objectName: "settings-theme-card"
-                    Layout.topMargin: Theme.spLg
-                    title: I18n.t("settings.appearance.group.themes")
-                    SettingsRow {
-                        separator: false
-                        ThemeSettings {
-                            Layout.fillWidth: true
-                            appearance: root.settings.appearance || ({})
-                            onSetKey: (key, value) => root.set("appearance", key, value)
-                        }
-                    }
-                }
+            // The window and starting with the system (A7-11): their own
+            // group, named where the close question sends the user.
+            SettingsGroup {
+                objectName: "settings-window-group"
+                Layout.topMargin: Theme.sp2xl
+                title: I18n.t("settings.appearance.group.window")
+                visible: Qt.platform.os === "windows" || Qt.platform.os === "osx" || !!startAtLoginRow._os.supported
                 // Only where there is a tray to close into.
                 SegRow {
                     objectName: "settings-close-to-tray"
@@ -1413,6 +1407,30 @@ Item {
                     onToggled: (checked) => {
                         AppController.setAutostart(!!startAtLoginRow._os.enabled, checked);
                         startAtLoginRow._os = AppController.autostartState();
+                    }
+                }
+            }
+            MoreBlock {
+                // The finer knobs: a cursor colour of its own, the themes.
+                // "Your own" accent (APP-174): the cursor colour from the swatches.
+                CursorColorRow {
+                    objectName: "settings-cursor-color"
+                    label: I18n.t("settings.appearance.cursorColor")
+                    hint: I18n.t("settings.appearance.cursorColor.hint")
+                    value: Theme.accentTone === "custom" ? Theme.cursorColorPick : ""
+                    onSelected: (color) => root.set("appearance", "cursorColor", color)
+                }
+                SettingsGroup {
+                    objectName: "settings-theme-card"
+                    Layout.topMargin: Theme.spLg
+                    title: I18n.t("settings.appearance.group.themes")
+                    SettingsRow {
+                        separator: false
+                        ThemeSettings {
+                            Layout.fillWidth: true
+                            appearance: root.settings.appearance || ({})
+                            onSetKey: (key, value) => root.set("appearance", key, value)
+                        }
                     }
                 }
             }
@@ -2316,6 +2334,27 @@ Item {
                 const seq = keysRoot.candidate;
                 keysRoot.cancel();
                 if (id.length > 0) AppController.setShortcut(id, seq);
+                keysRoot.refocus(id);
+            }
+            // A changed key rebuilds the list, and focus fell to nowhere: the
+            // next Tab started over at the sidebar (A7-8). Back on the key
+            // just changed, once the rows are rebuilt.
+            function refocus(id) {
+                if (!id) return;
+                Qt.callLater(function () {
+                    const chip = keysRoot._chip(keysRoot, "hotkey-chip-" + id);
+                    if (chip) chip.forceActiveFocus(Qt.TabFocusReason);
+                });
+            }
+            function _chip(item, name) {
+                if (!item) return null;
+                if (item.objectName === name) return item;
+                const kids = item.children || [];
+                for (let i = 0; i < kids.length; i++) {
+                    const hit = keysRoot._chip(kids[i], name);
+                    if (hit) return hit;
+                }
+                return null;
             }
             // A key heard while recording. Enter with nothing heard keeps the
             // old key; a conflict waits for the box below.
@@ -2340,6 +2379,7 @@ Item {
                     const id = keysRoot.capturingId;
                     keysRoot.cancel();
                     AppController.setShortcut(id, "");
+                    keysRoot.refocus(id);
                     return;
                 }
                 if (event.key === Qt.Key_Control || event.key === Qt.Key_Shift || event.key === Qt.Key_Alt
@@ -2493,7 +2533,11 @@ Item {
                                 id: resetMA
                                 objectName: "hotkeys-reset-" + keyRow.aid
                                 label: I18n.t("hotkeys.reset")
-                                onActivated: AppController.resetShortcut(keyRow.aid)
+                                onActivated: {
+                                    const id = keyRow.aid;
+                                    AppController.resetShortcut(id);
+                                    keysRoot.refocus(id);
+                                }
                             }
                         }
                         Item { visible: !(keyRow.changed && !keyRow.rec); Layout.preferredWidth: Theme.px(64) }
@@ -3493,10 +3537,21 @@ Item {
         id: sectionData
         ColumnLayout {
             id: dataRoot
+            objectName: "settings-data-root"
             spacing: 0
             // Read on demand: listBackups() is a plain invokable.
             property var backups: []
             function refreshBackups() { dataRoot.backups = AppController.listBackups(); }
+            // When a copy was taken, the way the rest of the app says a
+            // time ("today 14:45", a day otherwise), never the raw ISO
+            // stamp (A7-6).
+            function whenTaken(mtime) {
+                const at = new Date(mtime);
+                if (isNaN(at.getTime())) return String(mtime);
+                return at.toDateString() === new Date().toDateString()
+                    ? I18n.t("settings.data.today").arg(I18n.fmtTime(at))
+                    : AppController.humanDate(at) + " " + I18n.fmtTime(at);
+            }
             Component.onCompleted: dataRoot.refreshBackups()
             SettingsGroup {
                 ActRow {
@@ -3508,14 +3563,8 @@ Item {
                         const every = I18n.t(d.backupInterval === "hourly" ? "settings.data.every.hourly"
                                              : d.backupInterval === "weekly" ? "settings.data.every.weekly" : "settings.data.every.daily");
                         let last = "";
-                        if (dataRoot.backups.length > 0) {
-                            const at = new Date(dataRoot.backups[0].mtime);
-                            const today = new Date();
-                            const when = isNaN(at.getTime()) ? String(dataRoot.backups[0].mtime)
-                                : at.toDateString() === today.toDateString() ? I18n.t("settings.data.today").arg(I18n.fmtTime(at))
-                                : AppController.humanDate(at);
-                            last = I18n.t("settings.data.backups.last").arg(when);
-                        }
+                        if (dataRoot.backups.length > 0)
+                            last = I18n.t("settings.data.backups.last").arg(dataRoot.whenTaken(dataRoot.backups[0].mtime));
                         return [I18n.t("settings.data.backups.line").arg(every).arg(AppController.backupRetention()), last].filter((s) => s.length > 0).join(" · ");
                     }
                     actions: [ ({ value: "folder", label: I18n.t("settings.data.openFolder") }), ({ value: "restore", label: I18n.t("settings.data.restoreDots") }) ]
@@ -3562,7 +3611,8 @@ Item {
                     model: dataRoot.backups
                     delegate: SettingsRow {
                         required property var modelData
-                        label: modelData.mtime
+                        objectName: "settings-backup-row"
+                        label: dataRoot.whenTaken(modelData.mtime)
                         hint: modelData.fileName + "  ·  " + I18n.t("common.kb").arg(modelData.sizeKb)  // КБ in Russian (SHELL-4)
                         ActionButton {
                             id: restoreBtn
@@ -3877,7 +3927,9 @@ Item {
                 SettingsRow {
                     objectName: "settings-updates"
                     label: I18n.t("settings.about.updates")
-                    hint: AppController.updateStatus === "" ? I18n.t("settings.about.updates.hint") : AppController.updateStatus
+                    // The hint follows the choice (A7-3): "only by hand" never checks
+                    // on launch.
+                    hint: root.updatesHint(AppController.updateStatus, root._get("updates", "autoCheck", true) !== false)
                     LinkText {
                         objectName: "settings-check-updates"
                         visible: AppController.updatePhase !== "downloading" && AppController.updatePhase !== "installing"

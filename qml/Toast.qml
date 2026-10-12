@@ -149,10 +149,32 @@ Item {
     }
     // An Undo for the action just done (Main.onUndoableToast): replaces an
     // older Undo on screen, and loses its action when the history goes.
-    function showUndo(s, label, seconds, fn, k, key) {
+    // `serial`: the history entry it names (by default the newest).
+    function showUndo(s, label, seconds, fn, k, key, serial) {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",
                 actionFn: fn, action2Label: "", action2Fn: null, key: key || "", undo: true,
+                serial: serial !== undefined ? Number(serial) : Number(AppController.undoSerialForToast()),
                 ms: _duration(k || "info", seconds, !!label) });
+    }
+    // Ctrl+Z took back what an Undo toast names (A1-21): it went on showing
+    // the change just undone, with an Undo link, while the "undone" notice
+    // waited behind it. History serials only grow, so a toast whose entry
+    // is newer than the top of the history names an undone action: it goes.
+    function retireUndone(top) {
+        const done = function (e) { return e.undo && e.serial > 0 && e.serial > top; };
+        const keep = _items.filter(function (e) { return !done(e); });
+        const wait = _queue.filter(function (e) { return !done(e); });
+        if (wait.length !== _queue.length) _queue = wait;
+        if (keep.length !== _items.length) {
+            _items = keep;
+            _promote();
+        }
+    }
+    Connections {
+        target: AppController
+        function onPendingUndoChanged() {
+            if (AppController.hasPendingUndo) root.retireUndone(Number(AppController.undoSerialForToast()));
+        }
     }
     // The undo history is gone (a profile switch, the action undone with
     // Ctrl+Z): an Undo toast that stays up offered a button that did nothing

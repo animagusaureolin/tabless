@@ -729,6 +729,10 @@ TEST(CliPlanVerbs, EstimatesAndDurations) {
   EXPECT_EQ(parseEstimate(QStringLiteral("none")), 0);
   EXPECT_EQ(parseEstimate(QStringLiteral("soon")), -1);
   EXPECT_EQ(parseEstimate(QStringLiteral("0m")), -1);
+  // A bare number is minutes (A4-19).
+  EXPECT_EQ(parseEstimate(QStringLiteral("90")), 90);
+  EXPECT_EQ(parseEstimate(QStringLiteral("~25")), 25);
+  EXPECT_EQ(parseEstimate(QStringLiteral("99999")), -1);
   EXPECT_EQ(humanMinutes(120, QStringLiteral("en")), QStringLiteral("2h"));
   EXPECT_EQ(humanMinutes(90, QStringLiteral("en")), QStringLiteral("1h 30m"));
   EXPECT_EQ(humanMinutes(45, QStringLiteral("ru")), QStringLiteral("45м"));
@@ -838,7 +842,7 @@ TEST_F(CliHeadlessTest, SchedDueEstSomedayChangeTheTask) {
     r.verb = Verb::Due;
     r.value = QStringLiteral("2026-10-09");
     resp = execute(c, r, now);
-    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: deadline → Fri, Oct 9\n")) << qPrintable(resp.err);
+    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: due → Fri, Oct 9\n")) << qPrintable(resp.err);
 
     r.verb = Verb::Est;
     r.value = QStringLiteral("1h30m");
