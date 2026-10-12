@@ -169,4 +169,43 @@ TestCase {
         compare(rowsOf(nv, "snippet").length, 1);
         AppController.docsState = keep;
     }
+
+
+    // APP-290: a snippet or a link opens in the document to be read — the
+    // list only copied the code or opened the address.
+    function test_a_snippet_shows_its_code_in_the_document() {
+        const nv = docsOf();
+        const list = findChild(nv, "notes-list-pane");
+        const sn = rowsOf(nv, "snippet")[0];
+        list.itemShown(sn);
+        const view = findChild(nv, "docs-item-view");
+        verify(view.visible, "the snippet is not shown");
+        verify(!findChild(nv, "docs-no-page").visible);
+        compare(findChild(nv, "docs-item-text").text, "make up");
+        compare(list.shownKey, "snippet:" + sn.idx);
+        verify(!findChild(nv, "docs-item-open").visible, "a snippet has nothing to open");
+        // A page takes the document back.
+        nv.openPage("");
+        verify(!view.visible);
+    }
+
+    function test_a_link_shows_its_address_and_follows_its_edit() {
+        const nv = docsOf();
+        const keep = AppController.docsState;
+        const list = findChild(nv, "notes-list-pane");
+        list.itemShown(rowsOf(nv, "ref")[0]);
+        verify(findChild(nv, "docs-item-view").visible);
+        verify(findChild(nv, "docs-item-open").visible);
+        compare(findChild(nv, "docs-item-title").text, "HTTP Semantics");
+        // Edited elsewhere: the pane reads the new text; gone: it clears.
+        const d = JSON.parse(keep);
+        d.sections[0].items[0].desc = "the semantics of HTTP";
+        AppController.docsState = JSON.stringify(d);
+        compare(findChild(nv, "docs-item-text").text, "the semantics of HTTP");
+        d.sections[0].items = [];
+        AppController.docsState = JSON.stringify(d);
+        verify(!findChild(nv, "docs-item-view").visible);
+        verify(findChild(nv, "docs-no-page").visible);
+        AppController.docsState = keep;
+    }
 }

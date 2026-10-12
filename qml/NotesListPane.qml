@@ -55,11 +55,24 @@ Rectangle {
     // pinned at the top, the doc pages and the snippets below the notes.
     signal refActivated(string url)
     signal pageActivated(string id)
-    signal snippetActivated(string title, string code)
+    // A snippet or a link is shown in the document pane (APP-290): its code,
+    // its description; open and copy are there and in the row menu.
+    signal itemShown(var row)
+    // "snippet:<idx>" or "ref:<sec>:<item>": the row the document shows.
+    property string shownKey: ""
     signal contactActivated(string handle)
 
     // The Docs catalogue, read as it is stored: nothing is moved or copied,
     // so nothing of it can be lost on the way to Knowledge.
+    // A snippet's code, a link's address — with the toast saying what.
+    function copyItem(r) {
+        if (!r) return;
+        const text = r.kind === "snippet" ? String(r.code || "") : String(r.url || "");
+        AppController.copyToClipboard(text);
+        AppController.showToast(I18n.t("docs.toast.copied").arg(r.kind === "snippet" ? (r.title || r.lang || "") : text));
+    }
+    function editItem(kind, data) { docDialog.openFor(kind, data); }
+
     function _docs() {
         const raw = AppController.docsState || "";
         if (!raw.length) return ({ sections: [], snippets: [], contacts: [] });
@@ -255,7 +268,8 @@ Rectangle {
                     kind: "ref", tag: r.tag, rest: r.rest, name: title,
                     title: title + (r.rest.length ? " · " + r.rest : ""),
                     url: String(it.url), sec: si, item: ii, pinned: pinnedRef,
-                    refTitle: String(it.title || ""), ref: String(it.ref || "")
+                    refTitle: String(it.title || ""), ref: String(it.ref || ""),
+                    desc: String(it.desc || "")
                 });
             }
         }
@@ -688,7 +702,13 @@ Rectangle {
                     radius: Theme.radiusMd
                     color: drowCA.hovered ? Theme.panel2 : "transparent"
                     Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
-                    readonly property bool current: drow.rowData.kind === "page" && drow.rowData.id === root.openPageId
+                    readonly property bool current: {
+                        const r = drow.rowData;
+                        if (r.kind === "page") return r.id === root.openPageId;
+                        if (r.kind === "snippet") return root.shownKey === "snippet:" + r.idx;
+                        if (r.kind === "ref") return root.shownKey === "ref:" + r.sec + ":" + r.item;
+                        return false;
+                    }
                     // Quiet draws no tag chip: a reference reads "RFC 9110 · title".
                     readonly property string shownTitle: {
                         const r = drow.rowData;
@@ -737,9 +757,8 @@ Rectangle {
                         role: Accessible.Link
                         onActivated: {
                             const r = drow.rowData;
-                            if (r.kind === "ref") root.refActivated(r.url);
+                            if (r.kind === "ref" || r.kind === "snippet") root.itemShown(r);
                             else if (r.kind === "page") root.pageActivated(r.id);
-                            else if (r.kind === "snippet") root.snippetActivated(r.title, r.code);
                             else if (r.kind === "contact") root.contactActivated(r.handle);
                         }
                     }
@@ -753,6 +772,20 @@ Rectangle {
                     }
                     AppMenu {
                         id: docMenu
+                        AppMenuItem {
+                            objectName: "knowledge-item-open"
+                            visible: drow.rowData.kind === "ref"
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("md.link.web.open")
+                            onTriggered: root.refActivated(drow.rowData.url)
+                        }
+                        AppMenuItem {
+                            objectName: "knowledge-item-copy"
+                            visible: drow.rowData.kind === "ref" || drow.rowData.kind === "snippet"
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("docs.copy")
+                            onTriggered: root.copyItem(drow.rowData)
+                        }
                         AppMenuItem {
                             objectName: "knowledge-ref-pin"
                             visible: drow.rowData.kind === "ref"

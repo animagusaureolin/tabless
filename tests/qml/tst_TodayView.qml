@@ -252,4 +252,31 @@ TestCase {
         verify(!v.dayEmpty);
         verify(v._items().some(it => it.kind === "task" && it.id === d.id), "a cursor stop");
     }
+
+
+    // APP-287: "N overdue" under Deadlines opened the list filtered to
+    // tasks without a date.
+    function test_overdue_link_asks_for_overdue_not_undated() {
+        AppController.selectedDate = new Date();
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true;
+        d.title = "today overdue probe";
+        const y = new Date(); y.setDate(y.getDate() - 2); y.setHours(0, 0, 0, 0);
+        d.dueAt = y;
+        AppController.saveTask(d);
+        tc.tasks.push(d.id);
+        const v = createTemporaryQmlObject('import TodoCpp; TodayView { width: 1300; height: 800 }', host);
+        const link = findChild(v, "today-overdue");
+        tryVerify(function () { return link.visible; }, 2000, "no overdue link");
+        const od = createTemporaryQmlObject('import QtQuick; import QtTest; SignalSpy { signalName: "overdueRequested" }', host);
+        const un = createTemporaryQmlObject('import QtQuick; import QtTest; SignalSpy { signalName: "undatedRequested" }', host);
+        od.target = v; un.target = v;
+        let area = null;
+        for (let i = 0; i < link.children.length; i++)
+            if (link.children[i].activated !== undefined) area = link.children[i];
+        verify(area !== null);
+        area.activated();
+        compare(od.count, 1);
+        compare(un.count, 0);
+    }
 }
