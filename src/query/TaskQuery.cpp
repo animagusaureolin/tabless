@@ -334,13 +334,15 @@ TaskQuery TaskQuery::compile(
     QString spec;
     // The shorthands the filter's placeholder offers, as quick capture reads
     // them (PERSONA-14): "p1" is a priority, "@week" / "@неделя" a plan.
-    static const QRegularExpression kPriority(QStringLiteral("^[pP][0-3](,[pP]?[0-3])*$"));
+    // "p0,p1" is a list of priorities (A1-25); "з1" is "p1" typed in the
+    // Russian layout (A4-21).
+    static const QRegularExpression kPriority(QString::fromUtf8("^[pPзЗ][0-3](,[pPзЗ]?[0-3])*$"));
     const QString when = shorthandWhen(token);
     // "#infra" is a label; "#42" is an issue number, searched for as text.
     static const QRegularExpression kIssueNo(QStringLiteral("^#\\d+$"));
     if(kPriority.match(token).hasMatch()) {
       field = QStringLiteral("priority");
-      spec = token.toLower();
+      spec = token.toLower().replace(QString::fromUtf8("з"), QStringLiteral("p"));
     } else if(!when.isEmpty()) {
       field = QStringLiteral("scheduled");
       spec = when;

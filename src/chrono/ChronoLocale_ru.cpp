@@ -92,9 +92,14 @@ ChronoLocale buildRussian() {
                      << QString::fromUtf8("следующей") << QString::fromUtf8("следующем") << QString::fromUtf8("будущей")
                      << QString::fromUtf8("будущем");
   loc.thisAdjectives << QString::fromUtf8("эта") << QString::fromUtf8("этот") << QString::fromUtf8("этой") << QString::fromUtf8("эту")
-                     << QString::fromUtf8("текущий") << QString::fromUtf8("текущая");
+                     << QString::fromUtf8("текущий")
+                     << QString::fromUtf8("текущая")
+                     // "в ближайшую пятницу": the coming one.
+                     << QString::fromUtf8("ближайший") << QString::fromUtf8("ближайшая") << QString::fromUtf8("ближайшую")
+                     << QString::fromUtf8("ближайшее") << QString::fromUtf8("ближайшей") << QString::fromUtf8("ближайшем");
   loc.everyAdjectives << QString::fromUtf8("каждый") << QString::fromUtf8("каждая") << QString::fromUtf8("каждую")
-                      << QString::fromUtf8("каждое") << QString::fromUtf8("по");
+                      << QString::fromUtf8("каждое") << QString::fromUtf8("каждые") << QString::fromUtf8("каждого")
+                      << QString::fromUtf8("по");
   loc.atWords << QString::fromUtf8("в") << QString::fromUtf8("во") << QString::fromUtf8("на");
   loc.fromWords << QString::fromUtf8("с") << QString::fromUtf8("со");
   loc.toWords << QString::fromUtf8("до") << QString::fromUtf8("по");
@@ -122,6 +127,10 @@ ChronoLocale buildRussian() {
 
   loc.amSuffix.clear();
   loc.pmSuffix.clear();
+  // "в 3 ночи" is 03:00 and "в 12 ночи" midnight; "в 3 дня" is 15:00.
+  loc.amWords << QString::fromUtf8("утра") << QString::fromUtf8("ночи");
+  loc.pmWords << QString::fromUtf8("дня") << QString::fromUtf8("вечера");
+  loc.weakMeridiemWords << QString::fromUtf8("ночи") << QString::fromUtf8("дня");
 
   loc.timeRe = QRegularExpression(QStringLiteral("^(\\d{1,2})(?::(\\d{2}))?$"));
   loc.numericDateRe =

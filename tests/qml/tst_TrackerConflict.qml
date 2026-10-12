@@ -114,4 +114,22 @@ TestCase {
         te.showFor(ticketTask({ conflict: false, conflicts: [] }));
         verify(!findChild(te, "te-ticket-conflict").visible);
     }
+
+    // A3-8: the task document says the ticket is in conflict, with the
+    // tracker's version and the same two ways out the editor has.
+    function test_document_shows_the_conflict() {
+        const doc = createTemporaryQmlObject('import TodoCpp; TaskDocument { width: 480; height: 600 }', host);
+        verify(doc !== null);
+        verify(doc.hasConflictOf(ticketTask()));
+        const rows = doc.conflictRowsOf(ticketTask());
+        compare(rows.length, 2);
+        compare(rows[0].value, "theirs");
+        compare(rows[1].value, "P3");
+        verify(!doc.hasConflictOf(ticketTask({ conflict: false })));
+        verify(!doc.hasConflictOf({ id: "x", title: "plain" }));
+        verify(findChild(doc, "task-doc-conflict") !== null);
+        verify(findChild(doc, "task-doc-conflict-use-tracker") !== null);
+        verify(findChild(doc, "task-doc-conflict-keep-mine") !== null);
+    }
 }
+

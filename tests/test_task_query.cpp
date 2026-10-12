@@ -73,6 +73,13 @@ TEST(TaskQuery, StatusAndPriorityMatchCaseInsensitivelyAndAsSets) {
   EXPECT_FALSE(two.matches(mk(QStringLiteral("C"), QStringLiteral("todo"), QStringLiteral("P2"))));
 }
 
+// "з1" is "p1" typed in the Russian layout (A4-21).
+TEST(TaskQuery, PriorityShorthandInTheRussianLayout) {
+  const TaskQuery query = q(QString::fromUtf8("з1"));
+  EXPECT_TRUE(query.matches(mk(QStringLiteral("A"), QStringLiteral("todo"), QStringLiteral("P1"))));
+  EXPECT_FALSE(query.matches(mk(QStringLiteral("B"), QStringLiteral("todo"), QStringLiteral("P2"))));
+}
+
 TEST(TaskQuery, SeveralClausesAreAnded) {
   const TaskQuery query = q(QStringLiteral("status:prog priority:P0"));
   EXPECT_TRUE(query.matches(mk(QStringLiteral("A"), QStringLiteral("prog"), QStringLiteral("P0"))));
@@ -465,7 +472,12 @@ TEST(TaskQuery, IsArchivedAsksForTheArchivedCards) {
 
 TEST(TaskQuery, TwoPrioritiesMeanEither) {
   // A1-25 / A3-12: a task has one priority, so "p0 p1" can only mean either.
-  for(const QString& text : {QStringLiteral("p0 p1"), QStringLiteral("p0,p1"), QStringLiteral("priority:p0 priority:p1")}) {
+  // "з0,з1" is the list typed in the Russian layout (A4-21).
+  for(const QString& text : {QStringLiteral("p0 p1"),
+                             QStringLiteral("p0,p1"),
+                             QStringLiteral("priority:p0 priority:p1"),
+                             QString::fromUtf8("з0,з1"),
+                             QString::fromUtf8("p0,з1")}) {
     const TaskQuery query = q(text);
     EXPECT_TRUE(query.isQuery()) << text.toStdString();
     EXPECT_TRUE(query.matches(mk(QStringLiteral("A"), QStringLiteral("todo"), QStringLiteral("P0")))) << text.toStdString();

@@ -250,9 +250,15 @@ TestCase {
     function test_a_new_task_applies_what_its_title_says() {
         const te = make('import TodoCpp; TaskEditor { }');
         const a = newFrom(te, "p0 hotfix payments #billing tomorrow 9am");
-        compare(a.title, "hotfix payments tomorrow 9am");
+        // The date is read too, as quick capture reads it (A1-4, A5-1).
+        compare(a.title, "hotfix payments");
         compare(a.priority, "P0");
         compare(a.labels.map(l => l.id).join(","), "billing");
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        compare(Qt.formatDate(a.scheduledAt, "yyyy-MM-dd"), Qt.formatDate(tomorrow, "yyyy-MM-dd"));
+        compare(a.scheduledAt.getHours(), 9);
+        verify(a.scheduledHasTime);
         AppController.deleteTask(a.id);
 
         const b = newFrom(te, "See https://example.com/a/b // check the docs");
@@ -299,5 +305,85 @@ TestCase {
         verify(made !== null, "the title was not kept as typed");
         compare(made.priority, "P3");
         AppController.deleteTask(made.id);
+    }
+
+    // Ctrl N reads a date, a length and a repeat from the title the way quick
+    // capture does, shows it as chips while typing, and Enter creates the
+    // task (A1-4, A5-1, A3-19, A2-11, A5-2).
+    function test_ctrl_n_reads_the_whole_line_and_enter_creates() {
+        const te = make('import TodoCpp; TaskEditor { }');
+        te.showFor(AppController.newTaskDraft("todo"));
+        te.open();
+        const title = findChild(te, "te-title");
+        title.forceActiveFocus();
+        const stamp = "bank" + Date.now();
+        title.text = "Call " + stamp + " tomorrow 3pm p1 #personal 25 min";
+        te._refreshTitleChips();
+        verify(findChild(te, "te-title-read").visible, "the editor says what it read");
+        const kinds = te._titleChips.map(c => c.kind).join(",");
+        compare(kinds, "when,estimate,priority,label");
+        const before = {};
+        const m = AppController.tasks;
+        for (let i = 0; i < m.rowCount(); i++) before[m.data(m.index(i, 0), Qt.UserRole + 1)] = 1;
+        keyClick(Qt.Key_Return);
+        tryVerify(() => !te.opened, 2000, "Enter in a new task's title creates it");
+        let made = null;
+        for (let i = 0; i < m.rowCount(); i++) {
+            const id = m.data(m.index(i, 0), Qt.UserRole + 1);
+            if (!before[id]) made = AppController.taskById(id);
+        }
+        verify(made !== null, "no task was created");
+        compare(made.title, "Call " + stamp);
+        compare(made.priority, "P1");
+        compare(made.estimateMinutes, 25);
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        compare(Qt.formatDate(made.scheduledAt, "yyyy-MM-dd"), Qt.formatDate(tomorrow, "yyyy-MM-dd"));
+        compare(made.scheduledAt.getHours(), 15);
+        AppController.deleteTask(made.id);
+    }
+
+    // A deadline typed below wins over a date in the title: the title's
+    // date words stay words. A deadline alone says it also plans (A5-23).
+    function test_a_typed_deadline_keeps_the_title_date_as_words() {
+        const te = make('import TodoCpp; TaskEditor { }');
+        te.showFor(AppController.newTaskDraft("todo"));
+        const stamp = "rent" + Date.now();
+        findChild(te, "te-title").text = "Pay " + stamp + " by friday";
+        const deadline = findChild(te, "te-deadline");
+        verify(deadline !== null, "te-deadline not found");
+        deadline.text = "tomorrow 15:00";
+        te._refreshDeadlinePreview();
+        const read = findChild(te, "te-deadline-read");
+        verify(read.text.indexOf(I18n.t("editor.deadline.alsoPlanned")) >= 0,
+               "the deadline says it plans the task too: " + read.text);
+        const before = {};
+        const m = AppController.tasks;
+        for (let i = 0; i < m.rowCount(); i++) before[m.data(m.index(i, 0), Qt.UserRole + 1)] = 1;
+        verify(te._save());
+        let made = null;
+        for (let i = 0; i < m.rowCount(); i++) {
+            const id = m.data(m.index(i, 0), Qt.UserRole + 1);
+            if (!before[id]) made = AppController.taskById(id);
+        }
+        verify(made !== null);
+        compare(made.title, "Pay " + stamp + " by friday");
+        compare(made.dueAt.getHours(), 15);
+        compare(made.scheduledAt.getTime(), made.dueAt.getTime());
+        AppController.deleteTask(made.id);
+    }
+
+    // An existing task's title is a name: Enter does not save it and dates stay.
+    function test_an_existing_title_is_not_read() {
+        const d = AppController.newTaskDraft("todo");
+        d.title = "Ship v2 tomorrow 3pm";
+        verify(AppController.saveTask(d));
+        const te = make('import TodoCpp; TaskEditor { }');
+        te.showFor(AppController.taskById(d.id));
+        te._refreshTitleChips();
+        compare(te._titleChips.length, 0);
+        verify(te._save());
+        compare(AppController.taskById(d.id).title, "Ship v2 tomorrow 3pm");
+        AppController.deleteTask(d.id);
     }
 }
