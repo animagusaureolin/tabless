@@ -355,8 +355,11 @@ FocusScope {
         root._save("rule");
     }
     function setCustomRule(text) {
-        const r = String(text || "").trim().replace(/^RRULE:/i, "");
-        if (r.length > 0 && !AppController.isValidRRule(r)) { root._error = I18n.t("editor.err.rule"); return; }
+        let r = String(text || "").trim().replace(/^RRULE:/i, "");
+        // Words read like the task's repeat (B7): "every 3 weeks", "пн, ср".
+        if (r.length > 0 && !AppController.isValidRRule(r))
+            r = EventRule.fromChrono(AppController.recurrenceFromText(r));
+        if (String(text || "").trim().length > 0 && r.length === 0) { root._error = I18n.t("editor.err.rule"); return; }
         root._error = "";
         root._customOpen = false;
         if (r === root.rule) return;

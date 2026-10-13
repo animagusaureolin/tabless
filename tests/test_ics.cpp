@@ -443,6 +443,23 @@ TEST(Ics, ARecurringEventSurvivesARoundTrip) {
   EXPECT_EQ(back.exdates.at(0), QDate(2026, 10, 5));
 }
 
+// B7: the interval repeats a meeting is made from ("every 3 weeks", "every
+// mon, wed", "every other week on mon, thu") go out and come back as said.
+TEST(Ics, IntervalAndDayListRulesSurviveARoundTrip) {
+  for(const char* rule : {"FREQ=DAILY;INTERVAL=2",
+                          "FREQ=WEEKLY;INTERVAL=3",
+                          "FREQ=WEEKLY;BYDAY=MO,WE",
+                          "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH",
+                          "FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15"}) {
+    CalEvent e = timed();
+    e.rrule = QString::fromLatin1(rule);
+    const IcsImport in = parseIcs(toIcs({e}));
+    ASSERT_EQ(in.events.size(), 1) << rule;
+    EXPECT_EQ(in.events.at(0).rrule, e.rrule) << rule;
+    EXPECT_TRUE(in.warnings.isEmpty()) << rule;
+  }
+}
+
 // A title with the characters the format uses for its own punctuation.
 TEST(Ics, APunctuatedTitleSurvivesARoundTrip) {
   CalEvent e = timed();

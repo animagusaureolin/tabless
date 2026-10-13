@@ -2,6 +2,7 @@
 // estimate (APP-246). A pure function of the text and `now`.
 #include "capture/CaptureParse.h"
 #include "chrono/ChronoParser.h"
+#include "recur/RecurrenceEngine.h"
 
 #include <QDate>
 #include <QDateTime>
@@ -428,18 +429,132 @@ TEST(CaptureAcceptance, HabitualRepeats) {
   r = at(QStringLiteral("pay rent on the 15th of each month"), now);
   EXPECT_EQ(r.recurrence, QStringLiteral("every:month:15"));
   EXPECT_EQ(r.title, QStringLiteral("pay rent"));
-  for(const char* whole : {"water plants every other day",
-                           "sync every 2 weeks",
-                           "Buy milk every mon, wed",
-                           "every other friday sync",
-                           "Проверить диски каждые 2 дня",
-                           "стендап каждый пн и ср"}) {
+}
+
+// B7: interval repeats and lists of days are read now; B2 left them whole
+// in the title. Monday 12 October 2026.
+TEST(CaptureAcceptance, IntervalRepeats) {
+  const QDateTime now(QDate(2026, 10, 12), QTime(10, 0));  // Monday
+
+  struct Case {
+    const char* text;
+    const char* title;
+    const char* rule;
+    QDate when;
+  };
+
+  const Case cases[] = {
+      {"water plants every other day", "water plants", "every:2:day", QDate(2026, 10, 12)},
+      {"water plants every 2 days", "water plants", "every:2:day", QDate(2026, 10, 12)},
+      {"sync every 2 weeks", "sync", "every:2:week", QDate(2026, 10, 12)},
+      {"retro every 3 weeks", "retro", "every:3:week", QDate(2026, 10, 12)},
+      {"invoice every 2 months", "invoice", "every:2:month", QDate(2026, 10, 12)},
+      {"every other friday sync", "sync", "every:2:week", QDate(2026, 10, 16)},
+      {"sync every 2 weeks on friday", "sync", "every:2:week", QDate(2026, 10, 16)},
+      {"Buy milk every mon, wed", "Buy milk", "every:mon,wed", QDate(2026, 10, 12)},
+      {"gym every tue and thu", "gym", "every:thu,tue", QDate(2026, 10, 13)},
+      {"standup every weekday", "standup", "every:weekday", QDate(2026, 10, 12)},
+      {"Проверить диски каждые 2 дня", "Проверить диски", "every:2:day", QDate(2026, 10, 12)},
+      {"полив через день", "полив", "every:2:day", QDate(2026, 10, 12)},
+      {"ретро каждые 2 недели", "ретро", "every:2:week", QDate(2026, 10, 12)},
+      {"ретро каждые две недели", "ретро", "every:2:week", QDate(2026, 10, 12)},
+      {"отчёт каждую вторую неделю", "отчёт", "every:2:week", QDate(2026, 10, 12)},
+      {"бэкап раз в 2 недели", "бэкап", "every:2:week", QDate(2026, 10, 12)},
+      {"счёт каждые 3 месяца", "счёт", "every:3:month", QDate(2026, 10, 12)},
+      {"стендап каждый пн и ср", "стендап", "every:mon,wed", QDate(2026, 10, 12)},
+      {"зал по пн, ср, пт", "зал", "every:mon,wed,fri", QDate(2026, 10, 12)},
+      {"зал по вторникам и четвергам", "зал", "every:thu,tue", QDate(2026, 10, 13)},
+      {"отчёт по пн, вт, ср, чт, пт", "отчёт", "every:weekday", QDate(2026, 10, 12)},
+  };
+  for(const Case& c : cases) {
+    const Parsed r = at(QString::fromUtf8(c.text), now);
+    // The rule as the engine writes it: days in week order.
+    EXPECT_EQ(r.recurrence, heap::recur::canonicalRule(QString::fromUtf8(c.rule))) << c.text;
+    EXPECT_EQ(r.title, QString::fromUtf8(c.title)) << c.text;
+    EXPECT_EQ(r.when.date(), c.when) << c.text;
+  }
+  // A time with it stays the time; the first day still ahead.
+  Parsed r = at(QStringLiteral("standup every mon, wed 9:00"), now);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:mon,wed"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 14), QTime(9, 0))) << "Monday 9:00 is behind 10:00";
+  // Not a list: a two-letter English word after "and" may be a word, so
+  // the phrase stays whole, as before lists were read.
+  r = at(QStringLiteral("call every mon and we sync"), now);
+  EXPECT_TRUE(r.recurrence.isEmpty());
+  EXPECT_EQ(r.title, QStringLiteral("call every mon and we sync"));
+  // An offset is still an offset: "через 2 дня" is Wednesday, once.
+  r = at(QString::fromUtf8("позвонить через 2 дня"), now);
+  EXPECT_TRUE(r.recurrence.isEmpty());
+  EXPECT_EQ(r.when.date(), QDate(2026, 10, 14));
+  // A day of the month is still one.
+  r = at(QString::fromUtf8("аренда каждое 25 число"), now);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:month:25"));
+  // An interval no one plans with stays words.
+  r = at(QStringLiteral("ping every 900 days"), now);
+  EXPECT_TRUE(r.recurrence.isEmpty());
+  // "по 2 дня" is a share, not a repeat.
+  r = at(QString::fromUtf8("дежурства по 2 дня"), now);
+  EXPECT_TRUE(r.recurrence.isEmpty());
+}
+
+// B7 follow-up: a month interval from a date or on a day of the month, the
+// lists an interval cannot carry, and the phrases that only look like one.
+// Monday 12 October 2026.
+TEST(CaptureAcceptance, IntervalRepeatsFollowUp) {
+  const QDateTime now(QDate(2026, 10, 12), QTime(10, 0));  // Monday
+
+  struct Case {
+    const char* text;
+    const char* title;
+    const char* rule;
+    QDate when;
+  };
+
+  const Case cases[] = {
+      // A start date is the first one, not an interval after it.
+      {"invoice every 2 months from 15 nov", "invoice", "every:2:month", QDate(2026, 11, 15)},
+      {"invoice every 2 months from 1 nov", "invoice", "every:2:month", QDate(2026, 11, 1)},
+      {"invoice every 3 months from 1 nov", "invoice", "every:3:month", QDate(2026, 11, 1)},
+      {"sync every 2 weeks from 19 oct", "sync", "every:2:week", QDate(2026, 10, 19)},
+      // A day of the month with the interval.
+      {"rent every 2 months on the 15th", "rent", "every:2:month:15", QDate(2026, 10, 15)},
+      {"rent every 2 months on the 15th from 1 nov", "rent", "every:2:month:15", QDate(2026, 11, 15)},
+      {"аренда раз в 2 месяца 15-го", "аренда", "every:2:month:15", QDate(2026, 10, 15)},
+      {"аренда каждые 2 месяца 15 числа", "аренда", "every:2:month:15", QDate(2026, 10, 15)},
+      {"налог каждые 3 месяца 1-го", "налог", "every:3:month:1", QDate(2026, 11, 1)},
+      // A day of the month on its own, with an English ordinal.
+      {"pay every 15th", "pay", "every:month:15", QDate(2026, 10, 15)},
+      {"pay every 4th", "pay", "every:month:4", QDate(2026, 11, 4)},
+      {"pay every 15th of the month", "pay", "every:month:15", QDate(2026, 10, 15)},
+      {"pay every 20th", "pay", "every:month:20", QDate(2026, 10, 20)},
+      {"pay every 27th", "pay", "every:month:27", QDate(2026, 10, 27)},
+      {"Fix every 2 th tests", "Fix tests", "every:month:2", QDate(2026, 11, 2)},
+      // A list after a plain weekly repeat is the list.
+      {"sync every week on mon, wed", "sync", "every:mon,wed", QDate(2026, 10, 12)},
+  };
+  for(const Case& c : cases) {
+    const Parsed r = at(QString::fromUtf8(c.text), now);
+    EXPECT_EQ(r.recurrence, heap::recur::canonicalRule(QString::fromUtf8(c.rule))) << c.text;
+    EXPECT_EQ(r.title, QString::fromUtf8(c.title)) << c.text;
+    EXPECT_EQ(r.when.date(), c.when) << c.text;
+  }
+  // A list of days after an interval has no rule: all of it stays words,
+  // nothing half read (no Wednesday lost, no date).
+  for(const char* whole : {"every 2 weeks on mon, wed design",
+                           "every other mon, wed sync",
+                           "every 2 weeks mon and wed review",
+                           "бэкап раз в 2 недели по пн и ср",
+                           "ретро каждые 2 недели в пн и ср"}) {
     const QString text = QString::fromUtf8(whole);
     const Parsed w = at(text, now);
-    EXPECT_EQ(w.title, text) << whole;
     EXPECT_TRUE(w.recurrence.isEmpty()) << whole;
+    EXPECT_EQ(w.title, text) << whole;
     EXPECT_FALSE(w.when.isValid()) << whole;
   }
+  // "через день после X" is a day after something: once, tomorrow.
+  Parsed r = at(QString::fromUtf8("Отписаться через день после релиза"), now);
+  EXPECT_TRUE(r.recurrence.isEmpty());
+  EXPECT_EQ(r.when.date(), QDate(2026, 10, 13));
 }
 
 // REG-3: a plain repeat takes in the day, time or start that follows it,

@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
 import TodoCpp
+import "TaskDates.js" as TaskDates
 
 // The task as a document (heap 2, APP-265; sheets H2-Task / Q-Task), in
 // place of the modal editor. Opens as a panel on the right of the view (the
@@ -409,6 +410,9 @@ FocusScope {
     function _recurLabel(r) {
         const rule = String(r || "");
         if (rule.length === 0) return "";
+        // "раз в 2 недели", "по пн, ср" (B7).
+        const interval = TaskDates.intervalText(rule);
+        if (interval.length > 0) return interval;
         const monthly = /^every:month:(\d+)$/.exec(rule);
         if (monthly) {
             const l = I18n.t("editor.recur.monthlyOn").arg(monthly[1]);
@@ -422,7 +426,7 @@ FocusScope {
     // month the task's own date gives, and the current rule when it is none
     // of these — so it is marked and picking it keeps it (A2-22).
     readonly property var _recurOptions: {
-        const out = ["", "every:day", "every:weekday", "every:week", "every:month"];
+        const out = ["", "every:day", "every:weekday", "every:week", "every:2:week", "every:month"];
         const at = root._valid(root.task.scheduledAt) ? new Date(root.task.scheduledAt)
                  : root._valid(root.task.dueAt) ? new Date(root.task.dueAt) : new Date();
         const dows = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -430,7 +434,39 @@ FocusScope {
         out.push("every:month:" + at.getDate());
         const cur = String(root.task.recurrence || "");
         if (cur.length > 0 && out.indexOf(cur) < 0) out.push(cur);
+        // Any other interval, typed (B7): "every 3 weeks", "пн, ср".
+        out.push("custom");
         return out;
+    }
+    // The "Custom interval…" row's field: the words read by the same parser
+    // as quick capture; what is not a repeat stays in the field, marked.
+    property bool _recurEditing: false
+    property bool _recurBad: false
+    // The chip the row brought out for the field, taken back when nothing
+    // is set ("Repeat" with no rule under it).
+    property bool _recurChipAdded: false
+    function startCustomRecur() {
+        root._recurChipAdded = root._shown.indexOf("recurrence") < 0;
+        root._shown = root._shown.concat(["recurrence"]);
+        root._recurBad = false;
+        root._recurEditing = true;
+        recurField.text = "";
+        Qt.callLater(recurField.forceActiveFocus);
+    }
+    function applyCustomRecur(text) {
+        const rule = AppController.recurrenceFromText(text);
+        if (rule.length === 0) { root._recurBad = true; return false; }
+        root._recurEditing = false;
+        root._recurBad = false;
+        root._setField("recurrence", rule);
+        root.focusDocument();
+        return true;
+    }
+    function cancelCustomRecur() {
+        root._recurEditing = false;
+        if (root._recurChipAdded && !root._has("recurrence"))
+            root._shown = root._shown.filter((k) => k !== "recurrence");
+        root._recurChipAdded = false;
     }
     function _tabWithin(forward) {
         let next = (root.Window.activeFocusItem || root).nextItemInFocusChain(forward);
@@ -747,6 +783,35 @@ FocusScope {
                     key: root._key(I18n.t("taskdoc.prop.repeat"))
                     value: root._recurLabel(root.task.recurrence)
                     onClicked: recurMenu.popup(recurChip, 0, recurChip.height + Theme.spXs)
+                }
+                QQC.TextField {
+                    id: recurField
+                    objectName: "task-doc-recur-custom"
+                    visible: root._recurEditing
+                    width: Theme.px(280)
+                    height: Theme.chipH
+                    leftPadding: Theme.spMd
+                    rightPadding: Theme.spMd
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    color: Theme.text
+                    placeholderText: I18n.t("recur.custom.ph")
+                    placeholderTextColor: Theme.textDim
+                    background: Rectangle {
+                        radius: Theme.radiusMd
+                        color: Theme.panel2
+                        border.color: root._recurBad ? Theme.danger : Theme.focusRing
+                        border.width: 1
+                    }
+                    onTextChanged: root._recurBad = false
+                    onAccepted: root.applyCustomRecur(recurField.text)
+                    onActiveFocusChanged: if (!activeFocus && root._recurEditing) root.cancelCustomRecur()
+                    Keys.onEscapePressed: (e) => { root.cancelCustomRecur(); root.focusDocument(); e.accepted = true; }
+                    Keys.onReturnPressed: (e) => { recurField.accepted(); e.accepted = true; }
+                    Keys.onEnterPressed: (e) => { recurField.accepted(); e.accepted = true; }
+                    // What Enter and Esc do, and what was not read.
+                    QQC.ToolTip.visible: recurField.visible && recurField.activeFocus
+                    QQC.ToolTip.text: root._recurBad ? I18n.t("recur.custom.err") : I18n.t("recur.custom.hint")
                 }
                 TextChip {
                     objectName: "task-doc-estimate"
@@ -1283,9 +1348,11 @@ FocusScope {
             model: root._recurOptions
             delegate: AppMenuItem {
                 required property string modelData
-                text: modelData === "" ? I18n.t("taskdoc.repeat.none") : root._recurLabel(modelData)
+                objectName: modelData === "custom" ? "task-doc-recur-custom-row" : ""
+                text: modelData === "" ? I18n.t("taskdoc.repeat.none")
+                    : modelData === "custom" ? I18n.t("recur.custom") : root._recurLabel(modelData)
                 marked: String(root.task.recurrence || "") === modelData
-                onTriggered: root._setField("recurrence", modelData)
+                onTriggered: modelData === "custom" ? root.startCustomRecur() : root._setField("recurrence", modelData)
             }
             onObjectAdded: (i, o) => recurMenu.insertItem(i, o)
             onObjectRemoved: (i, o) => recurMenu.removeItem(o)

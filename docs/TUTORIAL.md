@@ -77,7 +77,9 @@ Everything is optional and order-independent, in **English and Russian**.
 | `every weekday`, `every monday`, `по будням`, `каждый будний день` | a **repeating** task; a time that has passed today starts at the next occurrence |
 | `daily`, `weekly`, `ежедневно`, `еженедельно`, `раз в неделю` | a **daily** or **weekly** task (`daily`/`weekly` at the end of the line: `daily standup notes` stays a title) |
 | `every month on the 15th`, `1st of every month`, `monthly`, `каждый месяц`, `каждое 25 число`, `каждое 1-е число` | a **monthly** task |
-| `every other day`, `every 2 weeks`, `every mon, wed`, `каждые 2 дня` | no such repeat yet: the words stay in the title, nothing is half read |
+| `every other day`, `every 2 days`, `every 3 weeks`, `every 2 months`, `every other friday`, `каждые 2 дня`, `через день`, `каждые 2 недели`, `раз в 2 недели` | an **interval** repeat, counted from the task's own date (`every other friday`: every two weeks from the coming Friday) |
+| `every mon, wed`, `every tue and thu`, `каждый пн и ср`, `по пн, ср, пт` | a repeat on **those days** of the week |
+| `every 2 years`, `every 900 days` | no such repeat: the words stay in the title, nothing is half read |
 | `~30m`, `25м`, `25 мин`, `за 50 минут`, `на 1ч`, `2h`, `на полчаса` | an **estimate** at the end of the line (`через 30 мин` and `в 2ч` stay times; `Fix 2h timeout` stays a title) |
 | `in 2 days`, `через 3 дня`, `через полчаса`, `next week`, `на следующей неделе`, `end of month` | relative dates (next week is its Monday) |
 
@@ -139,7 +141,10 @@ is read the same way (the chips under it show what was understood), and
   week / later, with a show-done toggle.
   ![Timeline](assets/img/screens/board-timeline.png)
 - **Week** (`Ctrl+3`) is a 7-day grid — drag, resize, and move events across
-  days; all-day deadline chips sit on top.
+  days; all-day deadline chips sit on top. A repeating task's next
+  occurrences show faintly with `↻` in Week and Month: worked out from its
+  rule, nothing is created ahead, they don't drag, and `Enter` on one opens
+  the task itself.
   ![Week](assets/img/screens/board-week.png)
 - The **day calendar** (right column) lets you drag on empty space to create an
   event, resize from either edge, and **drop a task onto it to schedule a focus
