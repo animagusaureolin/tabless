@@ -6861,6 +6861,20 @@ QString AppController::recurrenceFromText(const QString& text) const {
   }
   // As typed ("every 3 weeks", "через день"), then with the repeat word the
   // row leaves out: "3 weeks", "mon, wed", "2 дня", "пн, ср".
+  // A unit on its own in the plural ("weeks", "дня") says no interval: it is
+  // not read as every one of them.
+  static const QStringList kBareUnits = {QStringLiteral("days"),
+                                         QStringLiteral("weeks"),
+                                         QStringLiteral("months"),
+                                         QString::fromUtf8("дня"),
+                                         QString::fromUtf8("дней"),
+                                         QString::fromUtf8("недели"),
+                                         QString::fromUtf8("недель"),
+                                         QString::fromUtf8("месяца"),
+                                         QString::fromUtf8("месяцев")};
+  if(kBareUnits.contains(said.toLower())) {
+    return {};
+  }
   const QStringList tries = {said, QStringLiteral("every ") + said, QString::fromUtf8("каждые ") + said, QString::fromUtf8("по ") + said};
   const QDateTime now = QDateTime::currentDateTime();
   for(const QString& line : tries) {

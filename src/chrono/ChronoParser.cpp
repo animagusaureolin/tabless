@@ -25,26 +25,6 @@ bool hasCyrillic(const QString& s) {
   return false;
 }
 
-QString isoDay3(int iso) {
-  switch(iso) {
-    case 1:
-      return QStringLiteral("mon");
-    case 2:
-      return QStringLiteral("tue");
-    case 3:
-      return QStringLiteral("wed");
-    case 4:
-      return QStringLiteral("thu");
-    case 5:
-      return QStringLiteral("fri");
-    case 6:
-      return QStringLiteral("sat");
-    case 7:
-      return QStringLiteral("sun");
-  }
-  return QString();
-}
-
 int lookupHash(const QHash<QString, int>& h, const QString& k, bool* found) {
   auto it = h.constFind(k);
   if(it == h.cend()) {
@@ -534,8 +514,49 @@ class ChronoParser::Impl {
   // -1: "every other day/friday", "каждую вторую неделю", "every 2 weeks",
   // "каждые 3 дня", "every mon, wed", "каждый пн и ср".
   int unsupportedRepeatEnd(const QVector<Token>& toks, int i, const ChronoLocale* primary, const ChronoLocale* fallback) const {
-    if(i >= toks.size() || toks[i].kind != TokenKind::Word ||
-       !inListAny(toks[i].lower, primary->everyAdjectives, fallback->everyAdjectives)) {
+    if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
+      return -1;
+    }
+    // "every 2 weeks on mon, wed", "раз в 2 недели по пн и ср": a list of
+    // days after an interval has no rule, so the list goes with it and
+    // nothing of it is read as a date or a repeat of its own (B7).
+    const auto withDayList = [&](int u) {
+      // "every other mon, wed": the list starts at the day itself.
+      bool unitIsDay = false;
+      lookupHashAny(toks[u].lower, primary->weekdayNames, fallback->weekdayNames, &unitIsDay);
+      int m = unitIsDay ? u : u + 1;
+      if(m < toks.size() && toks[m].kind == TokenKind::Word &&
+         (toks[m].lower == QStringLiteral("on") || toks[m].lower == QString::fromUtf8("по") ||
+          inListAny(toks[m].lower, primary->atWords, fallback->atWords))) {
+        ++m;
+      }
+      bool isDay = false;
+      if(m < toks.size() && toks[m].kind == TokenKind::Word) {
+        lookupHashAny(toks[m].lower, primary->weekdayNames, fallback->weekdayNames, &isDay);
+      }
+      if(!isDay) {
+        return u;
+      }
+      QVector<int> listed{0};
+      bool ambiguous = false;
+      const int last = dayListEnd(toks, m, primary, fallback, listed, ambiguous);
+      return last > m ? last : u;
+    };
+    const auto isUnitWord = [&](int k) {
+      if(k >= toks.size() || toks[k].kind != TokenKind::Word) {
+        return false;
+      }
+      bool f = false;
+      lookupHashAny(toks[k].lower, primary->unitToDays, fallback->unitToDays, &f);
+      return f || primary->monthUnits.contains(toks[k].lower) || fallback->monthUnits.contains(toks[k].lower);
+    };
+    if(toks[i].lower == QString::fromUtf8("раз") && i + 3 < toks.size() && toks[i + 1].kind == TokenKind::Word &&
+       (toks[i + 1].lower == QString::fromUtf8("в") || toks[i + 1].lower == QString::fromUtf8("во")) && intervalAt(toks, i + 2) > 1 &&
+       isUnitWord(i + 3)) {
+      const int end = withDayList(i + 3);
+      return end > i + 3 ? end : -1;
+    }
+    if(!inListAny(toks[i].lower, primary->everyAdjectives, fallback->everyAdjectives)) {
       return -1;
     }
     const int j = i + 1;
@@ -560,13 +581,13 @@ class ChronoParser::Impl {
       return f;
     };
     if(toks[j].kind == TokenKind::Word && kOther.contains(toks[j].lower) && isUnitOrDay(j + 1)) {
-      return j + 1;
+      return withDayList(j + 1);
     }
     // "every 2 weeks" — but "every 15th" / "каждое 25 число" is a day of the month.
     if(toks[j].kind == TokenKind::Number && toks[j].value > 1 && isUnitOrDay(j + 1)) {
       bool day = false;
       lookupHashAny(toks[j + 1].lower, primary->weekdayNames, fallback->weekdayNames, &day);
-      return day ? -1 : j + 1;
+      return day ? -1 : withDayList(j + 1);
     }
     // "every mon, wed [and fri]".
     bool isDay = false;
@@ -1468,12 +1489,18 @@ class ChronoParser::Impl {
       // "по понедельникам", "every monday", "по пн и ср". Every n weeks
       // (B7) takes one day: "every 2 weeks on friday" is every:2:week from
       // the coming Friday; a list there has no token, so it stays words.
+      // A list after an interval ("every 2 weeks on mon, wed") clears the
+      // repeat: the caller then reads none of it rather than half.
       DateMatch dm;
       QString rec;
       bool weekdayRule = false;
       if(isWord(k) && tryEveryPhrase(toks, k, ref, primary, fallback, dm, rec)) {
         const heap::recur::Rule said = heap::recur::parseRule(rec);
-        weekdayRule = said.unit == QStringLiteral("days") && (asRule.every == 1 || said.days.size() == 1);
+        if(said.unit == QStringLiteral("days") && asRule.every > 1 && said.days.size() > 1) {
+          recurrence.clear();
+          return false;
+        }
+        weekdayRule = said.unit == QStringLiteral("days");
       }
       if(weekdayRule) {
         recurrence = asRule.every == 1 ? rec : recurrence;
@@ -1481,20 +1508,38 @@ class ChronoParser::Impl {
         out.lastTok = dm.lastTok;
         read = true;
       } else {
-        // "on monday", "в пятницу", "monday".
+        // "on monday", "в пятницу", "monday", "on mon, wed".
         const int j = isOnWord(k) ? k + 1 : k;
         bool found = false;
         const int iso = isWord(j) ? lookupHashAny(toks[j].lower, primary->weekdayNames, fallback->weekdayNames, &found) : 0;
         if(found) {
-          if(asRule.every == 1) {
-            recurrence = QStringLiteral("every:") + isoDay3(iso);
+          QVector<int> listed{iso};
+          bool ambiguous = false;
+          const int last = dayListEnd(toks, j, primary, fallback, listed, ambiguous);
+          if(asRule.every > 1 && listed.size() > 1) {
+            recurrence.clear();
+            return false;
           }
-          out.date = ref.date().addDays((iso - ref.date().dayOfWeek() + 7) % 7);
-          out.lastTok = j;
+          if(asRule.every == 1) {
+            heap::recur::Rule days;
+            days.unit = QStringLiteral("days");
+            days.days = listed;
+            std::sort(days.days.begin(), days.days.end());
+            recurrence = heap::recur::formatRule(days);
+            QDate first = ref.date();
+            while(!days.days.contains(first.dayOfWeek())) {
+              first = first.addDays(1);
+            }
+            out.date = first;
+            out.lastTok = last;
+          } else {
+            out.date = ref.date().addDays((iso - ref.date().dayOfWeek() + 7) % 7);
+            out.lastTok = j;
+          }
           read = true;
         }
       }
-    } else if(recurrence.startsWith(QStringLiteral("every:month:"))) {
+    } else if(asRule.unit == QStringLiteral("month")) {
       int j = afterComma(out.lastTok + 1);
       bool lead = false;
       if(isOnWord(j)) {
@@ -1508,7 +1553,12 @@ class ChronoParser::Impl {
       int end = -1;
       const int day = dayOfMonthAt(toks, j, /*needMarker=*/!lead, end);
       if(day > 0) {
+        // "every 2 months on the 15th", "раз в 2 месяца 15-го": the first
+        // 15th from today, then every two months on it.
         monthlyOn(day, ref, recurrence, out);
+        heap::recur::Rule kept = asRule;
+        kept.monthDay = day;
+        recurrence = heap::recur::formatRule(kept);
         out.lastTok = end;
         read = true;
       }
@@ -1539,9 +1589,14 @@ class ChronoParser::Impl {
         const QDate start = dm.date;
         // A day or week rule, every n of them included, starts on the day
         // named; the others on their first day from it.
-        const QString unit = heap::recur::parseRule(recurrence).unit;
-        const bool anchored = unit == QStringLiteral("day") || unit == QStringLiteral("week");
-        const QDate first = anchored ? start : heap::recur::nextOccurrence(recurrence, start.addDays(-1));
+        // So does a month rule with no day of its own: "every 2 months from
+        // 15 nov" is 15 Nov, then 15 Jan. Every n months on a day starts on
+        // the first such day from the date: the one-month rule finds it.
+        heap::recur::Rule said = heap::recur::parseRule(recurrence);
+        const bool anchored = said.unit == QStringLiteral("day") || said.unit == QStringLiteral("week") ||
+                              (said.unit == QStringLiteral("month") && said.monthDay == 0);
+        said.every = 1;
+        const QDate first = anchored ? start : heap::recur::nextOccurrence(heap::recur::formatRule(said), start.addDays(-1));
         out.date = first.isValid() ? first : start;
         out.lastTok = dm.lastTok;
         read = true;
@@ -1566,8 +1621,11 @@ class ChronoParser::Impl {
     }
     // "через день": every other day (B7) — the routine, not "in a day",
     // which is said "завтра". "через 2 дня" stays an offset.
+    // "через день после релиза" is one day after something: a one-off.
+    const bool afterSomething = i + 2 < toks.size() && toks[i + 2].kind == TokenKind::Word &&
+                                (toks[i + 2].lower == QString::fromUtf8("после") || toks[i + 2].lower == QString::fromUtf8("от"));
     if(toks[i].lower == QString::fromUtf8("через") && i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Word &&
-       toks[i + 1].lower == QString::fromUtf8("день")) {
+       toks[i + 1].lower == QString::fromUtf8("день") && !afterSomething) {
       recurrence = QStringLiteral("every:2:day");
       out.date = ref.date();
       out.firstTok = i;
@@ -1661,6 +1719,14 @@ class ChronoParser::Impl {
       int end = -1;
       const int day = dayOfMonthAt(toks, i + 1, /*needMarker=*/true, end);
       if(day > 0) {
+        // "every 15th of the month": the month goes with it.
+        if(end + 3 < toks.size() && toks[end + 1].kind == TokenKind::Word && toks[end + 1].lower == QStringLiteral("of") &&
+           toks[end + 2].kind == TokenKind::Word &&
+           (toks[end + 2].lower == QStringLiteral("the") || toks[end + 2].lower == QStringLiteral("each")) &&
+           toks[end + 3].kind == TokenKind::Word &&
+           (primary->monthUnits.contains(toks[end + 3].lower) || fallback->monthUnits.contains(toks[end + 3].lower))) {
+          end += 3;
+        }
         monthlyOn(day, ref, recurrence, out);
         out.firstTok = i;
         out.lastTok = end;
@@ -1750,25 +1816,12 @@ class ChronoParser::Impl {
     // after a comma, "и" or "and". Only a weekday word joins the list, and
     // not a two-letter English one ("every mon and we sync").
     QVector<int> listed{iso};
-    int last = i + 1;
-    for(int k = i + 2; k + 1 < toks.size();) {
-      const Token& sep = toks[k];
-      const bool joins = (sep.kind == TokenKind::Punct && (sep.text == QStringLiteral(",") || sep.text == QStringLiteral("&"))) ||
-                         (sep.kind == TokenKind::Word && (sep.lower == QString::fromUtf8("и") || sep.lower == QStringLiteral("and")));
-      const Token& next = toks[k + 1];
-      if(!joins || next.kind != TokenKind::Word || !listableDay(next.lower)) {
-        break;
-      }
-      bool isDay = false;
-      const int d = lookupHashAny(next.lower, primary->weekdayNames, fallback->weekdayNames, &isDay);
-      if(!isDay) {
-        break;
-      }
-      if(!listed.contains(d)) {
-        listed.append(d);
-      }
-      last = k + 1;
-      k += 2;
+    bool ambiguous = false;
+    const int last = dayListEnd(toks, i + 1, primary, fallback, listed, ambiguous);
+    // "every mon and we sync": "we" may be a day or a word, so the whole
+    // phrase stays in the title, as it did before lists were read.
+    if(ambiguous) {
+      return false;
     }
     heap::recur::Rule rule;
     rule.unit = QStringLiteral("days");
@@ -1784,6 +1837,44 @@ class ChronoParser::Impl {
     out.firstTok = i;
     out.lastTok = last;
     return true;
+  }
+
+  // The last token of a list of weekdays whose first day is at `at`: more
+  // days after a comma, "&", "и" or "and" go into `listed`. `ambiguous` is
+  // set when the list stops at a joiner and a two-letter English day ("mon
+  // and we sync"), which is as often a word.
+  int dayListEnd(const QVector<Token>& toks,
+                 int at,
+                 const ChronoLocale* primary,
+                 const ChronoLocale* fallback,
+                 QVector<int>& listed,
+                 bool& ambiguous) const {
+    int last = at;
+    ambiguous = false;
+    for(int k = at + 1; k + 1 < toks.size();) {
+      const Token& sep = toks[k];
+      const bool joins = (sep.kind == TokenKind::Punct && (sep.text == QStringLiteral(",") || sep.text == QStringLiteral("&"))) ||
+                         (sep.kind == TokenKind::Word && (sep.lower == QString::fromUtf8("и") || sep.lower == QStringLiteral("and")));
+      const Token& next = toks[k + 1];
+      if(!joins || next.kind != TokenKind::Word) {
+        break;
+      }
+      bool isDay = false;
+      const int d = lookupHashAny(next.lower, primary->weekdayNames, fallback->weekdayNames, &isDay);
+      if(!isDay) {
+        break;
+      }
+      if(!listableDay(next.lower)) {
+        ambiguous = next.lower.size() < 3 && next.lower.at(0).unicode() <= 0x7f;
+        break;
+      }
+      if(!listed.contains(d)) {
+        listed.append(d);
+      }
+      last = k + 1;
+      k += 2;
+    }
+    return last;
   }
 
   // A weekday word that may join a list of days: not the weekend ("every
@@ -1852,12 +1943,19 @@ class ChronoParser::Impl {
       out.firstTok = first;
       out.lastTok = k;
       refineRepeat(toks, ref, primary, fallback, out, recurrence);
-      return true;
+      return !recurrence.isEmpty();
     }
+    // "every other friday", but not "every 15th" (15, "th") or "every 2 th
+    // tests": a two-letter English day is as often a word.
     bool isDay = false;
     const int iso = lookupHashAny(w, primary->weekdayNames, fallback->weekdayNames, &isDay);
-    if(!isDay || n < 2) {
+    if(!isDay || n < 2 || !listableDay(w)) {
       return false;
+    }
+    QVector<int> listed{iso};
+    bool ambiguous = false;
+    if(dayListEnd(toks, k, primary, fallback, listed, ambiguous) > k || ambiguous) {
+      return false;  // "every other mon, wed": no rule, stays words
     }
     heap::recur::Rule rule;
     rule.every = n;

@@ -1526,6 +1526,11 @@ Popup {
                         }
                         onCurrentIndexChanged: { titleReadTimer.restart(); if (_vals[currentIndex] !== "custom") _prevIndex = currentIndex; }
                         onActivated: (i) => { if (recurBox._vals[i] === "custom") recurBox.openCustom(); }
+                        // Down on the closed box steps the rules; it stops at
+                        // the last one rather than opening the custom field.
+                        Keys.onDownPressed: (e) => {
+                            e.accepted = !recurBox.popup.visible && recurBox._vals[recurBox.currentIndex + 1] === "custom";
+                        }
                         model: [I18n.t("editor.recur.none"), I18n.t("editor.recur.daily"),
                                 I18n.t("editor.recur.weekly"), I18n.t("editor.recur.weekdays"),
                                 I18n.t("editor.recur.everyMon"), I18n.t("editor.recur.everyTue"),

@@ -1248,6 +1248,13 @@ TEST_F(AppControllerTest, RecurrenceFromTextReadsARepeatOrNothing) {
   EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every 2 weeks on the moon")), QString());
   EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("banana")), QString());
   EXPECT_EQ(app_->recurrenceFromText(QString()), QString());
+  // B7 follow-up: a day of the month with an interval, and the half-reads.
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every 2 months on the 15th")), QStringLiteral("every:2:month:15"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("раз в 2 месяца 15-го")), QStringLiteral("every:2:month:15"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("15th")), QStringLiteral("every:month:15"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("weeks")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("недели")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every 2 weeks on mon, wed")), QString());
 }
 
 // A2-25: the repeats ahead are worked out, never created; a finished or

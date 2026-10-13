@@ -442,7 +442,11 @@ FocusScope {
     // as quick capture; what is not a repeat stays in the field, marked.
     property bool _recurEditing: false
     property bool _recurBad: false
+    // The chip the row brought out for the field, taken back when nothing
+    // is set ("Repeat" with no rule under it).
+    property bool _recurChipAdded: false
     function startCustomRecur() {
+        root._recurChipAdded = root._shown.indexOf("recurrence") < 0;
         root._shown = root._shown.concat(["recurrence"]);
         root._recurBad = false;
         root._recurEditing = true;
@@ -457,6 +461,12 @@ FocusScope {
         root._setField("recurrence", rule);
         root.focusDocument();
         return true;
+    }
+    function cancelCustomRecur() {
+        root._recurEditing = false;
+        if (root._recurChipAdded && !root._has("recurrence"))
+            root._shown = root._shown.filter((k) => k !== "recurrence");
+        root._recurChipAdded = false;
     }
     function _tabWithin(forward) {
         let next = (root.Window.activeFocusItem || root).nextItemInFocusChain(forward);
@@ -795,8 +805,8 @@ FocusScope {
                     }
                     onTextChanged: root._recurBad = false
                     onAccepted: root.applyCustomRecur(recurField.text)
-                    onActiveFocusChanged: if (!activeFocus && root._recurEditing) root._recurEditing = false
-                    Keys.onEscapePressed: (e) => { root._recurEditing = false; root.focusDocument(); e.accepted = true; }
+                    onActiveFocusChanged: if (!activeFocus && root._recurEditing) root.cancelCustomRecur()
+                    Keys.onEscapePressed: (e) => { root.cancelCustomRecur(); root.focusDocument(); e.accepted = true; }
                     Keys.onReturnPressed: (e) => { recurField.accepted(); e.accepted = true; }
                     Keys.onEnterPressed: (e) => { recurField.accepted(); e.accepted = true; }
                     // What Enter and Esc do, and what was not read.

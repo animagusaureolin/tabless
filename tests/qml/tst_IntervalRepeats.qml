@@ -115,7 +115,51 @@ TestCase {
         doc.close();
     }
 
+    // Esc on the custom row of a task with no rule takes back the "Repeat"
+    // chip the row brought out: no empty chip is left behind.
+    function test_document_custom_row_esc_leaves_no_empty_chip() {
+        AppController.language = "en";
+        const id = mkRepeating("doc repeat esc probe", "", probeDay(705));
+        const doc = make('import TodoCpp; TaskDocument { anchors.fill: parent }');
+        doc.open(id);
+        const chip = findChild(doc, "task-doc-recurrence");
+        verify(chip !== null);
+        verify(!chip.visible, "no rule, no chip");
+        doc.startCustomRecur();
+        const field = findChild(doc, "task-doc-recur-custom");
+        tryVerify(() => field.visible && field.activeFocus, 1000);
+        verify(chip.visible, "the chip is out while the field is open");
+        keyClick(Qt.Key_Escape);
+        verify(!field.visible);
+        verify(!chip.visible, "Esc with nothing set takes the chip back");
+        compare(String(AppController.taskById(id).recurrence || ""), "");
+        doc.close();
+    }
+
     // ── Ctrl N's repeat box ──
+
+    // Down on the closed box stops at the last rule: it does not step onto
+    // the custom row and open its field.
+    function test_editor_down_stops_before_the_custom_row() {
+        AppController.language = "en";
+        const te = make('import TodoCpp; TaskEditor { }');
+        te.showFor({ id: "", title: "editor down probe", _isNew: true });
+        te.detailsOpen = true;
+        const box = findChild(te, "te-recurrence");
+        verify(box !== null);
+        const lastRule = box._vals.length - 2;
+        verify(box._vals[lastRule] !== "custom");
+        box.currentIndex = lastRule - 1;
+        box.forceActiveFocus();
+        tryVerify(() => box.activeFocus, 1000);
+        keyClick(Qt.Key_Down);
+        compare(box.currentIndex, lastRule, "Down still steps between the rules");
+        keyClick(Qt.Key_Down);
+        compare(box.currentIndex, lastRule, "Down stops at the last rule");
+        verify(!box._customOpen, "the custom field did not open");
+        verify(!box.popup.visible);
+        te.close();
+    }
 
     function test_editor_custom_row_sets_an_interval() {
         AppController.language = "ru";
