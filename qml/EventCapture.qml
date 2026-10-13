@@ -67,6 +67,8 @@ Popup {
             start: root.slot.start,
             end: root.slot.end,
             rule: x.rule || EventRule.fromChrono(p.recurrence),
+            // "15:00 EST", "по Москве": the meeting is kept there (A6-7).
+            tz: "",
             fromLine: false,
             words: [x.ruleText, x.lengthText].concat((p.spans || []).map(sp => String(sp.text)))
         };
@@ -75,6 +77,7 @@ Popup {
             out.fromLine = true;
             if (p.whenHasTime) {
                 const len = root.slot.end - root.slot.start;
+                out.tz = String(p.whenTz || "");
                 out.start = root._hours(p.when);
                 out.end = out.start + len;
                 if (root._valid(p.whenEnd)) {
@@ -126,8 +129,11 @@ Popup {
     }
     readonly property string _clash: root.visible ? root.clashWith(root.parsed) : ""
     function whenText(r) {
-        return I18n.fmtDate(r.date, "weekdayDay") + " · " + AppController.eventHourLabel(r.start)
+        const local = I18n.fmtDate(r.date, "weekdayDay") + " · " + AppController.eventHourLabel(r.start)
                + "–" + (r.endDate ? I18n.fmtDate(r.endDate, "weekdayDay") + " · " : "") + AppController.eventHourLabel(r.end);
+        // The hour where it was said, beside the local one (A6-4).
+        if (!r.tz || AppController.isLocalZone(r.tz)) return local;
+        return local + " · " + Theme.fmtHour(AppController.zoneHour(r.date, r.start, r.tz)) + " " + AppController.zoneName(r.tz);
     }
 
     function submit() {
@@ -141,6 +147,7 @@ Popup {
         d.date = r.date;
         d.endDate = r.endDate || r.date;
         d.rrule = r.rule;
+        d.tz = r.tz || "";
         AppController.saveEvent(d);
         root.close();
         root.created(d.id);

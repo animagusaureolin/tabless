@@ -34,6 +34,10 @@ struct Parsed {
   bool whenHasTime = false;
   // The end of a time range said with it ("16:00-16:45"): a meeting's length.
   QDateTime whenEnd;
+  // The zone the time was said in ("15:00 EST", "по Москве"), as an id
+  // CalEvent::tz keeps; empty when none was. `when` is already local: a task
+  // keeps no zone, a meeting may keep this one (A6-7).
+  QString whenZone;
   // Already behind `now` ("вчера"): allowed, shown greyed.
   bool whenPast = false;
   // A date after a deadline word ("до пятницы", "к 15:00", "due fri", "by

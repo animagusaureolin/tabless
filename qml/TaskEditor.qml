@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import TodoCpp
 import "PopupStack.js" as PopupStack
+import "TaskDates.js" as TaskDates
 
 Popup {
     PopupArrival { popup: root }
@@ -580,6 +581,8 @@ Popup {
         root._titleChips = chips;
     }
     function _recurText(r) {
+        const interval = TaskDates.intervalTitle(r);
+        if (interval.length > 0) return interval;
         const m = /^every:month:(\d+)$/.exec(String(r || ""));
         if (m) return I18n.t("editor.recur.monthlyOn").arg(m[1]);
         const i = recurBox._base.indexOf(r);
@@ -1599,34 +1602,92 @@ Popup {
                     }
                     AppComboBox {
                         id: recurBox
-                        onCurrentIndexChanged: titleReadTimer.restart()
                         objectName: "te-recurrence"
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         readonly property var _base: ["", "every:day", "every:week", "every:weekday",
                                                       "every:mon", "every:tue", "every:wed", "every:thu", "every:fri",
-                                                      "every:sat", "every:sun", "every:month"]
+                                                      "every:sat", "every:sun", "every:month", "every:2:week"]
                         // A rule the list does not name ("every:month:15", from
                         // capture) is shown as itself, so saving the editor
                         // does not quietly turn it into "none".
                         property string _extra: ""
-                        readonly property var _vals: _extra.length > 0 ? _base.concat([_extra]) : _base
+                        // The last row, "Custom interval…" (B7), is not a rule:
+                        // it opens a field over the box where the interval is
+                        // typed ("every 3 weeks", "пн, ср").
+                        readonly property var _vals: (_extra.length > 0 ? _base.concat([_extra]) : _base).concat(["custom"])
+                        property int _prevIndex: 0
+                        property bool _customOpen: false
+                        property bool _customBad: false
                         function setRecurrence(r) {
                             _extra = (r.length > 0 && _base.indexOf(r) < 0) ? r : "";
                             currentIndex = Math.max(0, _vals.indexOf(r));
+                            _customOpen = false;
                         }
-                        function value() { return _vals[currentIndex] || ""; }
+                        function value() {
+                            const v = _vals[currentIndex] || "";
+                            return v === "custom" ? "" : v;
+                        }
                         function _label(r) {
+                            const interval = TaskDates.intervalTitle(r);
+                            if (interval.length > 0) return interval;
                             const m = /^every:month:(\d+)$/.exec(r);
                             return m ? I18n.t("editor.recur.monthlyOn").arg(m[1]) : r;
+                        }
+                        function openCustom() {
+                            recurBox.currentIndex = recurBox._prevIndex;
+                            recurBox._customBad = false;
+                            recurBox._customOpen = true;
+                            recurCustomField.text = "";
+                            Qt.callLater(recurCustomField.forceActiveFocus);
+                        }
+                        function applyCustom(text) {
+                            const rule = AppController.recurrenceFromText(text);
+                            if (rule.length === 0) { recurBox._customBad = true; return false; }
+                            recurBox.setRecurrence(rule);
+                            recurBox.forceActiveFocus();
+                            return true;
+                        }
+                        onCurrentIndexChanged: { titleReadTimer.restart(); if (_vals[currentIndex] !== "custom") _prevIndex = currentIndex; }
+                        onActivated: (i) => { if (recurBox._vals[i] === "custom") recurBox.openCustom(); }
+                        // Down on the closed box steps the rules; it stops at
+                        // the last one rather than opening the custom field.
+                        Keys.onDownPressed: (e) => {
+                            e.accepted = !recurBox.popup.visible && recurBox._vals[recurBox.currentIndex + 1] === "custom";
                         }
                         model: [I18n.t("editor.recur.none"), I18n.t("editor.recur.daily"),
                                 I18n.t("editor.recur.weekly"), I18n.t("editor.recur.weekdays"),
                                 I18n.t("editor.recur.everyMon"), I18n.t("editor.recur.everyTue"),
                                 I18n.t("editor.recur.everyWed"), I18n.t("editor.recur.everyThu"),
                                 I18n.t("editor.recur.everyFri"), I18n.t("editor.recur.everySat"),
-                                I18n.t("editor.recur.everySun"), I18n.t("editor.recur.monthly")]
+                                I18n.t("editor.recur.everySun"), I18n.t("editor.recur.monthly"),
+                                I18n.t("recur.biweekly")]
                                .concat(_extra.length > 0 ? [_label(_extra)] : [])
+                               .concat([I18n.t("recur.custom")])
+                        // Over the box while it is open: Enter sets the rule,
+                        // Esc leaves the one there was.
+                        TextField {
+                            id: recurCustomField
+                            objectName: "te-recurrence-custom"
+                            visible: recurBox._customOpen
+                            anchors.fill: parent
+                            z: 2   // over the box's caret too
+                            font.family: Theme.fontUi
+                            color: Theme.text
+                            placeholderText: I18n.t("recur.custom.ph")
+                            placeholderTextColor: Theme.textDim
+                            background: FieldBg {
+                                border.color: recurBox._customBad ? Theme.danger : focused ? Theme.focusRing : Theme.fieldBorder
+                            }
+                            onTextChanged: recurBox._customBad = false
+                            onAccepted: recurBox.applyCustom(recurCustomField.text)
+                            onActiveFocusChanged: if (!activeFocus) recurBox._customOpen = false
+                            Keys.onEscapePressed: (e) => { recurBox._customOpen = false; recurBox.forceActiveFocus(); e.accepted = true; }
+                            Keys.onReturnPressed: (e) => { recurCustomField.accepted(); e.accepted = true; }
+                            Keys.onEnterPressed: (e) => { recurCustomField.accepted(); e.accepted = true; }
+                            ToolTip.visible: recurCustomField.visible && recurCustomField.activeFocus
+                            ToolTip.text: recurBox._customBad ? I18n.t("recur.custom.err") : I18n.t("recur.custom.hint")
+                        }
                     }
 
                     FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.labels") }

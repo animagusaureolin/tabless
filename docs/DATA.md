@@ -37,9 +37,13 @@ An event carries, besides its title, type, hours and dates, a few optional
 fields a file from before 0.5.3 simply lacks: `location`, `notes`, `url`,
 `reminderMinutes` (-1 = the notification setting, -2 = none, else minutes
 before) and `tz`. `tz` is empty for an ordinary event (it is at that hour
-wherever you are); a series imported from another time zone keeps the zone's
-IANA name there, its hours are that zone's, and every occurrence is converted
-on its own day so it follows that zone's daylight-saving changes.
+wherever you are). A meeting kept in a time zone — a series imported from
+another zone, or any meeting given one in the event editor's *Time zone* row
+or typed with one (`15:00 EST`, `10:00 New York`, `в 19:00 по Москве`) —
+keeps the zone's name there (an IANA name such as `America/New_York`, or a
+fixed offset such as `UTC-05:00`), its hours are that zone's, and every
+occurrence is converted on its own day so it follows that zone's
+daylight-saving changes. Editing it keeps the zone.
 
 ### Attachments
 

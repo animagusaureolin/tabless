@@ -153,7 +153,7 @@ TestCase {
             win.openEvent(id, Qt.formatDate(day, "yyyy-MM-dd"));
             const ed = findChild(win.contentItem, "event-zone");
             verify(ed !== null);
-            verify(!ed.visible, "a local meeting shows no zone");
+            compare(ed.text, I18n.t("event.zone.local"), "a local meeting says it is on local time (A6-7)");
         } finally {
             win.destroy();
         }

@@ -270,6 +270,7 @@ Parsed parse(const QString& text, const heap::chrono::ChronoParser& chrono, cons
         out.when = nearerBareHour(r, now);
       }
       out.whenHasTime = r.hasTime;
+      out.whenZone = r.zone;
       out.whenPast = isPast(out.when, r.hasTime, now);
       if(r.end.isValid() && r.end > r.start) {
         out.whenEnd = r.end;

@@ -72,12 +72,14 @@ Everything is optional and order-independent, in **English and Russian**.
 | `tomorrow morning`, `tonight`, `in the evening`, `завтра утром`, `вечером` | a time from the part of the day (morning 9:00, afternoon 15:00, evening 19:00, tonight 20:00); a clock said with it wins: `tonight 11pm` is 23:00 |
 | `в 9 утра`, `в 3 ночи`, `в 2 часа дня`, `в 11 вечера` | the half of the day in words: 09:00, 03:00, 14:00, 23:00 (`в 12 ночи` is midnight) |
 | `9am-5pm`, `11pm-1am`, `22:00-01:00` | a range; each end keeps its own am/pm, and an end before the start is the next day |
-| `3pm EST`, `3pm ET`, `15:00 UTC-5`, `19:00 по мск`, `7pm New York` | a time in that zone, shown in yours |
+| `3pm EST`, `3pm ET`, `15:00 UTC-5`, `19:00 по мск`, `7pm New York` | a time in that zone, shown in yours; a task keeps only your time, a meeting (`Ctrl+M`) stays in that zone |
 | `call mom at 5`, `lunch at noon`, `к 18:00` | a time with no day is its **next** occurrence: today if it is still ahead, else tomorrow |
 | `every weekday`, `every monday`, `по будням`, `каждый будний день` | a **repeating** task; a time that has passed today starts at the next occurrence |
 | `daily`, `weekly`, `ежедневно`, `еженедельно`, `раз в неделю` | a **daily** or **weekly** task (`daily`/`weekly` at the end of the line: `daily standup notes` stays a title) |
 | `every month on the 15th`, `1st of every month`, `monthly`, `каждый месяц`, `каждое 25 число`, `каждое 1-е число` | a **monthly** task |
-| `every other day`, `every 2 weeks`, `every mon, wed`, `каждые 2 дня` | no such repeat yet: the words stay in the title, nothing is half read |
+| `every other day`, `every 2 days`, `every 3 weeks`, `every 2 months`, `every other friday`, `каждые 2 дня`, `через день`, `каждые 2 недели`, `раз в 2 недели` | an **interval** repeat, counted from the task's own date (`every other friday`: every two weeks from the coming Friday) |
+| `every mon, wed`, `every tue and thu`, `каждый пн и ср`, `по пн, ср, пт` | a repeat on **those days** of the week |
+| `every 2 years`, `every 900 days` | no such repeat: the words stay in the title, nothing is half read |
 | `~30m`, `25м`, `25 мин`, `за 50 минут`, `на 1ч`, `2h`, `на полчаса` | an **estimate** at the end of the line (`через 30 мин` and `в 2ч` stay times; `Fix 2h timeout` stays a title) |
 | `in 2 days`, `через 3 дня`, `через полчаса`, `next week`, `на следующей неделе`, `end of month` | relative dates (next week is its Monday) |
 
@@ -104,6 +106,12 @@ words:
 | You type | Tabless does |
 |----------|-----------|
 | `ping @viktor about the release` / `напиши @viktor про релиз` | a **contact ping** in the People column, not the board |
+
+A time said with a zone (`standup 10:00 New York`, `созвон в 19:00 по Москве`)
+keeps the meeting in that zone: it follows that zone's clock changes, and the
+event editor shows both hours. The editor's *Time zone* row changes it: local
+time by default, the zones your meetings use first, and typing finds the rest
+(`new york`, `EST`, `UTC+5`, `москва`).
 
 A meeting also creates a task linked to it. Russian words match in any case:
 `созвона`, `встрече` and `синке` work as well as `созвон`, `встреча` and
@@ -133,7 +141,10 @@ is read the same way (the chips under it show what was understood), and
   week / later, with a show-done toggle.
   ![Timeline](assets/img/screens/board-timeline.png)
 - **Week** (`Ctrl+3`) is a 7-day grid — drag, resize, and move events across
-  days; all-day deadline chips sit on top.
+  days; all-day deadline chips sit on top. A repeating task's next
+  occurrences show faintly with `↻` in Week and Month: worked out from its
+  rule, nothing is created ahead, they don't drag, and `Enter` on one opens
+  the task itself.
   ![Week](assets/img/screens/board-week.png)
 - The **day calendar** (right column) lets you drag on empty space to create an
   event, resize from either edge, and **drop a task onto it to schedule a focus

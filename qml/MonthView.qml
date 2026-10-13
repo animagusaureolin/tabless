@@ -16,6 +16,7 @@ import "Segments.js" as Seg
 import "Search.js" as Search
 import "QueryWords.js" as QueryWords
 import "Reschedule.js" as Resched
+import "TaskDates.js" as TaskDates
 
 Item {
     id: root
@@ -166,6 +167,13 @@ Item {
             cells[k].tasks.sort((a, b) => (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9));
             cells[k].events.sort((a, b) => evKey(a) - evKey(b));
         }
+        // A2-25: the occurrences ahead of a repeating task, from its rule,
+        // faint and read-only after the day's real tasks. Nothing is created.
+        const ghosts = AppController.calendarRepeats(start, last);
+        for (let i = 0; i < ghosts.length; i++) {
+            const g = ghosts[i];
+            if (g.day >= 0 && g.day < n && root.passesFilter(g)) cells[g.day].tasks.push(g);
+        }
         return cells;
     }
     readonly property var cells: buildCells()
@@ -224,7 +232,7 @@ Item {
         let tasks = 0, events = 0;
         for (let i = 0; i < root.cells.length; i++) {
             if (!root.isSameDay(root.cells[i].date, d)) continue;
-            tasks = root.cells[i].tasks.length;
+            tasks = root.cells[i].tasks.filter(t => !t.ghost).length;
             events = root.cells[i].events.length;
             break;
         }
@@ -304,9 +312,14 @@ Item {
     property var keyTaskDay: null
     property string hoverTaskId: ""
     property var hoverTaskDay: null
+    // What a repeat ahead says on hover and to a reader (A2-25).
+    function ghostTip(g) {
+        return I18n.t("cal.ghost.tip").arg(g.title).arg(TaskDates.repeatText(g.recurrence));
+    }
     function moveKeyTaskByDays(days) {
         const it = root._cursorItem();
         if (it && it.kind === "event") return root._moveCursorEvent(days);
+        if (it && it.kind === "ghost") return false;   // a repeat ahead is not a task
         const id = it ? it.id : (root.keyTaskId || root.hoverTaskId);
         if (!id) return false;
         const t = AppController.taskById(id);
@@ -319,7 +332,7 @@ Item {
     }
     function moveKeyTaskByTime(steps) {
         const it = root._cursorItem();
-        if (it && it.kind === "event") return false;
+        if (it && (it.kind === "event" || it.kind === "ghost")) return false;
         const id = it ? it.id : (root.keyTaskId || root.hoverTaskId);
         const t = id ? AppController.taskById(id) : null;
         const r = t ? Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, steps, Theme.snapMinutes) : null;
@@ -345,8 +358,12 @@ Item {
         if (ci < 0 || ci >= root.cells.length) return [];
         const cell = root.cells[ci];
         const out = [];
-        for (let i = 0; i < cell.tasks.length; i++)
-            out.push({ kind: "task", id: cell.tasks[i].id, key: "task:" + cell.tasks[i].id, index: i });
+        for (let i = 0; i < cell.tasks.length; i++) {
+            // A repeat ahead (A2-25): Return opens the task; nothing moves it.
+            const ghost = !!cell.tasks[i].ghost;
+            out.push({ kind: ghost ? "ghost" : "task", id: cell.tasks[i].id,
+                       key: (ghost ? "ghost:" : "task:") + cell.tasks[i].id, index: i });
+        }
         for (let i = 0; i < cell.events.length; i++) {
             const e = cell.events[i];
             out.push({ kind: "event", id: e.id, key: "event:" + e.id + (e.masterId ? "@" + Number(e.occurrenceDate || e.date) : ""),
@@ -432,7 +449,7 @@ Item {
     function openCursor() {
         const it = root._cursorItem();
         if (!it) { root.enterSelectedDay(); return; }
-        if (it.kind === "task") root.taskClicked(it.id);
+        if (it.kind === "task" || it.kind === "ghost") root.taskClicked(it.id);
         else root.eventClicked(it.id, it.ev);
     }
     function toggleCursorSelection() {
@@ -788,8 +805,11 @@ Item {
                                 required property int index
                                 FocusRing {
                                     objectName: "month-cursor"
-                                    visible: root.cursorVisible && dayCell._sel && root.cursorKey === "task:" + dayCell.cell.tasks[taskChip.index].id
+                                    visible: root.cursorVisible && dayCell._sel
+                                             && root.cursorKey === (taskChip.ghost ? "ghost:" : "task:") + dayCell.cell.tasks[taskChip.index].id
                                 }
+                                // A repeat ahead (A2-25): faint, read-only.
+                                readonly property bool ghost: !!dayCell.cell.tasks[taskChip.index].ghost
                                 Layout.fillWidth: true
                                 implicitHeight: Theme.px(18)
                                 radius: Theme.radiusXs
@@ -805,30 +825,48 @@ Item {
                                         width: Theme.px(10); height: parent.height
                                         Icon {
                                             anchors.centerIn: parent
-                                            visible: !dayCell.cell.tasks[taskChip.index].scheduled
+                                            visible: !dayCell.cell.tasks[taskChip.index].scheduled && !taskChip.ghost
                                             name: "flag"
                                             size: Theme.px(10)
                                             color: Theme.textDim
                                         }
                                         StatusRing {
                                             anchors.centerIn: parent
-                                            visible: !!dayCell.cell.tasks[taskChip.index].scheduled
+                                            visible: !!dayCell.cell.tasks[taskChip.index].scheduled && !taskChip.ghost
                                             category: AppController.statusCategory(dayCell.cell.tasks[taskChip.index].status || "")
                                             size: Theme.px(9)
                                         }
+                                        // The repeat mark the card and Today use.
+                                        Text {
+                                            anchors.centerIn: parent
+                                            visible: taskChip.ghost
+                                            text: "↻"
+                                            color: Theme.textDim
+                                            font.family: Theme.fontUi
+                                            font.pixelSize: Theme.fsXs
+                                        }
                                     }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - taskSign.width - Theme.spXs; elide: Text.ElideRight; text: dayCell.cell.tasks[taskChip.index].title; color: Theme.textMuted; font.family: Theme.fontUi; font.pixelSize: Theme.fsXs }
+                                    Text {
+                                        objectName: taskChip.ghost ? "month-ghost-title" : "month-task-title"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: parent.width - taskSign.width - Theme.spXs
+                                        elide: Text.ElideRight
+                                        text: dayCell.cell.tasks[taskChip.index].title
+                                        color: taskChip.ghost ? Theme.textDim : Theme.textMuted
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: Theme.fsXs
+                                    }
                                 }
                                 readonly property var task: dayCell.cell.tasks[taskChip.index]
-                                objectName: "month-task-" + taskChip.task.id
+                                objectName: (taskChip.ghost ? "month-ghost-" : "month-task-") + taskChip.task.id
                                 // The keyboard's way in; deaf to the pointer, which
                                 // the drag area below takes.
                                 ClickArea {
-                                    label: taskChip.task.title
+                                    label: taskChip.ghost ? root.ghostTip(taskChip.task) : taskChip.task.title
                                     showTip: false
                                     acceptedButtons: Qt.NoButton
                                     onActivated: root.taskClicked(taskChip.task.id)
-                                    onActiveFocusChanged: if (activeFocus) {
+                                    onActiveFocusChanged: if (activeFocus && !taskChip.ghost) {
                                         root.keyTaskId = taskChip.task.id;
                                         root.keyTaskDay = dayCell.cell.date;
                                     }
@@ -837,6 +875,7 @@ Item {
                                 // (APP-249).
                                 // The task's menu, the same in every view (APP-268).
                                 TapHandler {
+                                    enabled: !taskChip.ghost
                                     acceptedButtons: Qt.RightButton
                                     onTapped: root.openTaskMenu(taskChip.task.id)
                                 }
@@ -852,7 +891,7 @@ Item {
                                     property bool inert: false
                                     onPressed: (mouse) => { pressX = mouse.x; pressY = mouse.y; inert = false; }
                                     onPositionChanged: (mouse) => {
-                                        if (!pressed || inert) return;
+                                        if (!pressed || inert || taskChip.ghost) return;
                                         if (!root.drag) {
                                             if (Math.abs(mouse.x - pressX) < 6 && Math.abs(mouse.y - pressY) < 6) return;
                                             root.beginDrag(taskChip.task);
@@ -867,9 +906,13 @@ Item {
                                         root.taskClicked(taskChip.task.id);
                                     }
                                     onContainsMouseChanged: {
+                                        if (taskChip.ghost) return;
                                         if (containsMouse) { root.hoverTaskId = taskChip.task.id; root.hoverTaskDay = dayCell.cell.date; }
                                         else if (root.hoverTaskId === taskChip.task.id) root.hoverTaskId = "";
                                     }
+                                    ToolTip.visible: taskChip.ghost && containsMouse
+                                    ToolTip.delay: 400
+                                    ToolTip.text: taskChip.ghost ? root.ghostTip(taskChip.task) : ""
                                     Connections {
                                         target: dragLayer
                                         function onCanceled() { if (chipMA.pressed) chipMA.inert = true; }
