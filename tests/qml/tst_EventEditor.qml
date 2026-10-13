@@ -244,7 +244,12 @@ TestCase {
             compare(EventRule.describe("FREQ=WEEKLY;INTERVAL=2", fri, I18n), "раз в 2 недели");
         }
         compare(EventRule.describe("", fri, I18n), I18n.t("event.repeat.none"));
-        const x = EventRule.extract("Ретро спринта пт 16:00 на 1 ч каждые 2 недели");
+        // F1-new-15: a month rule on a day names the day.
+        compare(EventRule.describe("FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15", fri, I18n),
+                I18n.count(2, "event.repeat.everyNMonths") + " · " + I18n.t("repeat.monthDay").arg("15"));
+        compare(EventRule.describe("FREQ=MONTHLY;BYMONTHDAY=1", fri, I18n),
+                I18n.t("event.repeat.monthly") + " · " + I18n.t("repeat.monthDay").arg("1"));
+        const x =EventRule.extract("Ретро спринта пт 16:00 на 1 ч каждые 2 недели");
         compare(x.rule, "FREQ=WEEKLY;INTERVAL=2");
         compare(x.minutes, 60);
         compare(x.text, "Ретро спринта пт 16:00");

@@ -102,6 +102,28 @@ TestCase {
         AppController.deleteTask(taskId);
     }
 
+    // F1-new-4: a repeating capture made a meeting too books a repeating
+    // meeting, the rule of its task, not one on the first day only.
+    function test_a_repeating_meeting_repeats() {
+        const qc = open();
+        const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "captured" }', host);
+        spy.target = qc;
+        type(qc, "capreading sync every 2 weeks on mon 15:00");
+        keyClick(Qt.Key_M, Qt.ControlModifier);
+        keyClick(Qt.Key_Return);
+        tryVerify(() => spy.count === 1);
+        const taskId = String(spy.signalArguments[0][2]);
+        compare(AppController.taskById(taskId).recurrence, "every:2:week");
+        const from = new Date();
+        const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 40);
+        const occ = AppController.eventOccurrences(from, to).filter(o => o.taskId === taskId);
+        verify(occ.length >= 2, "the meeting is booked once: " + occ.length);
+        const master = AppController.eventById(occ[0].masterId || occ[0].id);
+        compare(master.rrule, "FREQ=WEEKLY;INTERVAL=2");
+        AppController.deleteEvent(master.id);
+        AppController.deleteTask(taskId);
+    }
+
     // A6-6: "UTC-5" is a zone said with the time, not a ticket key; the
     // whole app path (meta first, then the date) moves 15:00 there to here.
     function test_a_zone_offset_is_read_with_the_time() {

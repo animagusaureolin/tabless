@@ -36,8 +36,12 @@ function describe(rule, startDay, i18n) {
             out = n > 1 ? i18n.count(n, "event.repeat.everyNWeeks") + (p.BYDAY && days.length > 1 ? " · " + short : "")
                         : i18n.t("event.repeat.weeklyOn").arg(names);
         }
-    } else if (p.FREQ === "MONTHLY") out = n > 1 ? i18n.count(n, "event.repeat.everyNMonths") : i18n.t("event.repeat.monthly");
-    else if (p.FREQ === "YEARLY") out = i18n.t("event.repeat.yearly");
+    } else if (p.FREQ === "MONTHLY") {
+        out = n > 1 ? i18n.count(n, "event.repeat.everyNMonths") : i18n.t("event.repeat.monthly");
+        // "every 2 months · on the 15", as the task's repeat chip says it
+        // (F1-new-15): the day was dropped from the meeting's row.
+        if (p.BYMONTHDAY && /^\d+$/.test(p.BYMONTHDAY)) out += " · " + i18n.t("repeat.monthDay").arg(p.BYMONTHDAY);
+    } else if (p.FREQ === "YEARLY") out = i18n.t("event.repeat.yearly");
     else return String(rule);
     if (p.COUNT) out += " · " + i18n.count(parseInt(p.COUNT), "event.repeat.times");
     if (p.UNTIL) out += " · " + i18n.t("event.repeat.until").arg(p.UNTIL.slice(6, 8) + "." + p.UNTIL.slice(4, 6) + "." + p.UNTIL.slice(0, 4));

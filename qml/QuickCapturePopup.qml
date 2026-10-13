@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import TodoCpp
 import "TaskDates.js" as TaskDates
+import "EventRule.js" as EventRule
 
 Popup {
     PopupArrival { popup: root }
@@ -420,6 +421,9 @@ Popup {
             // zone and follows its clocks; the task keeps the local time
             // only (A6-7).
             ev.tz        = root._parsed && root._parsed.whenTz ? String(root._parsed.whenTz) : "";
+            // "Team sync every 2 weeks on mon 15:00" + Also a meeting: the
+            // meeting repeats like its task, not once (F1-new-4).
+            ev.rrule     = EventRule.fromChrono(draft.recurrence || "");
             // The "// comment" tail rides along onto the meeting itself, not
             // just the linked task — it lands in the event's free-form context
             // so the note shows up on the calendar block too.
