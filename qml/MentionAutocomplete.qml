@@ -85,7 +85,8 @@ Popup {
         const all = AppController.profiles || [];
         for (let i = 0; i < all.length && out.length < maxRows; i++) {
             const name = String(all[i].name || "");
-            if (name.toLowerCase().indexOf(q) === 0)
+            // A name typed out in full is done: nothing left to offer.
+            if (name.toLowerCase().indexOf(q) === 0 && name.length > q.length)
                 out.push({ id: all[i].id, name: name, role: I18n.t("capture.profile") });
         }
         return out;

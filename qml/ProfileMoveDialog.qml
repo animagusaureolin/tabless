@@ -112,7 +112,7 @@ SmallDialog {
                 readonly property bool on: row.index === root.current
                 objectName: "profile-move-row-" + row.modelData.id
                 Layout.fillWidth: true
-                implicitHeight: Theme.rowH
+                implicitHeight: Theme.px(32)
                 Rectangle {
                     anchors.fill: parent
                     radius: Theme.radiusSm
