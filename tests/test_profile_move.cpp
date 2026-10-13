@@ -280,6 +280,38 @@ TEST(ProfileMoveApp, MovesAndOneUndoInEitherProfileBringsItBack) {
   EXPECT_FALSE(has(app, "TASK-2"));
 }
 
+TEST(ProfileMoveApp, UndoOfAMoveWhoseTaskIsGoneSaysSoAndKeepsTheOlderSteps) {
+  writeState({profileJson("a", {taskJson("TASK-1"), taskJson("TASK-2")}), profileJson("b", {})}, "a");
+  AppController app;
+  app.setLanguage(QStringLiteral("en"));
+  QStringList toasts;
+  QObject::connect(&app, &AppController::toast, [&toasts](const QString& m) {
+    toasts.append(m);
+  });
+  app.toggleDone({"TASK-2"});  // an older step in the source
+  ASSERT_TRUE(app.hasPendingUndo());
+  app.moveTasksToProfile({"TASK-1"}, "b");
+  app.setActiveProfileId("b");
+  app.deleteTask(QStringLiteral("TASK-1"));
+  ASSERT_FALSE(has(app, "TASK-1"));
+  app.setActiveProfileId("a");
+
+  toasts.clear();
+  app.undo();
+  EXPECT_FALSE(has(app, "TASK-1"));
+  ASSERT_FALSE(toasts.isEmpty()) << "a failed undo says so";
+  EXPECT_TRUE(toasts.last().contains(QStringLiteral("changed since"))) << toasts.last().toStdString();
+  EXPECT_TRUE(app.hasPendingUndo()) << "the older step is still there";
+
+  // Redo has nothing to replay: the spent step is not in the redo region.
+  app.redo();
+  EXPECT_TRUE(app.hasPendingUndo()) << "redo after a failed undo does not wipe the history";
+  app.undo();
+  const int row = app.tasks()->indexOfId("TASK-2");
+  ASSERT_GE(row, 0);
+  EXPECT_NE(app.tasks()->items().at(row).status, QStringLiteral("done")) << "the older step undoes";
+}
+
 TEST(ProfileMoveApp, ATrackerCardRefusesWithAToast) {
   writeState({profileJson("a", {taskJson("jira-APP-7", {{"externalProvider", "jira"}, {"externalId", "APP-7"}})}), profileJson("b", {})},
              "a");
@@ -370,10 +402,12 @@ TEST(ProfileMoveApp, TodayWithEveryProfileLabelsTheOtherProfilesRows) {
   const QDate today = QDate::currentDate();
   const QString at = QDateTime(today, QTime(15, 0)).toString(Qt::ISODate);
   const QString day = QDateTime(today, QTime(0, 0)).toString(Qt::ISODate);
-  QJsonObject other = profileJson("home",
-                                  {taskJson("HOME-1", {{"scheduledAt", at}, {"scheduledHasTime", true}}),
-                                   taskJson("HOME-2", {{"dueAt", day}, {"dueHasTime", false}}),
-                                   taskJson("HOME-3")});
+  QJsonObject other = profileJson(
+      "home",
+      {taskJson("HOME-1", {{"scheduledAt", at}, {"scheduledHasTime", true}}),
+       taskJson("HOME-2", {{"dueAt", day}, {"dueHasTime", false}}),
+       taskJson("HOME-3", {{"status", "prog"}}),
+       taskJson("HOME-4", {{"dueAt", QDateTime(today.addDays(-3), QTime(0, 0)).toString(Qt::ISODate)}, {"dueHasTime", false}})});
   other["color"] = QStringLiteral("#c08040");
   writeState({profileJson("work", {taskJson("WORK-1", {{"scheduledAt", at}, {"scheduledHasTime", true}})}), other}, "work");
   AppController app;
@@ -399,6 +433,13 @@ TEST(ProfileMoveApp, TodayWithEveryProfileLabelsTheOtherProfilesRows) {
   }
   EXPECT_TRUE(foreignDue);
   EXPECT_EQ(all.value("undated").toInt(), mine.value("undated").toInt()) << "the undated link opens this profile's list";
+  EXPECT_EQ(all.value("overdue").toList().size(), mine.value("overdue").toList().size())
+      << "the overdue link opens this profile's list, so it counts this profile's";
+  bool foreignProgress = false;
+  for(const QVariant& v : all.value("inProgress").toList()) {
+    foreignProgress = foreignProgress || v.toMap().value("profileName").toString() == QStringLiteral("HOME");
+  }
+  EXPECT_TRUE(foreignProgress) << "another profile's task in progress carries its profile";
 }
 
 int main(int argc, char** argv) {

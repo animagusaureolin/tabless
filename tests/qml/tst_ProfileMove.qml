@@ -219,4 +219,38 @@ TestCase {
         const doc = findChild(tc.win, "task-doc");
         tryVerify(() => doc.opened && doc.taskId === d.id);
     }
+    function collect(item, name, out) {
+        if (!item) return out;
+        if (item.objectName === name) out.push(item);
+        const kids = item.children || [];
+        for (let i = 0; i < kids.length; i++) collect(kids[i], name, out);
+        return out;
+    }
+    function test_today_in_progress_names_another_profiles_task() {
+        const pB = tc.other("Progress other");
+        AppController.activeProfileId = pB;
+        const d = AppController.newTaskDraft("prog");
+        d._isNew = true;
+        d.title = "other profile in progress " + Date.now();
+        verify(AppController.saveTask(d));
+        AppController.activeProfileId = tc.pA;
+
+        const s = JSON.parse(AppController.appSettingsJson || "{}");
+        s.calendar = Object.assign({}, s.calendar || {}, { todayScope: "all" });
+        AppController.appSettingsJson = JSON.stringify(s);
+        AppController.selectedDate = new Date();
+        AppController.openSection("today");
+        const today = findChild(tc.win, "today-view");
+        tryVerify(() => today && today.visible && today.allProfiles);
+        const rows = (today.dayData.inProgress || []).filter(r => r.id === d.id);
+        compare(rows.length, 1, "another profile's task is in progress on Today");
+        const name = tc.nameOf(pB);
+        tryVerify(() => {
+            const labels = tc.collect(today, "today-inprogress-profile", []).concat(tc.collect(today, "today-lead-profile", []));
+            return labels.some(l => l.visible && l.text === name);
+        }, 3000, "the in-progress row names its profile");
+        // This profile's rows carry no name.
+        const own = tc.collect(today, "today-inprogress-profile", []).filter(l => l.visible && l.text.length === 0);
+        compare(own.length, 0);
+    }
 }

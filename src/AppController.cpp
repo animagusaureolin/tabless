@@ -5008,7 +5008,9 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
       }
       inProgress.append(m);
     }
-    if(due.isValid() && due.date() < date && date == m_today) {
+    // Like "undated": its link opens this profile's list, so it counts this
+    // profile's tasks only (A1-17).
+    if(s.own && due.isValid() && due.date() < date && date == m_today) {
       overdue.append(QVariantMap{{"id", t.id},
                                  {"title", t.title},
                                  {"category", cat},
@@ -9806,7 +9808,9 @@ void AppController::undo() {
     const bool ok = applyProfileMove_(*entry, /*backward=*/true);
     const QString label = entry->label;
     if(!ok) {
-      m_undo.removeUndoable(serial);
+      // The step is spent: it would fail forward too, and nothing recorded
+      // on top of it can be redone without it. What is below stays.
+      m_undo.discardRedo();
     }
     if(m_parkedUndo.contains(other)) {
       m_parkedUndo[other].removeUndoable(serial);
@@ -9852,7 +9856,8 @@ void AppController::redo() {
       m_parkedUndo[profileMoveOtherSide_(copy)].push(copy);
       emit toast(copy.redoLabel.isEmpty() ? tr_("undo.redone") : copy.redoLabel);
     } else {
-      m_undo.clear();
+      // Only this step goes (with the redo tail above it); older undo stays.
+      m_undo.removeUndoable(copy.serial);
     }
     emit pendingUndoChanged();
     scheduleSave();

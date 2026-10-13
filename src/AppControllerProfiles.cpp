@@ -206,6 +206,8 @@ bool AppController::applyProfileMove_(heap::undo::Entry& entry, bool backward) {
     }
     const heap::profilemove::Result r = relocateTasks_(entry.moveFrom, entry.moveTo, entry.moveIds, opt);
     if(r.moved.isEmpty()) {
+      // Deleted or moved on since: say so rather than nothing (A5-14).
+      emit toast(tr_("undo.changedSince"), QStringLiteral("warning"));
       return false;
     }
     entry.moveIds = r.moved;
@@ -240,6 +242,7 @@ bool AppController::applyProfileMove_(heap::undo::Entry& entry, bool backward) {
   opt.recordHistory = false;
   const heap::profilemove::Result r = relocateTasks_(entry.moveTo, entry.moveFrom, ids, opt);
   if(r.moved.isEmpty()) {
+    emit toast(tr_("undo.changedSince"), QStringLiteral("warning"));
     return false;
   }
   // What is where now, for the redo: the ids in moveFrom, and what they

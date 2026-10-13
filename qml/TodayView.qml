@@ -665,6 +665,7 @@ FocusScope {
                                 RowLayout {
                                     spacing: Theme.spMd
                                     StatusRing { category: leadCard.t.category || "prog" }
+                                    ProfileDot { block: leadCard.t }
                                     Text {
                                         Layout.fillWidth: true
                                         text: leadCard.t.title || ""
@@ -679,6 +680,15 @@ FocusScope {
                                     Layout.leftMargin: Theme.statusRingSize + Theme.spMd
                                     spacing: Theme.spLg
                                     Text { text: leadCard.t.id || ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs }
+                                    // Another profile's task says whose it is (A1-17).
+                                    Text {
+                                        objectName: "today-lead-profile"
+                                        visible: root._isOther(leadCard.t)
+                                        text: leadCard.t.profileName || ""
+                                        color: Theme.textMuted
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: Theme.fsXs
+                                    }
                                     Text {
                                         visible: !leadCard.pr && String(leadCard.t.branch || "").length > 0
                                         text: leadCard.t.branch || ""
@@ -723,6 +733,7 @@ FocusScope {
                                     size: Theme.statusRingSize - 2
                                     category: ipRow.modelData.category || "prog"
                                 }
+                                ProfileDot { block: ipRow.modelData }
                                 Text {
                                     Layout.fillWidth: true
                                     text: ipRow.modelData.title
@@ -731,6 +742,17 @@ FocusScope {
                                     font.family: Theme.fontUi
                                     font.pixelSize: Theme.fsMd
                                     ClickArea { label: parent.text; onActivated: root._openTask(ipRow.modelData) }
+                                }
+                                // Whose it is, when it is another profile's (A1-17).
+                                Text {
+                                    objectName: "today-inprogress-profile"
+                                    visible: root._isOther(ipRow.modelData)
+                                    Layout.maximumWidth: Theme.px(120)
+                                    text: ipRow.modelData.profileName || ""
+                                    elide: Text.ElideRight
+                                    color: Theme.textMuted
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: Theme.fsSm
                                 }
                                 TimerMark { visible: !!ipRow.modelData.isTiming; taskId: ipRow.modelData.id }
                             }

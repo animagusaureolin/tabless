@@ -764,6 +764,12 @@ class UndoStack {
     m_cursor = 0;
   }
 
+  // Drops everything redoable, keeping what can still be undone: for a step
+  // that failed to reverse and so cannot be replayed either.
+  void discardRedo() {
+    m_entries.resize(m_cursor);
+  }
+
   // Leaving a workspace drops its diffs, but a profile removal is not one:
   // it restores a whole profile from any workspace, so it stays undoable
   // across a switch (IDIOT-SHELL-2). It is always the bottom entry —
