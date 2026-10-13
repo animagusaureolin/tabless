@@ -150,7 +150,7 @@ Item {
         const src = AppController.eventById(String(root._menuOcc.masterId || "") || e.id);
         const d = AppController.newEventDraft(e.start, e.date);
         for (const k of ["title", "type", "attendees", "taskId", "profileId", "context", "location", "notes", "url",
-                         "reminderMinutes"])
+                         "reminderMinutes", "tz"])
             if (src[k] !== undefined) d[k] = src[k];
         d.end = e.end;
         AppController.saveEvent(d);

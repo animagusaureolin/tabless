@@ -398,6 +398,10 @@ Popup {
             ev.taskId    = draft.id;
             ev.date      = d;
             ev.attendees = attendees;
+            // "15:00 EST", "в 19:00 по Москве": the meeting is kept in that
+            // zone and follows its clocks; the task keeps the local time
+            // only (A6-7).
+            ev.tz        = root._parsed && root._parsed.whenTz ? String(root._parsed.whenTz) : "";
             // The "// comment" tail rides along onto the meeting itself, not
             // just the linked task — it lands in the event's free-form context
             // so the note shows up on the calendar block too.
