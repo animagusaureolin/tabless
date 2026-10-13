@@ -195,7 +195,27 @@ Popup {
         return out;
     }
 
-    onAboutToShow: search.text = ""
+    // How far a key scrolls the sheet: ↓ ↑ a few lines, PgDn PgUp a page,
+    // Ctrl D / Ctrl U half of one (the keymap's own half page); 0 = not a
+    // scroll key. Ctrl D / U in the Russian layout too (В, Г).
+    function scrollStep(key, mods) {
+        const page = Math.max(Theme.px(48), flick.height - Theme.px(48));
+        const ctrl = (mods & Qt.ControlModifier) !== 0;
+        if (key === Qt.Key_Down && !ctrl) return Theme.px(64);
+        if (key === Qt.Key_Up && !ctrl) return -Theme.px(64);
+        if (key === Qt.Key_PageDown) return page;
+        if (key === Qt.Key_PageUp) return -page;
+        if (ctrl && (key === Qt.Key_D || key === 0x0412)) return page / 2;
+        if (ctrl && (key === Qt.Key_U || key === 0x0413)) return -page / 2;
+        return 0;
+    }
+    function scrollBy(dy) {
+        const max = Math.max(0, flick.contentHeight - flick.height);
+        flick.contentY = Math.max(0, Math.min(max, flick.contentY + dy));
+    }
+    readonly property bool scrolls: flick.contentHeight > flick.height + 1
+
+    onAboutToShow: { search.text = ""; flick.contentY = 0; }
     onOpened: search.forceActiveFocus()
     // Nothing on the sheet answers the search: a blank panel said nothing
     // (PERSONA-12).
@@ -249,6 +269,15 @@ Popup {
                     font.pixelSize: Theme.fsMd
                     background: FieldFrame {}
                     ContextMenu.menu: TextEditMenu { editor: search }
+                    // The sheet is longer than a small window and the keyboard
+                    // sits here: the keys scroll it, as the wheel does
+                    // (F3-EYES-5).
+                    Keys.onPressed: (e) => {
+                        const dy = root.scrollStep(e.key, e.modifiers);
+                        if (dy === 0) return;
+                        root.scrollBy(dy);
+                        e.accepted = true;
+                    }
                 }
                 Text {
                     text: I18n.t("keys.sheet.searchHint")
@@ -413,6 +442,15 @@ Popup {
                         root.editRequested();
                     }
                 }
+            }
+            // More below than the window shows: which keys bring it up.
+            Text {
+                objectName: "key-sheet-scroll-hint"
+                visible: root.scrolls
+                text: I18n.t("keys.sheet.scrollHint")
+                color: Theme.textDim
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsXs
             }
             Text {
                 Layout.fillWidth: true

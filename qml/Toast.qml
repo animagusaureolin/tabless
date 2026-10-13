@@ -142,10 +142,35 @@ Item {
     // `key`: the shortcut that does the action too, shown after it ("Ctrl Z").
     // `yields`: a newcomer pushes it off as it would a plain notice — for an
     // action nobody loses anything by missing.
-    function showWithAction(s, label, seconds, fn, k, key, yields) {
+    // `relabel`: () => ({ message, actionLabel }), the same words in the
+    // language the app speaks now (see relanguage()).
+    function showWithAction(s, label, seconds, fn, k, key, yields, relabel) {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",
                 actionFn: fn, action2Label: "", action2Fn: null, key: key || "", yields: !!yields,
+                relabel: typeof relabel === "function" ? relabel : null,
                 ms: _duration(k || "info", seconds, !!label) });
+    }
+    // The language changed under the toasts: "Обновлено: 0.8.2 → 0.8.9" stayed
+    // up in an English UI (F3-EYES-19). A toast that can say it again does;
+    // the rest go — an Undo among them keeps working with Ctrl+Z.
+    function relanguage() {
+        const can = function (e) { return typeof e.relabel === "function"; };
+        const again = function (e) {
+            const r = e.relabel();
+            e.message = String(r.message);
+            if (r.actionLabel !== undefined) e.actionLabel = String(r.actionLabel);
+        };
+        const keep = _items.filter(can);
+        keep.forEach(again);
+        const wait = _queue.filter(can);
+        wait.forEach(again);
+        _queue = wait;
+        _items = keep;
+        _promote();
+    }
+    Connections {
+        target: I18n
+        function onLangChanged() { root.relanguage(); }
     }
     // An Undo for the action just done (Main.onUndoableToast): replaces an
     // older Undo on screen, and loses its action when the history goes.
