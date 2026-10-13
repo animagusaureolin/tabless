@@ -823,12 +823,19 @@ inline IcsImport parseIcs(const QString& text,
         }
 
         // A series stays in its source zone, so that its DST is the source's.
+        // A single meeting stays in a named zone that is not the viewer's
+        // (a New York meeting comes back a New York meeting, as exported).
         // Everything else is converted once, to the viewer's clock.
         if(ruleOk) {
           if(dtStart.utc) {
             keepZone = QTimeZone::utc();
           } else if(!dtStart.tzid.isEmpty()) {
             keepZone = detail::resolveZone(dtStart.tzid, zones, dtStart.date.year());
+          }
+        } else if(!dtStart.tzid.isEmpty() && !dtStart.utc) {
+          const QTimeZone z = detail::resolveZone(dtStart.tzid, zones, dtStart.date.year());
+          if(z.isValid() && z.id() != display.id() && z.offsetFromUtc(startAt) != display.offsetFromUtc(startAt)) {
+            keepZone = z;
           }
         }
         const QTimeZone wallZone = keepZone.isValid() ? keepZone : display;
@@ -855,9 +862,9 @@ inline IcsImport parseIcs(const QString& text,
 
       if(ruleOk) {
         e.rrule = rrule;
-        if(keepZone.isValid()) {
-          e.tz = QString::fromUtf8(keepZone.id());
-        }
+      }
+      if(keepZone.isValid()) {
+        e.tz = QString::fromUtf8(keepZone.id());
       }
       // Deleted occurrences are dates in the series' own zone.
       for(const detail::Instant& x : exdates) {
@@ -1008,10 +1015,22 @@ inline IcsImport parseIcs(const QString& text,
   return out;
 }
 
+// A TZID parameter value. A fixed-offset zone's id ("UTC-05:00") holds a
+// colon, which would end the parameter list unquoted, so such a value is
+// quoted (RFC 5545 3.2: a param-value with ':' ';' ',' is a quoted-string).
+inline QString tzidParam(const QTimeZone& z) {
+  const QString id = QString::fromUtf8(z.id());
+  if(id.contains(QLatin1Char(':')) || id.contains(QLatin1Char(';')) || id.contains(QLatin1Char(','))) {
+    return QLatin1Char('"') + id + QLatin1Char('"');
+  }
+  return id;
+}
+
 // Writes a document. Floating times are the viewer's (`display`): a single
-// event goes out in UTC, which every reader agrees on; a series goes out
-// in the viewer's zone by name (with its VTIMEZONE), so its DST keeps working
-// wherever it is opened. A series that kept a source zone keeps it.
+// event goes out in UTC, which every reader agrees on; a floating series goes
+// out floating (no Z, no TZID), so it stays at the same wall time wherever it
+// is opened and comes back floating. A series or meeting kept in a zone goes
+// out in that zone by name (with its VTIMEZONE).
 // `uidDomain` qualifies a local id ("ev-2" → "ev-2@<domain>"): a bare local id
 // is the same in every install (the demo's ev-1..ev-5 above all), so another
 // heap importing the file took it for its own event and overwrote that
@@ -1036,19 +1055,18 @@ inline QString toIcs(const QVector<CalEvent>& events,
   for(const CalEvent& e : events) {
     byId.insert(e.id, &e);
   }
-  // The zone an event's wall times are written in when it is not UTC.
-  const auto seriesZone = [&](const CalEvent& e) -> QTimeZone {
-    const QTimeZone z = zoneOf(e);
-    if(z.isValid()) {
-      return z;
-    }
-    return e.rrule.isEmpty() ? QTimeZone() : display;
+  // The zone an event's wall times are written in; none for a floating one.
+  const auto seriesZone = [](const CalEvent& e) -> QTimeZone {
+    return zoneOf(e);
   };
   const auto zoned = [](const QString& prop, const QTimeZone& z, const QDate& d, double h) {
+    if(!z.isValid()) {
+      return prop + QStringLiteral(":") + detail::icsDateTime(d, h);  // floating
+    }
     if(z == QTimeZone::utc() || z.id() == "UTC") {
       return prop + QStringLiteral(":") + detail::icsUtc(wallInstant(d, h, QTimeZone::utc()));
     }
-    return prop + QStringLiteral(";TZID=") + QString::fromUtf8(z.id()) + QStringLiteral(":") + detail::icsDateTime(d, h);
+    return prop + QStringLiteral(";TZID=") + tzidParam(z) + QStringLiteral(":") + detail::icsDateTime(d, h);
   };
 
   for(const CalEvent& e : events) {
@@ -1096,8 +1114,10 @@ inline QString toIcs(const QVector<CalEvent>& events,
       body << QStringLiteral("DTSTART;VALUE=DATE:") + detail::icsDate(e.date);
       // Exclusive, per the spec: the day after the last one covered.
       body << QStringLiteral("DTEND;VALUE=DATE:") + detail::icsDate(last.addDays(1));
-    } else if(z.isValid()) {
-      useZone(z, e.date);
+    } else if(z.isValid() || !e.rrule.isEmpty()) {
+      if(z.isValid()) {
+        useZone(z, e.date);
+      }
       body << zoned(QStringLiteral("DTSTART"), z, e.date, e.start);
       body << zoned(QStringLiteral("DTEND"), z, last, e.end);
     } else {
@@ -1117,8 +1137,10 @@ inline QString toIcs(const QVector<CalEvent>& events,
       if(!ex.isEmpty()) {
         if(e.allDay) {
           body << QStringLiteral("EXDATE;VALUE=DATE:") + ex.join(QLatin1Char(','));
-        } else if(z.isValid() && !(z == QTimeZone::utc())) {
-          body << QStringLiteral("EXDATE;TZID=") + QString::fromUtf8(z.id()) + QStringLiteral(":") + ex.join(QLatin1Char(','));
+        } else if(!z.isValid()) {
+          body << QStringLiteral("EXDATE:") + ex.join(QLatin1Char(','));  // floating, like the series
+        } else if(!(z == QTimeZone::utc())) {
+          body << QStringLiteral("EXDATE;TZID=") + tzidParam(z) + QStringLiteral(":") + ex.join(QLatin1Char(','));
         } else {
           QStringList utc;
           for(const QDate& d : e.exdates) {
@@ -1137,8 +1159,9 @@ inline QString toIcs(const QVector<CalEvent>& events,
         body << QStringLiteral("RECURRENCE-ID;VALUE=DATE:") + detail::icsDate(e.originalDate);
       } else {
         const double h = m != nullptr ? m->start : e.start;
-        const QTimeZone mz = m != nullptr ? seriesZone(*m) : display;
-        body << zoned(QStringLiteral("RECURRENCE-ID"), mz.isValid() ? mz : display, e.originalDate, h);
+        // A floating master's occurrences are named floating too.
+        const QTimeZone mz = m != nullptr ? seriesZone(*m) : QTimeZone();
+        body << zoned(QStringLiteral("RECURRENCE-ID"), mz, e.originalDate, h);
       }
     }
     if(e.reminderMinutes >= 0 && !e.allDay) {
