@@ -1,0 +1,41 @@
+name: Channel builds
+
+# APP-309: test builds without a release per push. Each run packages every
+# platform through release.yml and replaces the files of one rolling
+# pre-release (tag channel-<name>), which the in-app updater never offers:
+#   feature  — every push to `feature`, where reviewed work lands
+#   unstable — on demand, from any branch (Run workflow → pick the branch)
+# Versioned vX.Y.Z-<channel>.<sha>, unsigned, nothing tagged vX.Y.Z.
+on:
+  push:
+    branches: [feature]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push makes the build in flight moot.
+concurrency:
+  group: channel-${{ github.event_name == 'push' && 'feature' || 'unstable' }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ github.event_name == 'push' && 'feature' || 'unstable' }} build
+    uses: ./.github/workflows/release.yml
+    with:
+      channel: ${{ github.event_name == 'push' && 'feature' || 'unstable' }}
+    # The OAuth client secrets, so sign-in works in a test build as in a
+    # release. Signing secrets are ignored for a channel build (release.yml).
+    secrets: inherit
+    # Every grant a job in release.yml asks for, the ones that do not run here
+    # included: a called workflow asking for more than its caller grants is
+    # rejected whole.
+    permissions:
+      contents: write
+      checks: write
+      pull-requests: read
+      issues: write
+      actions: read
+      id-token: write
+      attestations: write

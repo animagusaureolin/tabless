@@ -40,6 +40,16 @@ workflow refuses to publish if the two disagree.
   attaches the artifacts to the workflow run — **nothing is tagged or
   published**. Use it to smoke-test packaging without cutting a release.
 
+- **Channel builds** ([`channels.yml`](../.github/workflows/channels.yml)):
+  two rolling pre-releases, `channel-feature` and `channel-unstable`, each
+  with the newest `vX.Y.Z-<channel>.<short-sha>` bundle. Every push to
+  `feature` replaces the files of `channel-feature`; running *Channel builds*
+  from the Actions tab on any branch replaces `channel-unstable` (so does
+  *Release* run by hand with the `channel` input set). The tag
+  moves to the built commit, the release is never the latest (the updater
+  ignores it), and the builds are unsigned — so testers get a download link
+  without a release per push.
+
 ## Artifacts
 
 | Platform | Format | How it is built |
