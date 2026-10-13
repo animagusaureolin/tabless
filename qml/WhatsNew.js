@@ -17,7 +17,7 @@ var notes = {
                       ru: "«каждые 2 недели», «каждый пн и ср», «через день»; следующие видны бледно в Неделе и Месяце" } },
             { title: { en: "Time zones", ru: "Часовые пояса" },
               body: { en: "a meeting keeps its own zone: pick it in the meeting, or type “15:00 EST”; your local time stays next to it",
-                      ru: "у встречи свой пояс: выбрать в встрече или написать «15:00 по Москве»; рядом — ваше время" } },
+                      ru: "у встречи свой пояс: выбрать во встрече или написать «15:00 по Москве»; рядом — ваше время" } },
             { title: { en: "Today for every profile", ru: "Сегодня по всем профилям" },
               body: { en: "Settings → Calendar → “Today shows”: this profile or all of them",
                       ru: "Настройки → Календарь → «Сегодня» показывает: этот профиль или все" } },
@@ -25,8 +25,8 @@ var notes = {
               body: { en: "about two hundred fixes from a day-long test by twenty kinds of engineers: keys, dates in Russian, the week grid, end of day, undo",
                       ru: "около двухсот исправлений после теста «рабочий день» двадцати разных инженеров: клавиши, даты по-русски, сетка недели, конец дня, отмена" } }
         ],
-        moved: { en: "Deadline is now “Due” everywhere · Scale and Contrast → Settings → Appearance · Docs got a key: G D",
-                 ru: "«Дедлайн» теперь везде «Срок» · Масштаб и Контраст → Настройки → Внешний вид · у Доков своя клавиша: G D" }
+        moved: { en: "Deadline is now “Due” everywhere · Scale and Contrast → Settings → Appearance · Docs got a key: g d",
+                 ru: "«Дедлайн» теперь везде «Срок» · Масштаб и Контраст → Настройки → Внешний вид · у Доков своя клавиша: g d" }
     },
     "0.8": {
         sections: [
@@ -40,8 +40,8 @@ var notes = {
               body: { en: "board, list and calendar — one section with one filter",
                       ru: "доска, список и календарь — один раздел с общим фильтром" } },
             { title: { en: "Task as a document", ru: "Задача — документ" },
-              body: { en: "a panel on the right, saves by itself, “Done” — D",
-                      ru: "панель справа, сохраняется сама, «Готово» — D" } },
+              body: { en: "a panel on the right, saves by itself, “Done” — d",
+                      ru: "панель справа, сохраняется сама, «Готово» — d" } },
             { title: { en: "One input", ru: "Один ввод" },
               body: { en: "“tomorrow 15:00 p1” is understood wherever a task is created",
                       ru: "«завтра 15:00 p1» понимается везде, где создаётся задача" } },
