@@ -16984,7 +16984,8 @@ void AppController::runAutomationAt(const QDateTime& now) {
         return;
       }
       markReminderSent(call.key, now);
-      const int minutes = own ? taskBlockMinutes(t.id) : (t.estimateMinutes > 0 ? t.estimateMinutes : 60);
+      // As long as Today draws it, whichever profile it is in (F1-new-11).
+      const int minutes = t.estimateMinutes > 0 ? t.estimateMinutes : taskBlockMinutes(QString());
       const QDateTime end = t.scheduledAt.addSecs(60LL * minutes);
       const QString title =
           call.minutesLeft <= 0 ? tr_("notify.blockNow").arg(t.title) : tr_("notify.blockSoon").arg(t.title).arg(call.minutesLeft);
