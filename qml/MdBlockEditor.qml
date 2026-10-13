@@ -128,11 +128,14 @@ Item {
             return;
         }
         root._leave(true);
+        root._holdView();
+    }
+    // The view is a focus scope: it handed the keyboard back to the stop
+    // that had it last (a [[link]] followed with Return, the code block's
+    // Copy), where g t typed "gt" into the note and Esc did nothing
+    // (VB5-R1). The stop lets go, so the document itself holds it.
+    function _holdView() {
         view.forceActiveFocus();
-        // The view is a focus scope: it handed the keyboard back to the stop
-        // that had it last (a [[link]] followed with Return, the code block's
-        // Copy), where g t typed "gt" into the note and Esc did nothing
-        // (VB5-R1). The stop lets go, so the document itself holds it.
         for (let i = 0; i < 4 && root._onStop(); i++) {
             const f = root.Window.activeFocusItem;
             if (!f) break;
@@ -545,8 +548,10 @@ Item {
                 }
                 if (event.key === Qt.Key_Escape && mods === Qt.NoModifier) {
                     // First Esc leaves the block, the second the document.
+                    // The drawn text holds the keyboard, not the stop the
+                    // view had last (the plan's add field, F2-REG-1).
                     root._leave(true);
-                    view.forceActiveFocus();
+                    root._holdView();
                     event.accepted = true;
                     return;
                 }

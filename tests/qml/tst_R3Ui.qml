@@ -91,6 +91,17 @@ TestCase {
         const a = tc.win.activeFocusItem;
         return a ? String(a.objectName) : "";
     }
+    function focusInside(name) {
+        for (let p = tc.win.activeFocusItem; p; p = p.parent)
+            if (String(p.objectName) === name) return true;
+        return false;
+    }
+    // The named item the keyboard is on, or inside (a chip's own ClickArea).
+    function focusWithin() {
+        for (let p = tc.win.activeFocusItem; p; p = p.parent)
+            if (String(p.objectName).length > 0) return String(p.objectName);
+        return "";
+    }
     function closeAll() {
         const ps = popups();
         for (let i = 0; i < ps.length; i++) if (ps[i].opened) ps[i].close();
@@ -131,16 +142,58 @@ TestCase {
         // j / d on the item it reached are the item's.
         keyClick(Qt.Key_J);
         tryCompare(tc.win.activeFocusItem, "objectName", "cl-item-1");
-        // Back: Shift+Tab goes through the text and out, never stuck in it.
-        let left = false;
-        for (let i = 0; i < 6; i++) {
+        // Back: Shift+Tab from the text goes to the chips, not round to the
+        // bottom of the plan.
+        byName("task-doc-body").focusEditor();
+        tryCompare(tc.win.activeFocusItem, "objectName", "md-block-field");
+        keyClick(Qt.Key_Backtab, Qt.ShiftModifier);
+        wait(40);
+        compare(focusWithin(), "task-doc-add", "Shift+Tab from the text");
+        compare(AppController.taskById("R3T-1").desc || "", data.desc, "Shift+Tab changed the text");
+        // On backward past the top: round to the document's end, never to
+        // the board behind it.
+        for (let i = 0; i < 14; i++) {
             keyClick(Qt.Key_Backtab, Qt.ShiftModifier);
-            wait(40);
-            const f = tc.win.activeFocusItem;
-            if (f && focusName() !== "md-block-field" && String(focusName()).indexOf("cl-") !== 0
-                && f !== byName("task-doc-body")) { left = true; break; }
+            wait(20);
+            verify(focusInside("task-doc"), "Shift+Tab left the document for " + focusWithin());
         }
-        verify(left, "Shift+Tab stayed in the text: " + focusName());
+        // And forward all the way round, never out either.
+        for (let i = 0; i < 30; i++) {
+            keyClick(Qt.Key_Tab);
+            wait(20);
+            verify(focusInside("task-doc"), "Tab left the document for " + focusWithin());
+        }
+        // Through the plan to its add field, and on out of it: Tab there
+        // typed a tab into the field for ever.
+        byName("cl-item-1").forceActiveFocus();
+        verify(tabUntil("cl-add", 6) > 0, "Tab never reached the add field: " + focusWithin());
+        keyClick(Qt.Key_Tab);
+        wait(40);
+        verify(focusName() !== "cl-add", "Tab stayed in the plan's add field");
+        compare(byName("cl-add").text, "", "Tab typed into the add field");
+        // Backward from the add field: the last item.
+        byName("cl-add").forceActiveFocus();
+        keyClick(Qt.Key_Backtab, Qt.ShiftModifier);
+        wait(40);
+        verify(focusInside("cl-item-1"), "Shift+Tab from the add field: " + focusWithin());
+    }
+
+    // Esc in the text leaves the block for the drawn text, not for the
+    // plan's add field the view had last.
+    function test_esc_in_the_text_stays_on_the_text() {
+        seed("R3T-5", "r3 esc probe", "Some words");
+        AppController.setTaskChecklistText("R3T-5", "- [ ] one");
+        tc.win.openTask("R3T-5");
+        tryVerify(function () { const r = byName("cl-add"); return r !== null; }, 3000);
+        byName("cl-add").forceActiveFocus();
+        wait(30);
+        const body = byName("task-doc-body");
+        body.focusEditor();
+        tryCompare(tc.win.activeFocusItem, "objectName", "md-block-field");
+        keyClick(Qt.Key_Escape);
+        wait(40);
+        verify(focusName() !== "cl-add", "Esc moved to the plan's add field");
+        verify(body.documentFocused, "the drawn text does not hold the keyboard: " + focusName());
     }
 
     // Tab still indents a list item in the text.
@@ -276,6 +329,13 @@ TestCase {
             compare(toast.count, 1);
             AppController.language = "ru";
             tryCompare(toast, "count", 0);
+            // An Undo keeps its button, worded in the new language.
+            toast.showUndo("deleted", I18n.t("undo.action"), 10, function () {}, "success", "", 0);
+            compare(toast.actionLabel, I18n.dict.ru["undo.action"]);
+            AppController.language = "en";
+            wait(50);
+            compare(toast.count, 1, "the Undo toast went with the language");
+            compare(toast.actionLabel, I18n.dict.en["undo.action"]);
         } finally {
             AppController.language = was;
             toast.clear();

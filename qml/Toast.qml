@@ -152,10 +152,15 @@ Item {
     }
     // The language changed under the toasts: "Обновлено: 0.8.2 → 0.8.9" stayed
     // up in an English UI (F3-EYES-19). A toast that can say it again does;
-    // the rest go — an Undo among them keeps working with Ctrl+Z.
+    // the rest go. An Undo stays with its button in the new language: its
+    // words say what was done, and the button was the way back to it.
     function relanguage() {
-        const can = function (e) { return typeof e.relabel === "function"; };
+        const can = function (e) { return typeof e.relabel === "function" || (e.undo && e.actionLabel !== ""); };
         const again = function (e) {
+            if (typeof e.relabel !== "function") {
+                e.actionLabel = I18n.t("undo.action");
+                return;
+            }
             const r = e.relabel();
             e.message = String(r.message);
             if (r.actionLabel !== undefined) e.actionLabel = String(r.actionLabel);

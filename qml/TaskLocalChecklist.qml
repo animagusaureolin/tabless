@@ -20,6 +20,8 @@ ColumnLayout {
     // Bumped by the document on every change to the tasks.
     property int rev: 0
     signal openTask(string id)
+    // Tab / Shift+Tab in the add field: the document moves the keyboard on.
+    signal tabOut(bool forward)
 
     readonly property var items: root.rev >= 0 && root.taskId.length > 0 ? AppController.taskChecklist(root.taskId) : []
     readonly property int doneCount: root.items.filter(i => i.done).length
@@ -123,6 +125,10 @@ ColumnLayout {
         Keys.onReturnPressed: (e) => { if (e.modifiers & Qt.ShiftModifier) { e.accepted = false; return; } addField.submit(); }
         Keys.onEnterPressed: addField.submit()
         Keys.onEscapePressed: { root._insertAfter = ""; addField.text = ""; root.adding = false; }
+        // Tab moves on, as on a row: it typed a tab into the field for ever,
+        // and Done was out of reach by Tab (F2-REG-1).
+        Keys.onTabPressed: (e) => { root.tabOut(true); e.accepted = true; }
+        Keys.onBacktabPressed: (e) => { root.tabOut(false); e.accepted = true; }
         Keys.onUpPressed: (e) => {
             if (addField.text.length === 0 && root.items.length > 0) root.focusItem(root.items[root.items.length - 1].id);
             else e.accepted = false;

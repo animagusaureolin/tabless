@@ -538,22 +538,44 @@ FocusScope {
                 return;
             }
         }
+        // Out of the body backward: the last chip before it. The chain from
+        // the text went round to the plan's add field instead, and the chips
+        // and the title were never reached backward (F2-REG-1).
+        if (fromBody && !forward) {
+            const kids = bodyStop.parent ? bodyStop.parent.children : [];
+            let before = [];
+            for (let i = 0; i < kids.length && kids[i] !== bodyStop; i++)
+                before = before.concat(root._stopsIn(kids[i]));
+            if (before.length > 0) {
+                before[before.length - 1].forceActiveFocus(Qt.BacktabFocusReason);
+                return;
+            }
+        }
+        // Leaving the body, never back into it: neither the stop that opens
+        // it nor what is drawn inside it.
+        const fits = function (it) {
+            return it !== docFocus && it.visible
+                && !(fromBody && (it === bodyStop || root._inBody(it)))
+                && !(!fromBody && it !== bodyStop && root._inBody(it));
+        };
+        const reason = forward ? Qt.TabFocusReason : Qt.BacktabFocusReason;
         let next = cur.nextItemInFocusChain(forward);
         for (let n = 0; n < 200 && next; n++) {
             let inside = false;
             for (let p = next; p; p = p.parent)
                 if (p === root) { inside = true; break; }
-            // Leaving the body, never back into it: neither the stop that
-            // opens it nor what is drawn inside it.
-            if (inside && next !== docFocus && next.visible
-                && !(fromBody && (next === bodyStop || root._inBody(next)))
-                && !(!fromBody && next !== bodyStop && root._inBody(next))) {
-                next.forceActiveFocus(forward ? Qt.TabFocusReason : Qt.BacktabFocusReason);
+            // Out of the document: round to its other end. Shift+Tab from
+            // the top went on to the board's cards behind it.
+            if (!inside) break;
+            if (fits(next)) {
+                next.forceActiveFocus(reason);
                 return;
             }
             next = next.nextItemInFocusChain(forward);
         }
-        root.focusTitle();
+        const all = root._stopsIn(root).filter(fits);
+        if (all.length > 0) all[forward ? 0 : all.length - 1].forceActiveFocus(reason);
+        else root.focusTitle();
     }
     Keys.onReturnPressed: (e) => {
         if (titleField.activeFocus || body.editing) { e.accepted = false; return; }
@@ -605,7 +627,14 @@ FocusScope {
                     Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
-                    ClickArea { id: crumbCA; label: parent.text; onActivated: root.close() }
+                    ClickArea {
+                        id: crumbCA
+                        label: parent.text
+                        onActivated: root.close()
+                        // The first stop: Shift+Tab here goes round to the
+                        // end, not on to the board behind the document.
+                        Keys.onBacktabPressed: (e) => { root._tabWithin(false); e.accepted = true; }
+                    }
                 }
                 Text {
                     objectName: "task-doc-crumbs"
@@ -1498,6 +1527,7 @@ FocusScope {
             taskId: root.taskId
             rev: root._rev
             onOpenTask: (id) => root.openOther(id)
+            onTabOut: (forward) => root._tabWithin(forward)
         }
         // "Пишите прямо здесь. / — вставить чек-лист, код, ссылку на задачу."
         Text {
