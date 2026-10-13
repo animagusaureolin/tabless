@@ -982,7 +982,8 @@ Item {
                             // The meetings part goes when the cell is too
                             // narrow for it, and what is left still elides:
                             // at 1280px it was cut at the edge (F3-EYES-9).
-                            text: moreFm.advanceWidth(_long) <= width ? _long : _short
+                            // The column's width, not its own: that follows the text.
+                            text: moreFm.advanceWidth(_long) <= parent.width ? _long : _short
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                             FontMetrics { id: moreFm; font: moreText.font }
