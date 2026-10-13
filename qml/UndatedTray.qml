@@ -47,12 +47,11 @@ Rectangle {
     // Down / Up (j / k) walk the rows' key stops, so S on any of them asks
     // when: the list's own arrows put focus on a bare row, where S was the
     // calendar's "go to date" (F2-NEW-1).
+    signal rowFocusRequested(int index)
     function focusRow(i: int): bool {
         if (i < 0 || i >= list.count) return false;
         list.positionViewAtIndex(i, ListView.Contain);
-        const r = list.itemAtIndex(i);
-        if (!r) return false;
-        r.keyStop.forceActiveFocus(Qt.TabFocusReason);
+        root.rowFocusRequested(i);
         return true;
     }
 
@@ -146,7 +145,12 @@ Rectangle {
                 width: list.width
                 height: Theme.px(34)
                 readonly property bool armed: root.armedId === row.modelData.id
-                readonly property Item keyStop: rowKey
+                Connections {
+                    target: root
+                    function onRowFocusRequested(i: int) {
+                        if (i === row.index) rowKey.forceActiveFocus(Qt.TabFocusReason);
+                    }
+                }
 
                 Rectangle {
                     anchors.fill: parent
