@@ -633,14 +633,17 @@ Popup {
                             id: profItem
                             required property var modelData
                             text: profItem.modelData.name
-                            marked: profItem.modelData.id === (root._pickedProfileId || AppController.activeProfileId)
-                            onTriggered: {
-                                root._pickedProfileId = profItem.modelData.id === AppController.activeProfileId
-                                                        ? "" : profItem.modelData.id;
-                                Qt.callLater(() => inputField.forceActiveFocus());
-                            }
+                            onTriggered: Qt.callLater(() => inputField.forceActiveFocus())
                         }
-                        onObjectAdded: (idx, obj) => profileMenu.insertItem(idx, obj)
+                        // The pick and its mark are wired here, in the file's
+                        // scope, not inside the delegate (qmllint unqualified).
+                        onObjectAdded: (idx, obj) => {
+                            profileMenu.insertItem(idx, obj);
+                            obj.marked = Qt.binding(() => obj.modelData.id === (root._pickedProfileId || AppController.activeProfileId));
+                            obj.triggered.connect(() => {
+                                root._pickedProfileId = obj.modelData.id === AppController.activeProfileId ? "" : obj.modelData.id;
+                            });
+                        }
                         onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
                     }
                 }
