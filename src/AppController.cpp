@@ -16,6 +16,7 @@
 #include "cal/Occurrences.h"
 #include "cal/OutlookDesktop.h"
 #include "cal/Reminders.h"
+#include "cal/ZoneNames.h"
 #include "capture/CaptureParse.h"
 #include "chrono/ChronoParser.h"
 #include "diag/FrameLog.h"
@@ -122,6 +123,7 @@
 #include <cmath>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -3822,6 +3824,7 @@ QVariantMap AppController::captureParse(const QString& raw, const QDateTime& ref
   out["when"] = p.when;
   out["whenHasTime"] = p.whenHasTime;
   out["whenEnd"] = p.whenEnd;
+  out["whenTz"] = p.whenZone;
   out["whenPast"] = p.whenPast;
   out["due"] = p.due;
   out["dueHasTime"] = p.dueHasTime;
@@ -4472,6 +4475,15 @@ void AppController::saveEvent(const QVariantMap& draft) {
     e.exdates = prev->exdates;
     e.extra = prev->extra;  // keys a newer build wrote (PLAT-15)
   }
+  // A draft is on the viewer's clock: the editor, a drag and the capture
+  // line all speak it. An event kept in a zone stores its wall time there,
+  // so a New York meeting stays 10:00 New York (A6-7). A day is a day in
+  // every zone.
+  if(e.allDay) {
+    e.tz.clear();
+  } else {
+    e = heap::cal::fromViewer(e, QTimeZone::systemTimeZone());
+  }
   // A series the user just made, or just gave new days or a new start, begins
   // on one of its days (TIME-5, audit 2026-09-30). One that is only renamed
   // keeps its stored start: an imported series may legally begin off its
@@ -4493,12 +4505,10 @@ void AppController::storeEvent(CalEvent e) {
     }
   }
   if(e.rrule.isEmpty() && e.masterId.isEmpty()) {
-    // A single event keeps no deletions, and keeps no zone either: it is
-    // shown converted, and the next edit writes what was on screen.
+    // A single event keeps no deletions. It keeps its zone, though: a
+    // meeting set for 10:00 New York used to lose it on the first edit and
+    // stop following New York's clocks (A6-7).
     e.exdates.clear();
-    if(!e.tz.isEmpty()) {
-      e = heap::cal::localized(e, QTimeZone::systemTimeZone());
-    }
   }
   // The editor parses free-typed times and a multi-day event may legally end
   // before it starts by the clock, so the whole span is normalized in one
@@ -4530,10 +4540,18 @@ void AppController::updateEvent(const QString& id, double start, double end, con
   // A drag on the calendar is an edit like any other: Ctrl+Z puts it back.
   const UndoScope scope(this, tr_("event.editUndone").arg(e.title));
   // The grid speaks the viewer's clock. A zoned event is re-expressed in it
-  // before the drag is applied, or the new hours would be read in New York.
-  if(!e.tz.isEmpty() && e.rrule.isEmpty()) {
+  // before the drag is applied, or the new hours would be read in New York,
+  // and written back into its zone after, so it keeps it (A6-7).
+  const QString keptTz = e.allDay ? QString() : e.tz;
+  if(heap::cal::zoneOf(e).isValid() && !e.allDay) {
     e = heap::cal::localized(e, QTimeZone::systemTimeZone());
+    e.tz = keptTz;
   }
+  const auto upsertKept = [&](const CalEvent& shown) {
+    const CalEvent stored = heap::cal::fromViewer(shown, QTimeZone::systemTimeZone());
+    m_events.upsert(stored);
+    return stored;
+  };
 
   // Dragging a multi-day or all-day block moves the whole span: the grid can
   // only ever hand back one day's worth of hours, and reading them as the new
@@ -4548,7 +4566,7 @@ void AppController::updateEvent(const QString& id, double start, double end, con
         e.endDate = e.endDate.addDays(shift);
       }
     }
-    m_events.upsert(e);
+    e = upsertKept(e);
     followFocusBlock(before, &e);
     scheduleSave();
     return;
@@ -4563,7 +4581,7 @@ void AppController::updateEvent(const QString& id, double start, double end, con
   if(date.isValid() && e.rrule.isEmpty()) {
     e.date = date;
   }
-  m_events.upsert(e);
+  e = upsertKept(e);
   followFocusBlock(before, &e);
   scheduleSave();
 }
@@ -4750,6 +4768,9 @@ QVariantList AppController::eventOccurrences(const QDate& from, const QDate& to)
     }
     m["occurrenceDate"] = o.occurrenceDate;
     m["generated"] = o.generated;
+    // The zone it is kept in: handed back to saveEvent / saveOccurrence with
+    // these viewer-clock hours, it stays there (A6-7).
+    m["tz"] = o.zone;
     // Kept in another zone (A6-4): the start on that zone's clock.
     m["srcTz"] = o.srcTz;
     m["srcStart"] = o.srcStart;
@@ -5048,7 +5069,99 @@ bool AppController::isValidRRule(const QString& rule) const {
 
 QVariantMap AppController::eventById(const QString& id) const {
   const int row = m_events.indexOfId(id);
-  return row >= 0 ? occurrenceToVariant(m_events.items().at(row)) : QVariantMap();
+  if(row < 0) {
+    return {};
+  }
+  // On the viewer's clock, like every occurrence the views hand the editor,
+  // with the zone it is kept in beside it (A6-7): what saveEvent reads back.
+  const CalEvent& stored = m_events.items().at(row);
+  const QTimeZone local = QTimeZone::systemTimeZone();
+  const QTimeZone zone = heap::cal::zoneOf(stored);
+  if(!zone.isValid() || stored.allDay) {
+    return occurrenceToVariant(stored);
+  }
+  QVariantMap m = occurrenceToVariant(heap::cal::localized(stored, local));
+  m["tz"] = stored.tz;
+  if(zone.id() != local.id()) {
+    m["srcTz"] = stored.tz;
+    m["srcStart"] = stored.start;
+  }
+  return m;
+}
+
+QVariantList AppController::timeZoneSearch(const QString& query) const {
+  QVariantList out;
+  for(const heap::cal::ZoneMatch& z : heap::cal::searchZones(query, QDateTime::currentDateTimeUtc(), recentEventZones())) {
+    out.append(QVariantMap{{"id", z.id}, {"city", z.city}, {"region", z.region}, {"offset", heap::cal::offsetLabel(z.offset)}});
+  }
+  return out;
+}
+
+QStringList AppController::recentEventZones() const {
+  // The zones the user's own meetings are kept in, the latest first: what
+  // "recent" means without keeping a list of its own.
+  QVector<const CalEvent*> zoned;
+  for(const CalEvent& e : m_events.items()) {
+    if(!e.allDay && heap::cal::zoneOf(e).isValid() && e.date.isValid()) {
+      zoned.append(&e);
+    }
+  }
+  std::sort(zoned.begin(), zoned.end(), [](const CalEvent* a, const CalEvent* b) {
+    return a->date > b->date;
+  });
+  QStringList out;
+  for(const CalEvent* e : zoned) {
+    if(!out.contains(e->tz)) {
+      out.append(e->tz);
+    }
+    if(out.size() >= 5) {
+      break;
+    }
+  }
+  return out;
+}
+
+double AppController::zoneHour(const QDate& date, double hour, const QString& tz) const {
+  const QTimeZone zone(tz.toUtf8());
+  if(tz.isEmpty() || !zone.isValid() || !date.isValid()) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  QDate d;
+  double h = 0.0;
+  heap::cal::toZoneWall(date, hour, QTimeZone::systemTimeZone(), zone, &d, &h);
+  return h;
+}
+
+int AppController::zoneDayShift(const QDate& date, double hour, const QString& tz) const {
+  const QTimeZone zone(tz.toUtf8());
+  if(tz.isEmpty() || !zone.isValid() || !date.isValid()) {
+    return 0;
+  }
+  QDate d;
+  double h = 0.0;
+  heap::cal::toZoneWall(date, hour, QTimeZone::systemTimeZone(), zone, &d, &h);
+  return static_cast<int>(date.daysTo(d));
+}
+
+QString AppController::zoneName(const QString& tz) const {
+  return heap::cal::zoneCity(tz);
+}
+
+QString AppController::localZoneId() const {
+  return QString::fromUtf8(QTimeZone::systemTimeZone().id());
+}
+
+QString AppController::zoneOffsetLabel(const QString& tz) const {
+  const QTimeZone zone = tz.isEmpty() ? QTimeZone::systemTimeZone() : QTimeZone(tz.toUtf8());
+  return zone.isValid() ? heap::cal::offsetLabel(zone.offsetFromUtc(QDateTime::currentDateTimeUtc())) : QString();
+}
+
+bool AppController::isLocalZone(const QString& tz) const {
+  if(tz.isEmpty()) {
+    return true;
+  }
+  const QTimeZone zone(tz.toUtf8());
+  return zone.isValid() && zone.id() == QTimeZone::systemTimeZone().id();
 }
 
 void AppController::saveOccurrence(const QVariantMap& draft, const QString& scope) {
@@ -5082,16 +5195,24 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
     d["rrule"] = QString();
     d["masterId"] = masterId;
     d["originalDate"] = original;
-    d["tz"] = QString();
+    // The draft is on the viewer's clock; saveEvent writes it into the zone
+    // the occurrence is kept in, or the one the editor picked (A6-7).
+    if(!d.contains("tz")) {
+      d["tz"] = master.tz;
+    }
     saveEvent(d);
     return;
   }
 
   // The edited occurrence, written in the series' own clock. For a floating
   // series that is the draft as given; for one that kept its source zone the
-  // viewer's hours are converted back into it.
-  const QTimeZone zone = heap::cal::zoneOf(master);
+  // viewer's hours are converted back into it. A zone picked in the editor
+  // is the series' from now on (A6-7).
   const bool allDay = draft.value("allDay").toBool();
+  const QString draftTz = draft.contains("tz") ? draft.value("tz").toString() : master.tz;
+  const QString targetTz = allDay ? QString() : draftTz;
+  const bool zoneChanged = targetTz != master.tz;
+  const QTimeZone zone = targetTz.isEmpty() ? QTimeZone() : QTimeZone(targetTz.toUtf8());
   QDate newDate = draft.value("date").toDate();
   double newStart = draft.value("start").toDouble();
   QDate newEndDate = draft.value("endDate").toDate();
@@ -5115,6 +5236,7 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
   const QString draftRule = draft.contains("rrule") ? draft.value("rrule").toString() : master.rrule;
 
   const auto applyDraftFields = [&](CalEvent& e) {
+    e.tz = targetTz;
     e.title = draft.value("title").toString();
     e.type = draft.value("type").toString();
     e.attendees = draft.value("attendees").toString();
@@ -5187,7 +5309,7 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
       const qint64 movedSpan = (moved->endDate.isValid() && moved->endDate > moved->date) ? moved->date.daysTo(moved->endDate) : 0;
       const qint64 draftSpan =
           (draftDate.isValid() && draftEndDate.isValid() && draftEndDate > draftDate) ? draftDate.daysTo(draftEndDate) : 0;
-      const bool timeKept = allDay == moved->allDay && movedSpan == draftSpan &&
+      const bool timeKept = !zoneChanged && allDay == moved->allDay && movedSpan == draftSpan &&
                             (allDay || (std::abs(draftStart - moved->start) < 1e-9 && std::abs(draftEnd - moved->end) < 1e-9));
       if(timeKept) {
         m.allDay = master.allDay;
@@ -5302,7 +5424,7 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
         ov.end = draftEnd;
         ov.date = draftDate.isValid() ? draftDate : ov.date;
         ov.endDate = (draftEndDate.isValid() && draftEndDate > ov.date) ? draftEndDate : QDate();
-        m_events.upsert(ov);
+        m_events.upsert(heap::cal::fromViewer(ov, QTimeZone::systemTimeZone()));
       }
     }
     storeEvent(m);
@@ -8502,6 +8624,7 @@ QVariantMap AppController::parseDateTime(const QString& input, const QDateTime& 
   m.insert("end", r.end);
   m.insert("hasTime", r.hasTime);
   m.insert("recurrence", r.recurrence);
+  m.insert("tz", r.zone);
   m.insert("consumed", r.consumed);
   m.insert("startOffset", r.startOffset);
   m.insert("endOffset", r.endOffset);

@@ -412,6 +412,9 @@ heap_add_appcontroller_test(heap_presence_tests test_presence.cpp)
 # ─── Editing and deleting a repeating event ───
 heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
 
+# ─── A meeting kept in a time zone (A6-7) ───
+heap_add_appcontroller_test(heap_event_zones_tests test_event_zones.cpp)
+
 # ─── Docs as a tree of pages ───
 heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 
