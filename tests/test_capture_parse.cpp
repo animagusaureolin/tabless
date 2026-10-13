@@ -339,7 +339,8 @@ TEST(CaptureAcceptance, AZoneSaidWithTheTime) {
   const QDateTime now(QDate(2026, 10, 12), QTime(10, 0));
   Parsed r = at(QStringLiteral("Standup tomorrow 3pm EST"), now);
   EXPECT_EQ(r.title, QStringLiteral("Standup"));
-  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(15, 0), QTimeZone(-5 * 3600)));
+  // F1-new-3: EST is New York with its DST, as in the zone picker.
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(15, 0), QTimeZone("America/New_York")));
   r = at(QStringLiteral("sync tue 15:00 UTC-5"), now);
   EXPECT_EQ(r.title, QStringLiteral("sync"));
   EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(15, 0), QTimeZone(-5 * 3600)));
@@ -370,7 +371,20 @@ TEST(CaptureAcceptance, AZoneSaidWithTheTime) {
 // time itself is already local (above); a task keeps only that.
 TEST(CaptureAcceptance, TheZoneSaidIsNamed) {
   const QDateTime now(QDate(2026, 10, 12), QTime(10, 0));
-  EXPECT_EQ(at(QStringLiteral("Standup tomorrow 3pm EST"), now).whenZone, QStringLiteral("UTC-05:00"));
+  // F1-new-3: a short name is its region (with DST), the same as the picker;
+  // EST, EDT and ET give one hour on one day. An offset stays an offset.
+  EXPECT_EQ(at(QStringLiteral("Standup tomorrow 3pm EST"), now).whenZone, QStringLiteral("America/New_York"));
+  EXPECT_EQ(at(QStringLiteral("Standup tomorrow 3pm EDT"), now).whenZone, QStringLiteral("America/New_York"));
+  EXPECT_EQ(at(QStringLiteral("Sync tomorrow 10am PST"), now).whenZone, QStringLiteral("America/Los_Angeles"));
+  EXPECT_EQ(at(QStringLiteral("Sync tomorrow 10am CST"), now).whenZone, QStringLiteral("America/Chicago"));
+  EXPECT_EQ(at(QStringLiteral("Sync tomorrow 10am MST"), now).whenZone, QStringLiteral("America/Denver"));
+  EXPECT_EQ(at(QStringLiteral("Sync tomorrow 10am CET"), now).whenZone, QStringLiteral("Europe/Berlin"));
+  EXPECT_EQ(at(QStringLiteral("Vendor call tomorrow 15:00 EST"), now).when.toUTC(),
+            at(QStringLiteral("Vendor call tomorrow 15:00 ET"), now).when.toUTC());
+  EXPECT_EQ(at(QStringLiteral("Vendor call tomorrow 15:00 EST"), now).when.toUTC(),
+            QDateTime(QDate(2026, 10, 13), QTime(19, 0), QTimeZone::utc()))
+      << "15:00 in New York in October (EDT) is 19:00 UTC";
+  EXPECT_EQ(at(QStringLiteral("call tue 15:00 UTC-5"), now).whenZone, QStringLiteral("UTC-05:00"));
   EXPECT_EQ(at(QStringLiteral("review tomorrow 3pm PT"), now).whenZone, QStringLiteral("America/Los_Angeles"));
   Parsed r = at(QStringLiteral("sync tomorrow 10:00 New York"), now);
   EXPECT_EQ(r.title, QStringLiteral("sync"));
@@ -495,6 +509,46 @@ TEST(CaptureAcceptance, IntervalRepeats) {
   // "по 2 дня" is a share, not a repeat.
   r = at(QString::fromUtf8("дежурства по 2 дня"), now);
   EXPECT_TRUE(r.recurrence.isEmpty());
+}
+
+// F1-new-5: a list of days without commas, and the day said before the
+// repeat, are the same rule as the comma list after it. Monday 12 Oct 2026.
+TEST(CaptureAcceptance, DayListsWithoutCommasAndDaysBeforeTheRule) {
+  const QDateTime now(QDate(2026, 10, 12), QTime(10, 0));  // Monday
+
+  struct Case {
+    const char* text;
+    const char* title;
+    const char* rule;
+    QDate when;
+  };
+
+  const Case cases[] = {
+      {"Gym every mon wed fri", "Gym", "every:mon,wed,fri", QDate(2026, 10, 12)},
+      {"every mon wed fri gym", "gym", "every:mon,wed,fri", QDate(2026, 10, 12)},
+      {"Gym mon and wed every week", "Gym", "every:mon,wed", QDate(2026, 10, 12)},
+      {"Gym tue thu weekly", "Gym", "every:tue,thu", QDate(2026, 10, 13)},
+      {"Sync fri every 2 weeks", "Sync", "every:2:week", QDate(2026, 10, 16)},
+      {"Pay rent 15th every 2 months", "Pay rent", "every:2:month:15", QDate(2026, 10, 15)},
+      {"Pay rent 1st every month", "Pay rent", "every:month:1", QDate(2026, 11, 1)},
+      {"зал пн ср пт каждую неделю", "зал", "every:mon,wed,fri", QDate(2026, 10, 12)},
+      {"аренда 15-го каждый месяц", "аренда", "every:month:15", QDate(2026, 10, 15)},
+      {"стендап каждый пн ср", "стендап", "every:mon,wed", QDate(2026, 10, 12)},
+  };
+  for(const Case& c : cases) {
+    const Parsed r = at(QString::fromUtf8(c.text), now);
+    EXPECT_EQ(r.recurrence, heap::recur::canonicalRule(QString::fromUtf8(c.rule))) << c.text;
+    EXPECT_EQ(r.title, QString::fromUtf8(c.title)) << c.text;
+    EXPECT_EQ(r.when.date(), c.when) << c.text;
+  }
+  // Still words: a two-letter English day, and a list before an interval
+  // (as after one: there is no rule for it).
+  Parsed r = at(QStringLiteral("call every mon we sync"), now);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:mon"));
+  EXPECT_EQ(r.title, QStringLiteral("call we sync"));
+  r = at(QStringLiteral("Review mon"), now);
+  EXPECT_TRUE(r.recurrence.isEmpty()) << "a day alone is a date";
+  EXPECT_EQ(r.title, QStringLiteral("Review"));
 }
 
 // B7 follow-up: a month interval from a date or on a day of the month, the

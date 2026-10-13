@@ -192,8 +192,8 @@ inline QTimeZone cityZone(const QString& lowerName) {
 
 // Short names typed into the zone search, upper-case, to the zone that uses
 // them. "EST" in the picker means "where they say EST": New York, which
-// follows its DST. (The date parser reads EST said with a time as the fixed
-// -5 it names; see ChronoParser.)
+// follows its DST. The date parser reads "15:00 EST" through this same table,
+// so capture and the picker agree; only "UTC-5" is a fixed offset.
 inline const QHash<QString, QByteArray>& zoneAbbreviations() {
   static const QHash<QString, QByteArray> abbr = {
       {QStringLiteral("ET"), "America/New_York"},     {QStringLiteral("EST"), "America/New_York"},
