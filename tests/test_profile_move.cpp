@@ -398,6 +398,37 @@ TEST(ProfileMoveApp, CaptureReadsTheSigilAndHashStaysALabel) {
 
 // ── A1-17: Today with every profile ──
 
+// F1-new-11: another profile's block is as long seen from here as from its
+// own profile - its estimate, else the focus block length, never a flat hour.
+TEST(ProfileMoveApp, TodayWithEveryProfileDrawsTheirBlocksTheirLength) {
+  const QDate today = QDate::currentDate();
+  const QString at = QDateTime(today, QTime(12, 30)).toString(Qt::ISODate);
+  writeState({profileJson("work", {taskJson("WORK-1", {{"scheduledAt", at}, {"scheduledHasTime", true}})}),
+              profileJson("home",
+                          {taskJson("HOME-1", {{"scheduledAt", at}, {"scheduledHasTime", true}}),
+                           taskJson("HOME-2", {{"scheduledAt", at}, {"scheduledHasTime", true}, {"estimateMinutes", 20}})})},
+             "work");
+  AppController app;
+  const auto lengthOf = [](const QVariantMap& day, const QString& id) {
+    for(const QVariant& v : day.value("blocks").toList()) {
+      const QVariantMap b = v.toMap();
+      if(b.value("id").toString() == id) {
+        return qRound((b.value("end").toDouble() - b.value("start").toDouble()) * 60);
+      }
+    }
+    return -1;
+  };
+  const QVariantMap fromWork = app.todayData(today, true);
+  const int own = lengthOf(fromWork, QStringLiteral("WORK-1"));
+  EXPECT_EQ(own, app.taskBlockMinutes(QStringLiteral("WORK-1")));
+  EXPECT_EQ(lengthOf(fromWork, QStringLiteral("HOME-1")), own) << "no estimate: the same focus block length";
+  EXPECT_EQ(lengthOf(fromWork, QStringLiteral("HOME-2")), 20) << "its own estimate";
+  app.setActiveProfileId(QStringLiteral("home"));
+  const QVariantMap fromHome = app.todayData(today, true);
+  EXPECT_EQ(lengthOf(fromHome, QStringLiteral("HOME-1")), lengthOf(fromWork, QStringLiteral("HOME-1")));
+  EXPECT_EQ(lengthOf(fromHome, QStringLiteral("WORK-1")), own);
+}
+
 TEST(ProfileMoveApp, TodayWithEveryProfileLabelsTheOtherProfilesRows) {
   const QDate today = QDate::currentDate();
   const QString at = QDateTime(today, QTime(15, 0)).toString(Qt::ISODate);
