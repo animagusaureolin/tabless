@@ -6,13 +6,13 @@ native artifacts for Windows, Linux and macOS and attaches them to a GitHub
 Release.
 
 
-> **Old file names (APP-280, APP-283).** Release files are `tabless-<tag>-…`. The
-> same files are also published as `lowkey-<tag>-…`, because a lowkey 0.8
-> install's updater looks for those names; it then installs Tabless in place
-> (same installer AppId) and restarts `lowkey.exe`, which in a Tabless install is
-> a small launcher that starts `tabless.exe`. (0.8.0 did the same for heap 0.7
-> with `heap-<tag>-…` copies and a `heap.exe` launcher.) Stop publishing the
-> `lowkey-` copies once 0.8 is no longer worth carrying.
+> **Old file names (APP-280, APP-283).** Release files are `tabless-<tag>-…`.
+> Up to v0.9.1 the same files were also published as `lowkey-<tag>-…`, the
+> names a lowkey 0.8 install's updater looks for; since APP-309 they are not.
+> A 0.8 install that has not updated yet is still told about the new release
+> but finds no file of its name to install, so it updates by hand (or first to
+> v0.9.1, which still carries the copies). Its data folder, keychain entries
+> and `lowkey.exe` launcher are still taken over as before.
 
 ## Triggering a release
 

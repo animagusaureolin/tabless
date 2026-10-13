@@ -708,19 +708,6 @@ jobs:
             echo "::error::two artifacts share a file name"; find dist -mindepth 2 -type f; exit 1
           fi
 
-      # lowkey 0.8 looks for its update under lowkey's names (Updater::assetNameFor
-      # before APP-283). The same files go up under those names too, so every
-      # 0.8 install finds this release and moves to Tabless by its own updater.
-      # Drop this once 0.8 is no longer worth carrying.
-      - name: Copies under lowkey's names for 0.8 updaters
-        working-directory: dist
-        run: |
-          set -eu
-          for f in tabless-*-windows-setup.exe tabless-*-windows-portable.zip tabless-*-macos.dmg tabless-*-linux-x86_64.AppImage; do
-            [ -f "$f" ] && cp "$f" "lowkey-${f#tabless-}"
-          done
-          ls -1
-
       - name: List artifacts
         run: find dist -type f -printf '%p (%s bytes)\n'
 
