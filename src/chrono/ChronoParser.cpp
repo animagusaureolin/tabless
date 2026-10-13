@@ -85,12 +85,18 @@ class ChronoParser::Impl {
     const ChronoTokenizer tk;
     auto toks = tk.tokenize(input);
 
-    // A repeat the app cannot keep ("every other day", "every 2 weeks",
-    // "every mon, wed") stays whole in the title: reading one word of it
-    // ("wed" → Wednesday, "friday" out of "every other friday") left a
-    // half-eaten title and a date nobody asked for.
+    // A repeat the app cannot keep ("every 2 years", "every 900 days")
+    // stays whole in the title: reading one word of it left a half-eaten
+    // title and a date nobody asked for. "every other day", "every 2 weeks"
+    // and "every mon, wed" are rules since B7 and are read.
     QVector<bool> blocked(toks.size(), false);
     for(int p = 0; p < toks.size(); ++p) {
+      DateMatch readable;
+      QString rule;
+      if(tryEveryPhrase(toks, p, ref, primary, fallback, readable, rule) && !rule.isEmpty()) {
+        p = qMax(p, readable.lastTok);
+        continue;
+      }
       const int last = unsupportedRepeatEnd(toks, p, primary, fallback);
       for(int k = p; k <= last; ++k) {
         blocked[k] = true;
@@ -1456,19 +1462,21 @@ class ChronoParser::Impl {
       return k < toks.size() && toks[k].kind == TokenKind::Punct && toks[k].text == QStringLiteral(",") ? k + 1 : k;
     };
 
-    if(recurrence == QStringLiteral("every:week")) {
+    const heap::recur::Rule asRule = heap::recur::parseRule(recurrence);
+    if(asRule.unit == QStringLiteral("week")) {
       const int k = afterComma(out.lastTok + 1);
-      // "по понедельникам", "every monday".
+      // "по понедельникам", "every monday", "по пн и ср". Every n weeks
+      // (B7) takes one day: "every 2 weeks on friday" is every:2:week from
+      // the coming Friday; a list there has no token, so it stays words.
       DateMatch dm;
       QString rec;
       bool weekdayRule = false;
       if(isWord(k) && tryEveryPhrase(toks, k, ref, primary, fallback, dm, rec)) {
-        for(int iso = 1; iso <= 7; ++iso) {
-          weekdayRule = weekdayRule || rec == QStringLiteral("every:") + isoDay3(iso);
-        }
+        const heap::recur::Rule said = heap::recur::parseRule(rec);
+        weekdayRule = said.unit == QStringLiteral("days") && (asRule.every == 1 || said.days.size() == 1);
       }
       if(weekdayRule) {
-        recurrence = rec;
+        recurrence = asRule.every == 1 ? rec : recurrence;
         out.date = dm.date;
         out.lastTok = dm.lastTok;
         read = true;
@@ -1478,7 +1486,9 @@ class ChronoParser::Impl {
         bool found = false;
         const int iso = isWord(j) ? lookupHashAny(toks[j].lower, primary->weekdayNames, fallback->weekdayNames, &found) : 0;
         if(found) {
-          recurrence = QStringLiteral("every:") + isoDay3(iso);
+          if(asRule.every == 1) {
+            recurrence = QStringLiteral("every:") + isoDay3(iso);
+          }
           out.date = ref.date().addDays((iso - ref.date().dayOfWeek() + 7) % 7);
           out.lastTok = j;
           read = true;
@@ -1527,7 +1537,10 @@ class ChronoParser::Impl {
       if(matchDate(toks, j, ref, primary, fallback, dm, rec, recF, recL) && rec.isEmpty() && dm.date.isValid() &&
          !(loneNumber && dm.lastTok == j)) {
         const QDate start = dm.date;
-        const bool anchored = recurrence == QStringLiteral("every:day") || recurrence == QStringLiteral("every:week");
+        // A day or week rule, every n of them included, starts on the day
+        // named; the others on their first day from it.
+        const QString unit = heap::recur::parseRule(recurrence).unit;
+        const bool anchored = unit == QStringLiteral("day") || unit == QStringLiteral("week");
         const QDate first = anchored ? start : heap::recur::nextOccurrence(recurrence, start.addDays(-1));
         out.date = first.isValid() ? first : start;
         out.lastTok = dm.lastTok;
@@ -1550,6 +1563,17 @@ class ChronoParser::Impl {
     }
     if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
       return false;
+    }
+    // "через день": every other day (B7) — the routine, not "in a day",
+    // which is said "завтра". "через 2 дня" stays an offset.
+    if(toks[i].lower == QString::fromUtf8("через") && i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Word &&
+       toks[i + 1].lower == QString::fromUtf8("день")) {
+      recurrence = QStringLiteral("every:2:day");
+      out.date = ref.date();
+      out.firstTok = i;
+      out.lastTok = i + 1;
+      refineRepeat(toks, ref, primary, fallback, out, recurrence);
+      return true;
     }
     // The English "daily" / "weekly" / "monthly" is an adjective before a
     // noun ("Fix daily standup bot", "weekly report"): a repeat only at the
@@ -1592,6 +1616,12 @@ class ChronoParser::Impl {
       }
       return true;
     }
+    // "раз в 2 дня / недели / месяца": once every n of them (B7).
+    if(toks[i].lower == QString::fromUtf8("раз") && i + 3 < toks.size() && toks[i + 1].kind == TokenKind::Word &&
+       (toks[i + 1].lower == QString::fromUtf8("в") || toks[i + 1].lower == QString::fromUtf8("во")) && intervalAt(toks, i + 2) > 1 &&
+       intervalRepeat(toks, i, intervalAt(toks, i + 2), i + 3, ref, primary, fallback, out, recurrence)) {
+      return true;
+    }
     // "раз в день / неделю / месяц": once a day, a week, a month.
     if(toks[i].lower == QString::fromUtf8("раз") && i + 2 < toks.size() && toks[i + 1].kind == TokenKind::Word &&
        (toks[i + 1].lower == QString::fromUtf8("в") || toks[i + 1].lower == QString::fromUtf8("во")) &&
@@ -1614,6 +1644,17 @@ class ChronoParser::Impl {
     }
     if(!inListAny(toks[i].lower, primary->everyAdjectives, fallback->everyAdjectives)) {
       return false;
+    }
+    // "every 2 weeks", "every other day", "каждые 2 дня", "каждую вторую
+    // неделю", "every other friday" (B7): an interval, counted from the
+    // first date. A number that is not followed by a unit is a day of the
+    // month, read below. "по 2 дня" is a share ("отпуск по 2 дня"), not a
+    // repeat: "по" takes days of the week only.
+    if(i + 2 < toks.size() && toks[i].lower != QString::fromUtf8("по")) {
+      const int n = intervalAt(toks, i + 1);
+      if(n > 0 && intervalRepeat(toks, i, n, i + 2, ref, primary, fallback, out, recurrence)) {
+        return true;
+      }
     }
     // "каждое 25 число" / "every 15th": a day of the month on its own.
     if(i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Number) {
@@ -1705,12 +1746,126 @@ class ChronoParser::Impl {
     if(!found) {
       return false;
     }
-    recurrence = QStringLiteral("every:") + isoDay3(iso);
-    const int curIso = ref.date().dayOfWeek();
-    const int delta = (iso - curIso + 7) % 7;
-    out.date = ref.date().addDays(delta);
+    // "every mon, wed", "каждый пн и ср", "по пн, ср, пт" (B7): more days
+    // after a comma, "и" or "and". Only a weekday word joins the list, and
+    // not a two-letter English one ("every mon and we sync").
+    QVector<int> listed{iso};
+    int last = i + 1;
+    for(int k = i + 2; k + 1 < toks.size();) {
+      const Token& sep = toks[k];
+      const bool joins = (sep.kind == TokenKind::Punct && (sep.text == QStringLiteral(",") || sep.text == QStringLiteral("&"))) ||
+                         (sep.kind == TokenKind::Word && (sep.lower == QString::fromUtf8("и") || sep.lower == QStringLiteral("and")));
+      const Token& next = toks[k + 1];
+      if(!joins || next.kind != TokenKind::Word || !listableDay(next.lower)) {
+        break;
+      }
+      bool isDay = false;
+      const int d = lookupHashAny(next.lower, primary->weekdayNames, fallback->weekdayNames, &isDay);
+      if(!isDay) {
+        break;
+      }
+      if(!listed.contains(d)) {
+        listed.append(d);
+      }
+      last = k + 1;
+      k += 2;
+    }
+    heap::recur::Rule rule;
+    rule.unit = QStringLiteral("days");
+    rule.days = listed;
+    std::sort(rule.days.begin(), rule.days.end());
+    recurrence = heap::recur::formatRule(rule);
+    // The first of the days from today on, today included.
+    QDate first = ref.date();
+    while(!rule.days.contains(first.dayOfWeek())) {
+      first = first.addDays(1);
+    }
+    out.date = first;
     out.firstTok = i;
-    out.lastTok = i + 1;
+    out.lastTok = last;
+    return true;
+  }
+
+  // A weekday word that may join a list of days: not the weekend ("every
+  // sat and weekend") and not a two-letter English abbreviation, which is
+  // as often a word ("we", "th", "mo").
+  static bool listableDay(const QString& lower) {
+    if(lower == QStringLiteral("weekend") || lower == QString::fromUtf8("выходные") || lower == QString::fromUtf8("выходных")) {
+      return false;
+    }
+    return lower.size() >= 3 || (!lower.isEmpty() && lower.at(0).unicode() > 0x7f);
+  }
+
+  // The interval a word or number says before a unit: "2", "two", "два",
+  // "две", "other", "second", "вторую"; 0 when it says none.
+  static int intervalAt(const QVector<Token>& toks, int k) {
+    if(k >= toks.size()) {
+      return 0;
+    }
+    if(toks[k].kind == TokenKind::Number) {
+      return toks[k].value;
+    }
+    if(toks[k].kind != TokenKind::Word) {
+      return 0;
+    }
+    static const QHash<QString, int> kWords = {
+        {QStringLiteral("other"), 2},     {QStringLiteral("second"), 2},    {QStringLiteral("two"), 2},
+        {QStringLiteral("three"), 3},     {QStringLiteral("four"), 4},      {QStringLiteral("five"), 5},
+        {QStringLiteral("six"), 6},       {QString::fromUtf8("два"), 2},    {QString::fromUtf8("две"), 2},
+        {QString::fromUtf8("три"), 3},    {QString::fromUtf8("четыре"), 4}, {QString::fromUtf8("пять"), 5},
+        {QString::fromUtf8("шесть"), 6},  {QString::fromUtf8("второй"), 2}, {QString::fromUtf8("вторую"), 2},
+        {QString::fromUtf8("второе"), 2}, {QString::fromUtf8("вторые"), 2}, {QString::fromUtf8("третий"), 3},
+        {QString::fromUtf8("третью"), 3}, {QString::fromUtf8("третье"), 3},
+    };
+    return kWords.value(toks[k].lower, 0);
+  }
+
+  // "<n> days / weeks / months" from token `k` on, the repeat word at
+  // `first`: every:<n>:day|week|month, or the plain rule for one. "every
+  // other friday" is every two weeks from the coming Friday.
+  bool intervalRepeat(const QVector<Token>& toks,
+                      int first,
+                      int n,
+                      int k,
+                      const QDateTime& ref,
+                      const ChronoLocale* primary,
+                      const ChronoLocale* fallback,
+                      DateMatch& out,
+                      QString& recurrence) const {
+    if(n < 1 || n > heap::recur::kMaxInterval || k >= toks.size() || toks[k].kind != TokenKind::Word) {
+      return false;
+    }
+    const QString& w = toks[k].lower;
+    bool isUnit = false;
+    const int unitDays = lookupHashAny(w, primary->unitToDays, fallback->unitToDays, &isUnit);
+    const bool month = primary->monthUnits.contains(w) || fallback->monthUnits.contains(w);
+    if(month || (isUnit && (unitDays == 1 || unitDays == 7))) {
+      if(month && n == 1) {
+        monthlyOn(ref.date().day(), ref, recurrence, out);
+      } else {
+        heap::recur::Rule rule;
+        rule.every = n;
+        rule.unit = month ? QStringLiteral("month") : unitDays == 1 ? QStringLiteral("day") : QStringLiteral("week");
+        recurrence = heap::recur::formatRule(rule);
+        out.date = ref.date();
+      }
+      out.firstTok = first;
+      out.lastTok = k;
+      refineRepeat(toks, ref, primary, fallback, out, recurrence);
+      return true;
+    }
+    bool isDay = false;
+    const int iso = lookupHashAny(w, primary->weekdayNames, fallback->weekdayNames, &isDay);
+    if(!isDay || n < 2) {
+      return false;
+    }
+    heap::recur::Rule rule;
+    rule.every = n;
+    rule.unit = QStringLiteral("week");
+    recurrence = heap::recur::formatRule(rule);
+    out.date = ref.date().addDays((iso - ref.date().dayOfWeek() + 7) % 7);
+    out.firstTok = first;
+    out.lastTok = k;
     return true;
   }
 
