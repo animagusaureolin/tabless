@@ -3,10 +3,12 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import TodoCpp
 import "TaskDates.js" as TaskDates
+import "EventRule.js" as EventRule
 
 Popup {
     PopupArrival { popup: root }
     id: root
+    objectName: "quick-capture-popup"
     // Standalone it is the whole window — there is nothing behind it to
     // dim or block, so no scrim.
     modal: !root.standalone
@@ -45,6 +47,10 @@ Popup {
     property var _rejected: []
     // The column the task goes to (APP-266 chip "Column").
     property string _status: "todo"
+    // The profile picked in the header's "in … v" menu: where the task goes,
+    // the app switching there only on submit, as the Ctrl N editor does. Esc
+    // leaves the app where it was (F1-new-7).
+    property string _pickedProfileId: ""
     property string _openStatus: ""
     // "+" on a column: the input, already pointed at that column.
     function openIn(statusId) {
@@ -374,14 +380,14 @@ Popup {
     // "+Side project" in the line (A5-21): the task goes to that profile,
     // the way the "в … ▾" menu above sends it — the app goes there first.
     function _goToTarget(draft) {
-        const target = String(draft._targetProfileId || "");
+        const target = String(draft._targetProfileId || root._pickedProfileId || "");
         if (target.length > 0 && target !== AppController.activeProfileId)
             AppController.activeProfileId = target;
     }
     // The profile the header names: the one the line names, else the app's.
     readonly property string _targetName: (root._parsed && root._parsed.profileName)
                                           ? root._parsed.profileName
-                                          : (AppController.profileById(AppController.activeProfileId).name || "")
+                                          : (AppController.profileById(root._pickedProfileId || AppController.activeProfileId).name || "")
 
     function _submitTask(draft, kindEarly) {
         AppController.saveTask(draft);
@@ -420,6 +426,9 @@ Popup {
             // zone and follows its clocks; the task keeps the local time
             // only (A6-7).
             ev.tz        = root._parsed && root._parsed.whenTz ? String(root._parsed.whenTz) : "";
+            // "Team sync every 2 weeks on mon 15:00" + Also a meeting: the
+            // meeting repeats like its task, not once (F1-new-4).
+            ev.rrule     = EventRule.fromChrono(draft.recurrence || "");
             // The "// comment" tail rides along onto the meeting itself, not
             // just the linked task — it lands in the event's free-form context
             // so the note shows up on the calendar block too.
@@ -453,10 +462,12 @@ Popup {
     function _submitEachLine() {
         const lines = inputField.text.split("\n").filter(l => l.trim().length > 0);
         // All of them go where the header says: the first line's "+Name".
+        let named = "";
         for (const line of lines) {
-            const named = AppController.captureParse(line, new Date(), []).profileId;
-            if (named) { root._goToTarget({ _targetProfileId: named }); break; }
+            named = AppController.captureParse(line, new Date(), []).profileId || "";
+            if (named) break;
         }
+        root._goToTarget({ _targetProfileId: named });
         AppController.beginUndoGroup(I18n.t("capture.undo.many").arg(lines.length));
         let last = "";
         try {
@@ -525,6 +536,7 @@ Popup {
         _rejected = [];
         _status = _openStatus.length > 0 ? _openStatus : "todo";
         _openStatus = "";
+        _pickedProfileId = "";
         _pastedLines = false;
         _askLines = false;
         _prevNewlines = 0;
@@ -621,13 +633,17 @@ Popup {
                             id: profItem
                             required property var modelData
                             text: profItem.modelData.name
-                            marked: profItem.modelData.id === AppController.activeProfileId
-                            onTriggered: {
-                                AppController.activeProfileId = profItem.modelData.id;
-                                Qt.callLater(() => inputField.forceActiveFocus());
-                            }
+                            onTriggered: Qt.callLater(() => inputField.forceActiveFocus())
                         }
-                        onObjectAdded: (idx, obj) => profileMenu.insertItem(idx, obj)
+                        // The pick and its mark are wired here, in the file's
+                        // scope, not inside the delegate (qmllint unqualified).
+                        onObjectAdded: (idx, obj) => {
+                            profileMenu.insertItem(idx, obj);
+                            obj.marked = Qt.binding(() => obj.modelData.id === (root._pickedProfileId || AppController.activeProfileId));
+                            obj.triggered.connect(() => {
+                                root._pickedProfileId = obj.modelData.id === AppController.activeProfileId ? "" : obj.modelData.id;
+                            });
+                        }
                         onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
                     }
                 }
@@ -734,6 +750,12 @@ Popup {
                             e.accepted = true;
                             return;
                         }
+                        // A partial "+Ли" is never a profile: plain Enter takes
+                        // the highlighted one and creates the task there, in
+                        // one key (F1-new-8). Labels and people keep the rule
+                        // above.
+                        if (enter && !(e.modifiers & (Qt.ControlModifier | Qt.ShiftModifier)) && at._trigger === "+")
+                            at.accept();
                         if (e.key === Qt.Key_Escape) {
                             at.dismiss();
                             e.accepted = true;

@@ -402,28 +402,24 @@ class ChronoParser::Impl {
   // "по мск", "по Москве", and a few cities ("New York", "London"). The
   // short names count in capitals only ("est" is a word), UTC/GMT/МСК in any
   // case. Returns the last token of the zone, or -1.
+  //
+  // A short name is the region it is said in, with its DST, exactly as the
+  // zone picker reads it (cal::zoneAbbreviations): "15:00 EST" in October is
+  // 15:00 in New York, which is what people mean, and "EST", "EDT" and "ET"
+  // all land on the same hour (F1-new-3). Only an explicit offset ("UTC-5",
+  // "+03:00") stays a fixed offset.
   static int zoneAt(const QVector<Token>& toks, int k, QTimeZone& zone) {
     if(k >= toks.size() || toks[k].kind != TokenKind::Word) {
       return -1;
     }
-    static const QHash<QString, int> kFixed = {
-        {QStringLiteral("EST"), -5},
-        {QStringLiteral("EDT"), -4},
-        {QStringLiteral("CST"), -6},
-        {QStringLiteral("CDT"), -5},
-        {QStringLiteral("MST"), -7},
-        {QStringLiteral("MDT"), -6},
-        {QStringLiteral("PST"), -8},
-        {QStringLiteral("PDT"), -7},
-        {QStringLiteral("CET"), 1},
-        {QStringLiteral("CEST"), 2},
-        {QStringLiteral("EET"), 2},
-        {QStringLiteral("EEST"), 3},
-        {QStringLiteral("BST"), 1},
-        {QStringLiteral("WET"), 0},
-        {QStringLiteral("JST"), 9},
-        {QStringLiteral("AEST"), 10},
-        {QStringLiteral("AEDT"), 11},
+    // The short names read with a time; each resolves through the picker's
+    // table. (GMT is read above as UTC; IST/SGT/KST are left as words.)
+    static const QStringList kShort = {
+        QStringLiteral("EST"),  QStringLiteral("EDT"), QStringLiteral("ET"),  QStringLiteral("CST"),  QStringLiteral("CDT"),
+        QStringLiteral("CT"),   QStringLiteral("MST"), QStringLiteral("MDT"), QStringLiteral("MT"),   QStringLiteral("PST"),
+        QStringLiteral("PDT"),  QStringLiteral("PT"),  QStringLiteral("CET"), QStringLiteral("CEST"), QStringLiteral("EET"),
+        QStringLiteral("EEST"), QStringLiteral("BST"), QStringLiteral("WET"), QStringLiteral("JST"),  QStringLiteral("AEST"),
+        QStringLiteral("AEDT"),
     };
     int i = k;
     // "по мск", "по Москве", "in London".
@@ -497,20 +493,8 @@ class ChronoParser::Impl {
       zone = QTimeZone(secs);
       return last;
     }
-    if(const auto fixed = kFixed.constFind(toks[i].text); fixed != kFixed.cend()) {
-      zone = QTimeZone(fixed.value() * 3600);
-      return i;
-    }
-    // "3pm ET", "10am PT": the US zones said without standard/daylight,
-    // which follow the season. Capitals only, like the short names above.
-    static const QHash<QString, QByteArray> kRegional = {
-        {QStringLiteral("ET"), "America/New_York"},
-        {QStringLiteral("CT"), "America/Chicago"},
-        {QStringLiteral("MT"), "America/Denver"},
-        {QStringLiteral("PT"), "America/Los_Angeles"},
-    };
-    if(const auto regional = kRegional.constFind(toks[i].text); regional != kRegional.cend()) {
-      zone = QTimeZone(regional.value());
+    if(kShort.contains(toks[i].text)) {
+      zone = QTimeZone(heap::cal::zoneAbbreviations().value(toks[i].text));
       return zone.isValid() ? i : -1;
     }
     return -1;
@@ -1612,6 +1596,86 @@ class ChronoParser::Impl {
     return read;
   }
 
+  // The day said before its repeat (F1-new-5): "Gym mon and wed every week",
+  // "mon wed weekly", "Pay rent 15th every 2 months", "15-го каждый месяц".
+  // The same rule as with the day after it; the day used to be read as a
+  // one-off date and the repeat left in the title. A day list before an
+  // interval of weeks has no rule, as after one, and is not read here.
+  bool tryDaysBeforeRule(const QVector<Token>& toks,
+                         int i,
+                         const QDateTime& ref,
+                         const ChronoLocale* primary,
+                         const ChronoLocale* fallback,
+                         DateMatch& out,
+                         QString& recurrence) const {
+    if(i >= toks.size()) {
+      return false;
+    }
+    QVector<int> listed;
+    int monthDay = 0;
+    int last = -1;
+    if(toks[i].kind == TokenKind::Word && listableDay(toks[i].lower)) {
+      bool isDay = false;
+      const int iso = lookupHashAny(toks[i].lower, primary->weekdayNames, fallback->weekdayNames, &isDay);
+      if(!isDay) {
+        return false;
+      }
+      listed.append(iso);
+      bool ambiguous = false;
+      last = dayListEnd(toks, i, primary, fallback, listed, ambiguous);
+      if(ambiguous) {
+        return false;
+      }
+    } else if(toks[i].kind == TokenKind::Number) {
+      monthDay = dayOfMonthAt(toks, i, /*needMarker=*/true, last);
+      if(monthDay <= 0) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    const int r = last + 1;
+    if(r >= toks.size() || toks[r].kind != TokenKind::Word) {
+      return false;
+    }
+    DateMatch dm;
+    QString rec;
+    if(!tryEveryPhrase(toks, r, ref, primary, fallback, dm, rec) || rec.isEmpty() || dm.firstTok != r) {
+      return false;
+    }
+    heap::recur::Rule rule = heap::recur::parseRule(rec);
+    if(!listed.isEmpty()) {
+      if(rule.unit != QStringLiteral("week") || (rule.every > 1 && listed.size() > 1)) {
+        return false;
+      }
+      if(rule.every == 1) {
+        heap::recur::Rule days;
+        days.unit = QStringLiteral("days");
+        days.days = listed;
+        std::sort(days.days.begin(), days.days.end());
+        recurrence = heap::recur::formatRule(days);
+        QDate first = ref.date();
+        while(!days.days.contains(first.dayOfWeek())) {
+          first = first.addDays(1);
+        }
+        out.date = first;
+      } else {
+        recurrence = rec;
+        out.date = ref.date().addDays((listed.first() - ref.date().dayOfWeek() + 7) % 7);
+      }
+    } else {
+      if(rule.unit != QStringLiteral("month")) {
+        return false;
+      }
+      monthlyOn(monthDay, ref, recurrence, out);
+      rule.monthDay = monthDay;
+      recurrence = heap::recur::formatRule(rule);
+    }
+    out.firstTok = i;
+    out.lastTok = dm.lastTok;
+    return true;
+  }
+
   // ── "every monday" / "каждую среду" / "every weekday" / "every day" ──
   bool tryEveryPhrase(const QVector<Token>& toks,
                       int i,
@@ -1621,6 +1685,9 @@ class ChronoParser::Impl {
                       DateMatch& out,
                       QString& recurrence) const {
     if(tryDayOfEveryMonth(toks, i, ref, primary, fallback, out, recurrence)) {
+      return true;
+    }
+    if(tryDaysBeforeRule(toks, i, ref, primary, fallback, out, recurrence)) {
       return true;
     }
     if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
@@ -1860,6 +1927,20 @@ class ChronoParser::Impl {
     ambiguous = false;
     for(int k = at + 1; k + 1 < toks.size();) {
       const Token& sep = toks[k];
+      // "every mon wed fri": a day right after a day joins the list too
+      // (F1-new-5). Only a listable one, so "every mon we sync" stays put.
+      if(sep.kind == TokenKind::Word && listableDay(sep.lower)) {
+        bool bare = false;
+        const int d = lookupHashAny(sep.lower, primary->weekdayNames, fallback->weekdayNames, &bare);
+        if(bare) {
+          if(!listed.contains(d)) {
+            listed.append(d);
+          }
+          last = k;
+          k += 1;
+          continue;
+        }
+      }
       const bool joins = (sep.kind == TokenKind::Punct && (sep.text == QStringLiteral(",") || sep.text == QStringLiteral("&"))) ||
                          (sep.kind == TokenKind::Word && (sep.lower == QString::fromUtf8("и") || sep.lower == QStringLiteral("and")));
       const Token& next = toks[k + 1];

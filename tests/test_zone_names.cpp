@@ -37,6 +37,30 @@ TEST(ZoneNames, ACityFindsItsZone) {
   EXPECT_TRUE(has(QStringLiteral("europe/ber"), QStringLiteral("Europe/Berlin")));
 }
 
+// F1-new-14: "SF" and the EU capitals in Russian were not found.
+TEST(ZoneNames, NicknamesAndRussianCapitalsAreFound) {
+  EXPECT_EQ(first(QStringLiteral("SF")), QStringLiteral("America/Los_Angeles"));
+  EXPECT_EQ(first(QStringLiteral("nyc")), QStringLiteral("America/New_York"));
+  EXPECT_EQ(first(QString::fromUtf8("Варшава")), QStringLiteral("Europe/Warsaw"));
+  EXPECT_EQ(first(QString::fromUtf8("прага")), QStringLiteral("Europe/Prague"));
+  EXPECT_EQ(first(QString::fromUtf8("Мадрид")), QStringLiteral("Europe/Madrid"));
+  EXPECT_TRUE(has(QString::fromUtf8("варш"), QStringLiteral("Europe/Warsaw")));
+}
+
+// F3-EYES-16: a Russian UI names the city and the region in Russian; an
+// unlisted zone keeps its English city; English stays English.
+TEST(ZoneNames, TheCityIsShownInTheUiLanguage) {
+  EXPECT_EQ(heap::cal::zoneCityIn(QStringLiteral("Europe/Berlin"), QStringLiteral("ru")), QString::fromUtf8("Берлин"));
+  EXPECT_EQ(heap::cal::zoneCityIn(QStringLiteral("Europe/Moscow"), QStringLiteral("ru")), QString::fromUtf8("Москва"));
+  EXPECT_EQ(heap::cal::zoneCityIn(QStringLiteral("Europe/Kiev"), QStringLiteral("ru")), QString::fromUtf8("Киев"));
+  EXPECT_EQ(heap::cal::zoneCityIn(QStringLiteral("Europe/Berlin"), QStringLiteral("en")), QStringLiteral("Berlin"));
+  EXPECT_EQ(heap::cal::zoneCityIn(QStringLiteral("America/Argentina/Salta"), QStringLiteral("ru")), QStringLiteral("Salta"));
+  EXPECT_EQ(heap::cal::zoneCityIn(QStringLiteral("UTC-05:00"), QStringLiteral("ru")), QString::fromUtf8("UTC−5"));
+  EXPECT_EQ(heap::cal::zoneRegionRu(QStringLiteral("Europe")), QString::fromUtf8("Европа"));
+  EXPECT_EQ(heap::cal::zoneRegionRu(QStringLiteral("America/Argentina")), QString::fromUtf8("Америка/Argentina"));
+  EXPECT_EQ(heap::cal::zoneRegionRu(QString()), QString());
+}
+
 TEST(ZoneNames, AShortNameFindsWhereItIsSaid) {
   EXPECT_EQ(first(QStringLiteral("EST")), QStringLiteral("America/New_York"));
   EXPECT_EQ(first(QStringLiteral("est")), QStringLiteral("America/New_York"));

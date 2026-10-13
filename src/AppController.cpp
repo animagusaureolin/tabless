@@ -5181,7 +5181,11 @@ QVariantMap AppController::eventById(const QString& id) const {
 QVariantList AppController::timeZoneSearch(const QString& query) const {
   QVariantList out;
   for(const heap::cal::ZoneMatch& z : heap::cal::searchZones(query, QDateTime::currentDateTimeUtc(), recentEventZones())) {
-    out.append(QVariantMap{{"id", z.id}, {"city", z.city}, {"region", z.region}, {"offset", heap::cal::offsetLabel(z.offset)}});
+    const bool ru = m_language == QStringLiteral("ru");
+    out.append(QVariantMap{{"id", z.id},
+                           {"city", ru ? heap::cal::zoneCityIn(z.id, m_language) : z.city},
+                           {"region", ru ? heap::cal::zoneRegionRu(z.region) : z.region},
+                           {"offset", heap::cal::offsetLabel(z.offset)}});
   }
   return out;
 }
@@ -5233,7 +5237,8 @@ int AppController::zoneDayShift(const QDate& date, double hour, const QString& t
 }
 
 QString AppController::zoneName(const QString& tz) const {
-  return heap::cal::zoneCity(tz);
+  // In the UI's language where a name is known (F3-EYES-16).
+  return heap::cal::zoneCityIn(tz, m_language);
 }
 
 QString AppController::localZoneId() const {

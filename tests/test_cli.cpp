@@ -598,6 +598,49 @@ TEST_F(CliHeadlessTest, AddToAnotherProfileLeavesTheActiveOne) {
   EXPECT_EQ(s.profiles.at(side).tasks.at(0).title, QStringLiteral("side quest"));
 }
 
+// F1-new-2: "+Globex" in the text sends the task there, as quick capture
+// does; it used to be cut from the title and the task saved in the active
+// profile. An explicit --profile wins, and the CLI says the "+Name" was not
+// followed.
+TEST_F(CliHeadlessTest, AddFollowsAPlusProfileInTheText) {
+  QString globex;
+  QString active;
+  {
+    AppController c;
+    active = c.activeProfileId();
+    globex = c.createProfile(QStringLiteral("Globex"));
+    c.setActiveProfileId(active);
+    Request r;
+    r.verb = Verb::Add;
+    r.text = QStringLiteral("Call vendor tomorrow +Globex");
+    Response resp = execute(c, r, QDateTime::currentDateTime());
+    EXPECT_EQ(resp.exitCode, kExitOk) << qPrintable(resp.err);
+    EXPECT_TRUE(resp.out.contains(QStringLiteral(" to Globex: Call vendor"))) << qPrintable(resp.out);
+    EXPECT_EQ(c.activeProfileId(), active) << "the CLI does not switch the app";
+    r.text = QStringLiteral("Ship it +globex");
+    EXPECT_EQ(execute(c, r, QDateTime::currentDateTime()).exitCode, kExitOk);
+    // --profile given: it wins, and the note says so.
+    r.text = QStringLiteral("Recap +Globex");
+    r.profile = active;
+    resp = execute(c, r, QDateTime::currentDateTime());
+    EXPECT_EQ(resp.exitCode, kExitOk) << qPrintable(resp.err);
+    EXPECT_TRUE(resp.err.contains(QStringLiteral("+Globex not followed"))) << qPrintable(resp.err);
+    c.flushSave();
+  }
+  const Snapshot s = reload();
+  const int g = findProfile(s, globex);
+  const int a = findProfile(s, active);
+  ASSERT_GE(g, 0);
+  ASSERT_GE(a, 0);
+  QStringList inGlobex;
+  for(const Task& t : s.profiles.at(g).tasks) {
+    inGlobex << t.title;
+  }
+  EXPECT_EQ(inGlobex, (QStringList{QStringLiteral("Call vendor"), QStringLiteral("Ship it")}));
+  ASSERT_EQ(s.profiles.at(a).tasks.size(), 1);
+  EXPECT_EQ(s.profiles.at(a).tasks.at(0).title, QStringLiteral("Recap"));
+}
+
 // CLI-1: `heap add` with no window used to load a damaged state.json the way
 // the window does — quarantine it, promote the newest backup (or an empty
 // workspace) — then report "nothing changed". The window opened later found a

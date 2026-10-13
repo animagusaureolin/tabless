@@ -128,6 +128,34 @@ TestCase {
         AppController.deleteTask(b);
     }
 
+    // F1-new-6: Shift M on a tracker card says at once that it stays, with no
+    // picker whose Move cannot happen.
+    function test_shift_m_on_a_tracker_card_says_why_without_the_picker() {
+        const json = JSON.stringify({ profile: {
+            id: "pm-tracker", name: "PM tracker " + Date.now(), color: "#5cc2dd",
+            statuses: [{ id: "todo", name: "To Do", color: "#888888" }],
+            tasks: [{ id: "TL-6", title: "pm tracker card", status: "todo", priority: "P2",
+                      externalId: "GH-6", externalProvider: "github",
+                      externalUrl: "https://example.invalid/issues/6" }] } });
+        AppController.importProfileFromJson(json, true);
+        const imported = AppController.activeProfileId;
+        verify(imported !== tc.pA, "the import did not open its profile");
+        tc.made.push(imported);
+        let id = "";
+        const m = AppController.tasks;
+        for (let i = 0; i < m.rowCount(); i++)
+            if (m.data(m.index(i, 0), m.roleOf("title")) === "pm tracker card") id = m.data(m.index(i, 0), m.roleOf("id"));
+        verify(id.length > 0);
+        const spy = createTemporaryQmlObject('import QtTest; SignalSpy { signalName: "toast" }', tc);
+        spy.target = AppController;
+        tc.win.moveToProfile([id]);
+        const dlg = findChild(tc.win, "profile-move-dialog");
+        verify(!dlg.opened, "the picker opened for a card that cannot move");
+        compare(spy.count, 1, "nothing said why");
+        verify(String(spy.signalArguments[0][0]).length > 0, "an empty toast");
+        verify(!!AppController.taskById(id).id, "the card stayed");
+    }
+
     function test_one_profile_says_why() {
         // Only meaningful with a single profile: then the picker never opens.
         if ((AppController.profiles || []).length > 1) skip("the test profile has several profiles");
@@ -159,6 +187,65 @@ TestCase {
             if (t.title === title) found = t.id;
         }
         verify(found.length > 0, "the task is in the named profile, its title without the sigil");
+    }
+
+    // F1-new-7: the header's "in … v" picker only remembers the target;
+    // Esc leaves the app where it was, Enter saves there and goes there.
+    function test_the_capture_profile_picker_waits_for_submit() {
+        const pB = tc.other("Picker target");
+        tc.win.runCommand("quick-capture");
+        const input = findChild(tc.win, "qc-input");
+        tryVerify(() => input && input.visible);
+        const qc = findChild(tc.win, "quick-capture-popup");
+        verify(qc, "no capture popup");
+        // What the menu item does on a pick.
+        qc._pickedProfileId = pB;
+        compare(qc._targetName, tc.nameOf(pB), "the header names the picked profile");
+        compare(AppController.activeProfileId, tc.pA, "a pick alone switched the app");
+        keyClick(Qt.Key_Escape);
+        tryVerify(() => !input.visible);
+        compare(AppController.activeProfileId, tc.pA, "Esc left the app in the picked profile");
+        // Picked, then Enter: saved there, the app follows.
+        tc.win.runCommand("quick-capture");
+        tryVerify(() => input.visible);
+        compare(qc._pickedProfileId, "", "the pick outlived its capture");
+        qc._pickedProfileId = pB;
+        const title = "picked capture " + Date.now();
+        input.forceActiveFocus();
+        input.text = title;
+        input.cursorPosition = input.text.length;
+        keyClick(Qt.Key_Return);
+        tryCompare(AppController, "activeProfileId", pB);
+        let found = false;
+        const m = AppController.tasks;
+        for (let i = 0; i < m.rowCount(); i++)
+            if (AppController.taskById(String(m.data(m.index(i, 0), Qt.UserRole + 1))).title === title) found = true;
+        verify(found, "the task is not in the picked profile");
+    }
+
+    // F1-new-8: Enter with the "+Profile" completion open takes the offered
+    // profile (a partial "+Pr" is never one) and creates the task there.
+    function test_enter_with_the_profile_completion_takes_it() {
+        const pB = tc.other("Prcomplete");
+        const name = tc.nameOf(pB);
+        tc.win.runCommand("quick-capture");
+        const input = findChild(tc.win, "qc-input");
+        tryVerify(() => input && input.visible);
+        input.forceActiveFocus();
+        input.text = "";
+        const title = "partial sigil " + Date.now();
+        input.insert(0, title + " +Prcompl");
+        input.cursorPosition = input.text.length;
+        wait(150);
+        keyClick(Qt.Key_Return);
+        tryCompare(AppController, "activeProfileId", pB);
+        let found = "";
+        const m = AppController.tasks;
+        for (let i = 0; i < m.rowCount(); i++) {
+            const t = AppController.taskById(String(m.data(m.index(i, 0), Qt.UserRole + 1)));
+            if (String(t.title).indexOf("partial sigil") === 0) found = t.title;
+        }
+        compare(found, title, "the task went elsewhere or kept '+Prcompl' in its title (" + name + ")");
     }
 
     function test_the_editor_names_its_profile_and_takes_another() {

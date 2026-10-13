@@ -85,7 +85,8 @@ QString helpText() {
              "Commands:\n"
              "  add \"<text>\" [--profile <p>] [--json]   capture a task, read like quick capture:\n"
              "                                          dates (\"tomorrow 14:00\"), p1 / !!, #label,\n"
-             "                                          \"// description\", a tracker key as the id\n"
+             "                                          \"// description\", a tracker key as the id,\n"
+             "                                          +Profile to add it to that profile\n"
              "  now [--json] [--format \"<fmt>\"]         the current task: the one with a running\n"
              "                                          timer, else the one the git branch of the\n"
              "                                          current directory names; prints nothing\n"
@@ -99,7 +100,7 @@ QString helpText() {
              "  open <ID>                               show the task in the window\n"
              "  sched <ID> <when>                       plan it for a day: \"tomorrow 14:00\",\n"
              "                                          \"fri\", \"2026-10-12\"; \"none\" takes it off\n"
-             "  due <ID> <date>                         its deadline (a tracker card's: your own\n"
+             "  due <ID> <date>                         its due date (a tracker card's: your own\n"
              "                                          date, the tracker keeps its own); \"none\"\n"
              "  est <ID> <time>                         estimate: 2h, 90m, 1h30m; \"none\" clears\n"
              "  someday <ID> [off]                      park it as someday (or take it back)\n"
@@ -936,6 +937,8 @@ QString cliText(const QString& key, const QString& language) {
       {QStringLiteral("overdue"), {"Overdue", "Просрочено"}},
       {QStringLiteral("today"), {"Today", "Сегодня"}},
       {QStringLiteral("added"), {"Added %1: %2", "Добавлено %1: %2"}},
+      {QStringLiteral("addedTo"), {"Added %1 to %2: %3", "Добавлено %1 в «%2»: %3"}},
+      {QStringLiteral("profileWins"), {"+%1 not followed: --profile %2 was given", "+%1 не учтён: указан --profile %2"}},
       {QStringLiteral("done"), {"Done %1: %2", "Готово %1: %2"}},
       {QStringLiteral("alreadyDone"), {"Already done %1: %2", "Уже готово %1: %2"}},
       {QStringLiteral("opened"), {"Opened %1", "Открыто %1"}},

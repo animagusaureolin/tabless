@@ -54,6 +54,18 @@ SmallDialog {
             if (t && t.ticket && t.ticket.provider) kept.push(t.ticket.key || t.id);
         }
         root._trackerKeys = kept;
+        // Only tracker cards: nothing can move, so no picker with a Move
+        // button that cannot happen (F1-new-6). The controller's refusal says
+        // why at once — it moves nothing when every id is a tracker card.
+        if (kept.length > 0 && kept.length === root.taskIds.length) {
+            const all = AppController.profiles || [];
+            for (let i = 0; i < all.length; i++) {
+                if (all[i].id === AppController.activeProfileId) continue;
+                AppController.moveTasksToProfile(root.taskIds, all[i].id);
+                break;
+            }
+            return;
+        }
         root.query = "";
         root.current = 0;
         filterField.text = "";

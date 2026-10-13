@@ -125,6 +125,23 @@ TestCase {
         AppController.deleteEvent(id);
     }
 
+    // F3-EYES-16, F1-new-14: in a Russian UI the picker names the city and
+    // the region in Russian; "Варшава" and "SF" are found.
+    function test_the_picker_speaks_the_ui_language() {
+        const saved = AppController.language;
+        AppController.language = "ru";
+        const berlin = AppController.timeZoneSearch("berl")[0];
+        compare(berlin.id, "Europe/Berlin");
+        compare(berlin.city, "Берлин");
+        compare(berlin.region, "Европа");
+        compare(AppController.zoneName("Europe/Moscow"), "Москва");
+        compare(AppController.timeZoneSearch("Варшава")[0].id, "Europe/Warsaw");
+        AppController.language = "en";
+        compare(AppController.timeZoneSearch("berl")[0].city, "Berlin");
+        compare(AppController.timeZoneSearch("SF")[0].id, "America/Los_Angeles");
+        AppController.language = saved;
+    }
+
     // "10:00 New York" in When: the hour is New York's, the meeting is kept
     // there.
     function test_when_reads_a_zone_said_with_the_time() {
