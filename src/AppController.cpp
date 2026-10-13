@@ -2913,10 +2913,9 @@ void AppController::moveTaskRanked(const QString& id, const QString& newStatus, 
     // late used to spawn a copy that was already overdue.
     // A plain monthly rule keeps the day of the date it starts from, so the
     // 31st became the 28th after February for good (IDIOT-CAL-5). The copy
-    // carries the day as the parser writes it, "every:month:31".
-    const QString seriesRule = recurrence == QStringLiteral("every:month") && recurBase.isValid()
-                                   ? QStringLiteral("every:month:%1").arg(recurBase.day())
-                                   : recurrence;
+    // carries the day as the parser writes it, "every:month:31" (and
+    // "every:2:month:31" for one every two months).
+    const QString seriesRule = heap::recur::seriesRule(recurrence, recurBase);
     const QDate next = heap::recur::nextOccurrenceAfter(seriesRule, base, today);
     const int srcRow = m_tasks.indexOfId(taskId);
     // Fresh unique id (strip any prior "-rN" suffix) so upsert inserts a new
@@ -6804,6 +6803,80 @@ QVariantList AppController::calendarTasks(const QDate& from, const QDate& to, bo
     out.append(m);
   }
   return out;
+}
+
+QVariantList AppController::calendarRepeats(const QDate& from, const QDate& to) const {
+  QVariantList out;
+  if(!from.isValid() || !to.isValid() || to < from) {
+    return out;
+  }
+  const QDate today = QDate::currentDate();
+  const auto& items = m_tasks.items();
+  for(int i = 0; i < items.size(); ++i) {
+    const Task& t = items.at(i);
+    // An archived or finished one brings nothing more: its open copy, when
+    // there is one, carries the series on.
+    if(t.recurrence.isEmpty() || t.archived || statusCategory(t.status) == QStringLiteral("done")) {
+      continue;
+    }
+    // The date completing it rolls from, as toggleDone takes it.
+    const QDateTime dueAt = heap::local::effectiveDueAt(t);
+    const QDate anchor = dueAt.isValid() ? dueAt.date() : t.scheduledAt.date();
+    const QVector<QDate> dates = heap::recur::occurrencesBetween(t.recurrence, anchor, today, from, to);
+    if(dates.isEmpty()) {
+      continue;
+    }
+    // The copy keeps the clock time of the date it rolls (HEAP-77).
+    const bool timed = t.scheduledAt.isValid() ? t.scheduledHasTime : heap::local::effectiveDueHasTime(t);
+    const QTime clock = t.scheduledAt.isValid() ? t.scheduledAt.time() : dueAt.time();
+    const QModelIndex idx = m_tasks.index(i, 0);
+    for(const QDate& d : dates) {
+      QVariantMap m;
+      m["id"] = t.id;
+      m["title"] = t.title;
+      m["desc"] = t.desc;
+      m["priority"] = heap::local::effectivePriority(t);
+      m["status"] = t.status;
+      m["recurrence"] = t.recurrence;
+      m["date"] = d;
+      m["day"] = static_cast<int>(from.daysTo(d));
+      m["hasTime"] = timed;
+      m["hour"] = timed ? clock.hour() + (clock.minute() / 60.0) : -1.0;
+      // What the views' search reads, as calendarTasks hands it.
+      m["searchText"] = m_tasks.data(idx, TaskModel::SearchTextRole);
+      m["ticket"] = m_tasks.data(idx, TaskModel::TicketRole);
+      m["dueAt"] = dueAt;
+      m["scheduledAt"] = t.scheduledAt;
+      m["ghost"] = true;
+      out.append(m);
+    }
+  }
+  return out;
+}
+
+QString AppController::recurrenceFromText(const QString& text) const {
+  const QString said = text.simplified();
+  if(said.isEmpty() || !m_chrono) {
+    return {};
+  }
+  // As typed ("every 3 weeks", "через день"), then with the repeat word the
+  // row leaves out: "3 weeks", "mon, wed", "2 дня", "пн, ср".
+  const QStringList tries = {said, QStringLiteral("every ") + said, QString::fromUtf8("каждые ") + said, QString::fromUtf8("по ") + said};
+  const QDateTime now = QDateTime::currentDateTime();
+  for(const QString& line : tries) {
+    const heap::chrono::ParseResult r = m_chrono->parse(line, now);
+    if(!r.ok || r.recurrence.isEmpty() || r.startOffset < 0) {
+      continue;
+    }
+    // The whole line, or the words are something else ("every 2 weeks on
+    // the moon"): nothing is half read.
+    QString rest = line.left(r.startOffset) + line.mid(r.endOffset);
+    rest.remove(QLatin1Char(',')).remove(QLatin1Char('.'));
+    if(rest.trimmed().isEmpty()) {
+      return heap::recur::canonicalRule(r.recurrence);
+    }
+  }
+  return {};
 }
 
 void AppController::deleteEvent(const QString& id) {

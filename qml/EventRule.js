@@ -30,7 +30,11 @@ function describe(rule, startDay, i18n) {
         else {
             if (days.length === 0 && startDay && startDay.getDay) days = [DAYS[(startDay.getDay() + 6) % 7]];
             var names = days.map(function (d) { return i18n.t("event.repeat.on." + d); }).join(", ");
-            out = n > 1 ? i18n.count(n, "event.repeat.everyNWeeks") : i18n.t("event.repeat.weeklyOn").arg(names);
+            // "раз в 2 недели · пн, ср": the days of an interval said too,
+            // once there is more than one (B7).
+            var short = days.map(function (d) { return i18n.dayName((DAYS.indexOf(d) + 1) % 7).toLowerCase(); }).join(", ");
+            out = n > 1 ? i18n.count(n, "event.repeat.everyNWeeks") + (p.BYDAY && days.length > 1 ? " · " + short : "")
+                        : i18n.t("event.repeat.weeklyOn").arg(names);
         }
     } else if (p.FREQ === "MONTHLY") out = n > 1 ? i18n.count(n, "event.repeat.everyNMonths") : i18n.t("event.repeat.monthly");
     else if (p.FREQ === "YEARLY") out = i18n.t("event.repeat.yearly");
@@ -50,8 +54,17 @@ function fromChrono(rec) {
     if (r === "every:week") return "FREQ=WEEKLY";
     var m = r.match(/^every:month:(\d+)$/);
     if (m) return "FREQ=MONTHLY;BYMONTHDAY=" + m[1];
-    var d = r.match(/^every:(mon|tue|wed|thu|fri|sat|sun)$/);
-    if (d) return "FREQ=WEEKLY;BYDAY=" + DAYS[["mon", "tue", "wed", "thu", "fri", "sat", "sun"].indexOf(d[1])];
+    var names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    // "every:mon" and, since B7, "every:mon,wed": BYDAY lists the days.
+    var d = r.match(/^every:((?:mon|tue|wed|thu|fri|sat|sun)(?:,(?:mon|tue|wed|thu|fri|sat|sun))*)$/);
+    if (d) return "FREQ=WEEKLY;BYDAY=" + d[1].split(",").map(function (x) { return DAYS[names.indexOf(x)]; }).join(",");
+    // "every:2:day", "every:3:week", "every:2:month[:15]": INTERVAL.
+    var n = r.match(/^every:(\d+):(day|week|month)(?::(\d+))?$/);
+    if (n) {
+        var freq = n[2] === "day" ? "DAILY" : n[2] === "week" ? "WEEKLY" : "MONTHLY";
+        var every = parseInt(n[1]);
+        return "FREQ=" + freq + (every > 1 ? ";INTERVAL=" + every : "") + (n[3] ? ";BYMONTHDAY=" + n[3] : "");
+    }
     return "";
 }
 

@@ -1498,6 +1498,15 @@ class AppController : public QObject {
   // `schedDay` — the day's offset from `from`, or -1. Only candidates have
   // their fields read, which is what keeps a 10k-task profile's week cheap.
   Q_INVOKABLE QVariantList calendarTasks(const QDate& from, const QDate& to, bool includeArchived) const;
+  // The occurrences ahead of each open repeating task that fall in [from,
+  // to] (A2-25), worked out from its rule and drawn faintly by Week and
+  // Month: [{id, title, priority, date, day, hasTime, hour, recurrence}],
+  // `day` the offset from `from`. Display only: nothing is created ahead.
+  Q_INVOKABLE QVariantList calendarRepeats(const QDate& from, const QDate& to) const;
+  // A repeat said in words, as the editors' "Custom" row takes it (B7):
+  // "every 3 weeks", "каждые 2 дня", "mon, wed", "пн, ср", "2 weeks". The
+  // engine's token ("every:3:week"), or "" when the words are not a repeat.
+  Q_INVOKABLE QString recurrenceFromText(const QString& text) const;
   // The load of each day from `from` on (APP-247): [{date, workday,
   // meetings, tasks, free, overWork, work}] in minutes, each minute counted
   // once — the fact the calendar's day headers show.

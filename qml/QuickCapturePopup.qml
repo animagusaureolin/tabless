@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import TodoCpp
+import "TaskDates.js" as TaskDates
 
 Popup {
     PopupArrival { popup: root }
@@ -207,6 +208,9 @@ Popup {
             "every:thu": "everyThu", "every:fri": "everyFri", "every:sat": "everySat",
             "every:sun": "everySun", "every:month": "monthly"
         };
+        // "раз в 2 недели", "по пн, ср" (B7).
+        const interval = TaskDates.intervalText(r);
+        if (interval.length > 0) return interval;
         const monthly = /^every:month:(\d+)$/.exec(String(r || ""));
         if (monthly) {
             const l = I18n.t("editor.recur.monthlyOn").arg(monthly[1]);

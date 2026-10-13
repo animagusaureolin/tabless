@@ -250,6 +250,17 @@ TestCase {
         compare(x.text, "Ретро спринта пт 16:00");
         compare(EventRule.fromChrono("every:fri"), "FREQ=WEEKLY;BYDAY=FR");
         compare(EventRule.fromChrono("every:weekday"), "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR");
+        // B7: interval repeats and lists of days.
+        compare(EventRule.fromChrono("every:mon,wed"), "FREQ=WEEKLY;BYDAY=MO,WE");
+        compare(EventRule.fromChrono("every:2:day"), "FREQ=DAILY;INTERVAL=2");
+        compare(EventRule.fromChrono("every:3:week"), "FREQ=WEEKLY;INTERVAL=3");
+        compare(EventRule.fromChrono("every:2:month:15"), "FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15");
+        compare(EventRule.fromChrono("every:2:mon"), "");
+        if (I18n.lang === "ru")
+            compare(EventRule.describe("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH", fri, I18n), "раз в 2 недели · пн, чт");
+        // Words in the custom row's field read as a rule.
+        compare(EventRule.fromChrono(AppController.recurrenceFromText("every 3 weeks")), "FREQ=WEEKLY;INTERVAL=3");
+        compare(EventRule.fromChrono(AppController.recurrenceFromText("пн, ср")), "FREQ=WEEKLY;BYDAY=MO,WE");
     }
 
     // A new meeting comes from one line, with chips for what was read.

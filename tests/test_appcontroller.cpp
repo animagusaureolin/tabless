@@ -14,6 +14,7 @@
 #include "integrations/AutoSync.h"
 #include "integrations/IntegrationTypes.h"
 #include "local/Effective.h"
+#include "recur/RecurrenceEngine.h"
 #include "views/UiScale.h"
 
 #include <QApplication>
@@ -1177,6 +1178,114 @@ TEST_F(AppControllerTest, RecurringScheduledOnlyTaskKeepsAnInvalidDueDate) {
     }
   }
   EXPECT_TRUE(foundNext);
+}
+
+// B7: an interval repeat rolls from the task's own date, every n of them.
+TEST_F(AppControllerTest, CompletingAnIntervalRepeatSpawnsItNIntervalsOn) {
+  const QDate today = QDate::currentDate();
+
+  struct Case {
+    const char* rule;
+    QDate next;
+  };
+
+  const Case cases[] = {{"every:2:day", today.addDays(2)}, {"every:3:week", today.addDays(21)}, {"every:2:month", today.addMonths(2)}};
+  int n = 0;
+  for(const Case& c : cases) {
+    const QString id = QStringLiteral("INT-%1").arg(++n);
+    Task t = mkTask(id, QStringLiteral("Water plants"));
+    t.recurrence = QString::fromLatin1(c.rule);
+    t.scheduledAt = QDateTime(today, QTime(9, 0));
+    t.scheduledHasTime = true;
+    app_->tasks()->reset({t});
+    app_->moveTask(id, QStringLiteral("done"));
+    bool found = false;
+    for(const Task& x : app_->tasks()->items()) {
+      if(x.id != id) {
+        found = true;
+        EXPECT_EQ(x.scheduledAt, QDateTime(c.next, QTime(9, 0))) << c.rule;
+        // A monthly one keeps its day as the series rule (IDIOT-CAL-5).
+        EXPECT_EQ(x.recurrence, heap::recur::seriesRule(QString::fromLatin1(c.rule), today)) << c.rule;
+      }
+    }
+    EXPECT_TRUE(found) << c.rule;
+  }
+}
+
+// A list of days: Monday's done brings Wednesday's.
+TEST_F(AppControllerTest, CompletingADayListRepeatSpawnsTheNextDayOfIt) {
+  const QDate today = QDate::currentDate();
+  Task t = mkTask(QStringLiteral("DAYS-1"), QStringLiteral("Gym"));
+  t.recurrence = QStringLiteral("every:mon,wed");
+  t.scheduledAt = QDateTime(today, QTime(0, 0));
+  app_->tasks()->reset({t});
+  app_->moveTask(QStringLiteral("DAYS-1"), QStringLiteral("done"));
+  const QDate want = heap::recur::nextOccurrence(QStringLiteral("every:mon,wed"), today);
+  bool found = false;
+  for(const Task& x : app_->tasks()->items()) {
+    if(x.id != QStringLiteral("DAYS-1")) {
+      found = true;
+      EXPECT_EQ(x.scheduledAt.date(), want);
+      EXPECT_TRUE(want.dayOfWeek() == 1 || want.dayOfWeek() == 3);
+    }
+  }
+  EXPECT_TRUE(found);
+}
+
+// The editors' "Custom interval…" row reads words the way capture does.
+TEST_F(AppControllerTest, RecurrenceFromTextReadsARepeatOrNothing) {
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every 3 weeks")), QStringLiteral("every:3:week"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("3 weeks")), QStringLiteral("every:3:week"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every other day")), QStringLiteral("every:2:day"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("mon, wed")), QStringLiteral("every:mon,wed"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("пн, ср")), QStringLiteral("every:mon,wed"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("каждые 2 дня")), QStringLiteral("every:2:day"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("2 дня")), QStringLiteral("every:2:day"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("через день")), QStringLiteral("every:2:day"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("weekdays")), QStringLiteral("every:weekday"));
+  // Not a repeat, or one with words left over: nothing.
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("tomorrow")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every 2 weeks on the moon")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("banana")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QString()), QString());
+}
+
+// A2-25: the repeats ahead are worked out, never created; a finished or
+// archived task brings none, a task with no rule none.
+TEST_F(AppControllerTest, CalendarRepeatsAreComputedNotCreated) {
+  const QDate today = QDate::currentDate();
+  Task daily = mkTask(QStringLiteral("GH-1"), QStringLiteral("Check backups"));
+  daily.recurrence = QStringLiteral("every:day");
+  daily.scheduledAt = QDateTime(today, QTime(9, 30));
+  daily.scheduledHasTime = true;
+  Task done = mkTask(QStringLiteral("GH-2"), QStringLiteral("Old one"));
+  done.recurrence = QStringLiteral("every:day");
+  done.status = QStringLiteral("done");
+  done.scheduledAt = QDateTime(today, QTime(0, 0));
+  Task archived = mkTask(QStringLiteral("GH-3"), QStringLiteral("Archived"));
+  archived.recurrence = QStringLiteral("every:day");
+  archived.archived = true;
+  archived.scheduledAt = QDateTime(today, QTime(0, 0));
+  Task plain = mkTask(QStringLiteral("GH-4"), QStringLiteral("Once"));
+  plain.scheduledAt = QDateTime(today, QTime(0, 0));
+  Task undated = mkTask(QStringLiteral("GH-5"), QStringLiteral("No date"));
+  undated.recurrence = QStringLiteral("every:week");
+  app_->tasks()->reset({daily, done, archived, plain, undated});
+  const int rows = app_->tasks()->rowCount();
+
+  const QVariantList ghosts = app_->calendarRepeats(today.addDays(-3), today.addDays(3));
+  ASSERT_EQ(ghosts.size(), 3) << "tomorrow and the two days after, nothing before today or on it";
+  for(int i = 0; i < ghosts.size(); ++i) {
+    const QVariantMap g = ghosts.at(i).toMap();
+    EXPECT_EQ(g.value("id").toString(), QStringLiteral("GH-1"));
+    EXPECT_EQ(g.value("date").toDate(), today.addDays(i + 1));
+    EXPECT_EQ(g.value("day").toInt(), 4 + i);
+    EXPECT_TRUE(g.value("ghost").toBool());
+    EXPECT_TRUE(g.value("hasTime").toBool());
+    EXPECT_DOUBLE_EQ(g.value("hour").toDouble(), 9.5);
+  }
+  EXPECT_EQ(app_->tasks()->rowCount(), rows) << "nothing is created ahead";
+  EXPECT_TRUE(app_->calendarRepeats(today, today.addDays(-1)).isEmpty());
 }
 
 TEST_F(AppControllerTest, TemplateCreatesPrefilledChecklistTask) {
