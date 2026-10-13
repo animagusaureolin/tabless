@@ -9,6 +9,7 @@ import "Search.js" as Search
 import "QueryWords.js" as QueryWords
 import "Reschedule.js" as Resched
 import "EventRule.js" as EventRule
+import "TaskDates.js" as TaskDates
 
 Item {
     id: root
@@ -352,7 +353,7 @@ Item {
         if (dayIdx < 0 || dayIdx >= days.length) return [];
         const list = days[dayIdx].tasks.slice(0, root.dayZoom ? 3 : gridHost.dueMaxLines);
         const ids = [];
-        for (let i = 0; i < list.length; i++) ids.push(list[i].id);
+        for (let i = 0; i < list.length; i++) if (!list[i].ghost) ids.push(list[i].id);
         return ids;
     }
 
@@ -680,6 +681,15 @@ Item {
         for (let k = 0; k < days.length; k++) {
             days[k].tasks.sort((a, b) => (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9));
         }
+        // A2-25: the occurrences ahead of a repeating task, worked out from
+        // its rule, faint and read-only after the day's real chips. Shown,
+        // never created; Return on one opens the task itself.
+        const ghosts = AppController.calendarRepeats(start, end);
+        for (let i = 0; i < ghosts.length; i++) {
+            const g = ghosts[i];
+            const col = g.day >= 0 && g.day < colOf.length ? colOf[g.day] : -1;
+            if (col >= 0 && root.passesFilter(g)) days[col].tasks.push(g);
+        }
         return days;
     }
 
@@ -716,6 +726,17 @@ Item {
         return parts.join(" · ");
     }
 
+    // A repeat ahead (A2-25): its clock time when the task has one, then the
+    // title — "09:00 Проверить бэкапы". What the tip and a reader say.
+    function ghostTitle(g) {
+        if (!g || !g.hasTime || !(g.hour >= 0)) return g ? g.title : "";
+        const h = Math.floor(g.hour);
+        return I18n.fmtTime(new Date(2000, 0, 1, h, Math.round((g.hour - h) * 60))) + " " + g.title;
+    }
+    function ghostTip(g) {
+        return I18n.t("cal.ghost.tip").arg(g.title).arg(TaskDates.repeatText(g.recurrence));
+    }
+
     // The day zoom's header line (DG-051, X-Oth-DayMonth): "2 встречи ·
     // 1 задача · срок:", the deadlines following as links. Facts only.
     function dayFacts(day) {
@@ -725,6 +746,7 @@ Item {
         let planned = day.blocks ? day.blocks.length : 0;
         let dues = 0;
         for (let i = 0; i < day.tasks.length; i++) {
+            if (day.tasks[i].ghost) continue;   // a repeat ahead is not a fact of the day
             if (day.tasks[i].scheduled) planned++;
             else dues++;
         }
@@ -926,8 +948,14 @@ Item {
         const day = root.days[d];
         const out = [];
         const chips = day.tasks.slice(0, 4);
-        for (let i = 0; i < chips.length; i++)
-            out.push({ kind: "task", id: chips[i].id, key: "task:" + chips[i].id, start: -1 });
+        for (let i = 0; i < chips.length; i++) {
+            // A repeat ahead (A2-25) is its own stop: Return opens the task,
+            // nothing moves, selects or archives it.
+            if (chips[i].ghost)
+                out.push({ kind: "ghost", id: chips[i].id, key: "ghost:" + chips[i].id + "@" + d, start: -1 });
+            else
+                out.push({ kind: "task", id: chips[i].id, key: "task:" + chips[i].id, start: -1 });
+        }
         const timed = [];
         for (let i = 0; i < day.events.length; i++) {
             const e = day.events[i];
@@ -1045,7 +1073,7 @@ Item {
     function openCursor() {
         const it = root._cursorItem();
         if (!it) { if (!root.cursorVisible) root.moveCursor(0, 0); return; }
-        if (it.kind === "task") root.taskClicked(it.id);
+        if (it.kind === "task" || it.kind === "ghost") root.taskClicked(it.id);
         else root.eventClicked(it.id, it.ev.occ);
     }
     function toggleCursorSelection() {
@@ -1190,7 +1218,7 @@ Item {
     function totalTasks() {
         let n = 0;
         for (let i = 0; i < days.length; i++)
-            for (let j = 0; j < days[i].tasks.length; j++) if (!days[i].tasks[j].scheduled) n++;
+            for (let j = 0; j < days[i].tasks.length; j++) if (!days[i].tasks[j].scheduled && !days[i].tasks[j].ghost) n++;
         return n;
     }
     function totalEvents() {
@@ -1488,7 +1516,9 @@ Item {
                                     delegate: Rectangle {
                                         id: dueChip
                                         required property var modelData
-                                        readonly property bool _selected: AppController.selectionCount >= 0
+                                        // A repeat ahead (A2-25): faint, read-only.
+                                        readonly property bool ghost: !!modelData.ghost
+                                        readonly property bool _selected: !ghost && AppController.selectionCount >= 0
                                             && AppController.isTaskSelected(modelData.id)
                                         width: root.dayZoom ? dueLine.implicitWidth + 2 * Theme.spXs : dueFlow.width
                                         height: gridHost.dueLineH
@@ -1502,7 +1532,8 @@ Item {
                                         border.width: _selected ? 2 : 0
                                         // A deadline is orange in bold and grey
                                         // in quiet; a planned day is a ring.
-                                        readonly property color ink: modelData.scheduled ? Theme.textMuted
+                                        readonly property color ink: ghost ? Theme.textDim
+                                            : modelData.scheduled ? Theme.textMuted
                                             : Style.urgency ? Theme.signalNow : Theme.textMuted
 
                                         Row {
@@ -1513,24 +1544,35 @@ Item {
                                             spacing: Theme.spXs
                                             Icon {
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                visible: !dueChip.modelData.scheduled
+                                                visible: !dueChip.modelData.scheduled && !dueChip.ghost
                                                 name: "flag"
                                                 size: Theme.px(10)
                                                 color: dueChip.ink
                                             }
                                             StatusRing {
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                visible: !!dueChip.modelData.scheduled
+                                                visible: !!dueChip.modelData.scheduled && !dueChip.ghost
                                                 category: AppController.statusCategory(dueChip.modelData.status || "")
                                                 size: Theme.px(10)
                                             }
+                                            // The repeat mark the card and Today use.
                                             Text {
-                                                objectName: "week-due-title"
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: dueChip.ghost
+                                                width: Theme.px(10)
+                                                horizontalAlignment: Text.AlignHCenter
+                                                text: "↻"
+                                                color: dueChip.ink
+                                                font.family: Theme.fontUi
+                                                font.pixelSize: root.dayZoom ? Theme.fsSm : Theme.fsXs
+                                            }
+                                            Text {
                                                 // A day's chips share the line and elide (A2-16): a
                                                 // long title ran past the edge cut mid-word.
                                                 width: root.dayZoom ? Math.min(implicitWidth, Math.max(Theme.px(60), dueFlow.width / Math.max(1, Math.min(3, headCol.modelData.tasks.length)) - Theme.px(10) - 3 * Theme.spXs - Theme.spMd))
                                                                     : dueLine.width - Theme.px(10) - Theme.spXs
-                                                text: dueChip.modelData.title
+                                                objectName: dueChip.ghost ? "week-ghost-title" : "week-due-title"
+                                                text: dueChip.ghost ? root.ghostTitle(dueChip.modelData) : dueChip.modelData.title
                                                 textFormat: Text.PlainText
                                                 color: dueChip.ink
                                                 font.family: Theme.fontUi
@@ -1541,7 +1583,8 @@ Item {
                                         FocusRing {
                                             objectName: "week-cursor"
                                             visible: root.cursorVisible && root.cursorDay === headCol.index
-                                                     && root.cursorKey === "task:" + dueChip.modelData.id
+                                                     && root.cursorKey === (dueChip.ghost ? "ghost:" + dueChip.modelData.id + "@" + headCol.index
+                                                                                          : "task:" + dueChip.modelData.id)
                                         }
                                         // The keyboard's way in (design audit
                                         // DES-19). Under the MouseArea and deaf
@@ -1549,19 +1592,21 @@ Item {
                                         // there, with its Ctrl / Shift.
                                         ClickArea {
                                             id: dueKey
-                                            objectName: "week-due-" + dueChip.modelData.id
-                                            label: dueChip.modelData.title
+                                            objectName: (dueChip.ghost ? "week-ghost-" : "week-due-") + dueChip.modelData.id
+                                            label: dueChip.ghost ? root.ghostTip(dueChip.modelData) : dueChip.modelData.title
                                             showTip: false
                                             acceptedButtons: Qt.NoButton
                                             onActivated: chipMA.open()
-                                            // The move keys act on it (APP-249).
-                                            onActiveFocusChanged: if (activeFocus) {
+                                            // The move keys act on it (APP-249); never
+                                            // on a repeat ahead, which is not a task.
+                                            onActiveFocusChanged: if (activeFocus && !dueChip.ghost) {
                                                 root.keyTaskId = dueChip.modelData.id;
                                                 root.keyTaskDay = headCol.modelData.date;
                                             }
                                         }
                                         // The task's menu, the same in every view (APP-268).
                                         TapHandler {
+                                            enabled: !dueChip.ghost
                                             acceptedButtons: Qt.RightButton
                                             onTapped: root.openTaskMenu(dueChip.modelData.id)
                                         }
@@ -1580,7 +1625,7 @@ Item {
                                             property bool inert: false
                                             onPressed: (mouse) => { pressX = mouse.x; pressY = mouse.y; inert = false; }
                                             onPositionChanged: (mouse) => {
-                                                if (!pressed || inert) return;
+                                                if (!pressed || inert || dueChip.ghost) return;
                                                 if (!root.chipDrag) {
                                                     if (Math.abs(mouse.x - pressX) < 6 && Math.abs(mouse.y - pressY) < 6) return;
                                                     root.beginChipDrag(dueChip.modelData);
@@ -1593,6 +1638,7 @@ Item {
                                             }
                                             onCanceled: if (root.chipDrag) { root.chipDrag = null; dragLayer.finish(); }
                                             onContainsMouseChanged: {
+                                                if (dueChip.ghost) return;
                                                 if (containsMouse) { root.hoverTaskId = dueChip.modelData.id; root.hoverTaskDay = headCol.modelData.date; }
                                                 else if (root.hoverTaskId === dueChip.modelData.id) root.hoverTaskId = "";
                                             }
@@ -1610,7 +1656,9 @@ Item {
                                                 if (inert) { inert = false; return; }
                                                 const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
                                                 const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
-                                                if (ctrl) {
+                                                if (dueChip.ghost) {
+                                                    chipMA.open();
+                                                } else if (ctrl) {
                                                     AppController.toggleTaskSelection(modelData.id);
                                                 } else if (shift) {
                                                     root._rangeSelect(modelData.id);
@@ -1621,7 +1669,7 @@ Item {
                                             // The full title on Tab too (APP-184).
                                             ToolTip.visible: containsMouse || dueKey.activeFocus
                                             ToolTip.delay: 400
-                                            ToolTip.text: modelData.title
+                                            ToolTip.text: dueChip.ghost ? root.ghostTip(modelData) : modelData.title
                                         }
                                     }
                                 }
