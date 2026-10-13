@@ -91,6 +91,14 @@ Rectangle {
             keys: AppController.shortcutText("board.moveLeft") + " / " + AppController.shortcutText("board.moveRight").replace(/^Shift\s+/, "")
             onActivated: moveMenu.popup(moveBtn, 0, -moveMenu.implicitHeight - Theme.spSm)
         }
+        // To another profile (A5-14); with one profile there is nowhere to go.
+        BarAction {
+            objectName: "sel-profile"
+            visible: (AppController.profiles || []).length > 1
+            text: I18n.t("selection.bar.profile")
+            keys: AppController.shortcutText("task.moveProfile")
+            onActivated: bar.commandRequested("task.moveProfile")
+        }
         BarAction {
             // The archive holds already-archived tasks — the bulk action
             // there restores them.

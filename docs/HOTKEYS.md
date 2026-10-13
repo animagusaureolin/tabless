@@ -125,6 +125,7 @@ pointer.
 | Menu | `M` (or the `Menu` key) |
 | Copy ID / branch name / tracker link | `Y, Y` / `Y, B` / `Y, L` |
 | Create a git branch | `C, B` |
+| Move to another profile (a list: type to filter, `Enter`; one undo in either profile) | `Shift+M` |
 | Delete the selection, or the task under the cursor (undoable) | `Del` |
 
 ## Board cursor

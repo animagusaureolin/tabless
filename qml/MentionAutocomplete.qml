@@ -10,6 +10,8 @@ import "Mention.js" as Mention
 //               "r.losev", "roman.losev" — or the name's words, either
 //               script; "@roman losev" may carry one space)
 //   #<token>  → AppController.tasks   (id + title, prefix/substring match)
+//   +<name>   → AppController.profiles (A5-21, capture only: enableProfiles);
+//               the whole name, spaces and all, any case
 //
 // The owner wires it into the target's onTextChanged /
 // onCursorPositionChanged hooks (→ refresh()) and routes keyboard
@@ -28,6 +30,7 @@ Popup {
     // corresponding flag to false from the owner.
     property bool enablePeople: true
     property bool enableTickets: true
+    property bool enableProfiles: false
     // Insert a person as @Their_Name rather than @their-id (for note text).
     property bool insertNames: false
 
@@ -64,10 +67,39 @@ Popup {
     // trigger range, or null if the caret isn't inside one. The trigger
     // char ("@" or "#") and the entered prefix are returned so the caller
     // (refresh / accept) can decide which source to query.
+    // "+Side pr|": the '+' at the start or after a space, on this line, and
+    // what follows it still the start of some profile's name.
+    function _profileRange(text, caret) {
+        const lineStart = text.lastIndexOf("\n", caret - 1) + 1;
+        const plus = text.lastIndexOf("+", caret - 1);
+        if (plus < lineStart || caret - plus > 65) return null;
+        if (plus > 0 && !/\s/.test(text.charAt(plus - 1))) return null;
+        const prefix = text.substring(plus + 1, caret);
+        if (prefix.length > 0 && /^\s/.test(prefix)) return null;
+        if (ac._profileSuggestions(prefix.toLowerCase()).length === 0) return null;
+        return { trigger: "+", start: plus, end: caret, prefix: prefix };
+    }
+
+    function _profileSuggestions(q) {
+        const out = [];
+        const all = AppController.profiles || [];
+        for (let i = 0; i < all.length && out.length < maxRows; i++) {
+            const name = String(all[i].name || "");
+            // A name typed out in full is done: nothing left to offer.
+            if (name.toLowerCase().indexOf(q) === 0 && name.length > q.length)
+                out.push({ id: all[i].id, name: name, role: I18n.t("capture.profile") });
+        }
+        return out;
+    }
+
     function _currentTriggerRange() {
         const text = _text();
         const caret = _caret();
         if (caret < 0) return null;
+        if (enableProfiles) {
+            const pr = ac._profileRange(text, caret);
+            if (pr) return pr;
+        }
         let start = caret;
         while (start > 0 && _handleCharRe.test(text.charAt(start - 1))) --start;
         // "@roman losev": a person's query may hold one space, once a word
@@ -145,6 +177,7 @@ Popup {
         const q = (r.prefix || "").toLowerCase();
         _trigger = r.trigger;
         _suggestions = (r.trigger === "@") ? _peopleSuggestions(q)
+            : (r.trigger === "+") ? _profileSuggestions(q)
             : _ticketSuggestions(q);
         _selectedIdx = 0;
         navigated = false;
@@ -171,7 +204,8 @@ Popup {
         }
         // Notes write a person as @Their_Name (NotesView does the same), task
         // text as the id the task parser matches.
-        const token = (insertNames && r.trigger === "@") ? String(pick.name || pick.id).replace(/\s+/g, "_") : pick.id;
+        const token = (insertNames && r.trigger === "@") ? String(pick.name || pick.id).replace(/\s+/g, "_")
+                    : r.trigger === "+" ? String(pick.name) : pick.id;
         const insert = r.trigger + token + " ";
         // Edit in place (remove + insert) rather than reassigning target.text:
         // a whole-text assignment resets the caret to 0 on a TextArea/TextField,

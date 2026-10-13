@@ -360,6 +360,8 @@ Popup {
         const draft = root._capTitle(AppController.quickTaskDraft(inputField.text, new Date(), root._rejected));
         draft.status = root._status;
         if (root.linkBranch && root._branch.length > 0) draft.branch = root._branch;
+        // Before the undo group: the step is recorded in the profile it lands in.
+        root._goToTarget(draft);
         // A meeting is a task and its calendar event: one undo step for both.
         AppController.beginUndoGroup(I18n.t("quick.undo").arg(draft.id));
         try {
@@ -368,6 +370,18 @@ Popup {
             AppController.endUndoGroup();
         }
     }
+
+    // "+Side project" in the line (A5-21): the task goes to that profile,
+    // the way the "в … ▾" menu above sends it — the app goes there first.
+    function _goToTarget(draft) {
+        const target = String(draft._targetProfileId || "");
+        if (target.length > 0 && target !== AppController.activeProfileId)
+            AppController.activeProfileId = target;
+    }
+    // The profile the header names: the one the line names, else the app's.
+    readonly property string _targetName: (root._parsed && root._parsed.profileName)
+                                          ? root._parsed.profileName
+                                          : (AppController.profileById(AppController.activeProfileId).name || "")
 
     function _submitTask(draft, kindEarly) {
         AppController.saveTask(draft);
@@ -438,6 +452,11 @@ Popup {
     // "N tasks": each line its own task, read the same way.
     function _submitEachLine() {
         const lines = inputField.text.split("\n").filter(l => l.trim().length > 0);
+        // All of them go where the header says: the first line's "+Name".
+        for (const line of lines) {
+            const named = AppController.captureParse(line, new Date(), []).profileId;
+            if (named) { root._goToTarget({ _targetProfileId: named }); break; }
+        }
         AppController.beginUndoGroup(I18n.t("capture.undo.many").arg(lines.length));
         let last = "";
         try {
@@ -571,8 +590,8 @@ Popup {
                     spacing: Theme.spXs
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: I18n.t("capture.inProfile").arg(AppController.profileById(AppController.activeProfileId).name || "")
-                        color: profCA.hovered ? Theme.text : Theme.textMuted
+                        text: I18n.t("capture.inProfile").arg(root._targetName)
+                        color: profCA.hovered || !!(root._parsed && root._parsed.profileName) ? Theme.text : Theme.textMuted
                         Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsSm
@@ -589,7 +608,8 @@ Popup {
                 }
                 ClickArea {
                     id: profCA
-                    label: I18n.t("capture.inProfile").arg(AppController.profileById(AppController.activeProfileId).name || "")
+                    label: I18n.t("capture.inProfile").arg(root._targetName)
+                    tip: I18n.t("capture.inProfileHint")
                     enabled: AppController.profiles.length > 1
                     onActivated: profileMenu.popup(profRow, 0, profRow.height + Theme.spXs)
                 }
@@ -665,7 +685,7 @@ Popup {
                     // Every recognised word in the accent, as the sheet
                     // draws "завтра 11:00 p1" (R3-098).
                     colors: ({ when: Theme.accentStrong, due: Theme.accentStrong, estimate: Theme.accentStrong,
-                               priority: Theme.accentStrong, label: Theme.textMuted })
+                               priority: Theme.accentStrong, label: Theme.textMuted, profile: Theme.accentStrong })
                 }
                 onCursorPositionChanged: at.refresh()
 
@@ -752,6 +772,7 @@ Popup {
                         root._refreshPreview();
                         const draft = AppController.quickTaskDraft(inputField.text, new Date(), root._rejected);
                         draft.status = root._status;
+                        root._goToTarget(draft);
                         inputField.clear();  // it goes on in the document, not as a draft
                         root.close();
                         root.openFullRequested(draft);
@@ -847,6 +868,15 @@ Popup {
                 value: visible ? root._parsed.priority : ""
                 // Plain, as the sheet writes "приоритет P1" (R3-098).
                 valueColor: Theme.text
+            }
+            // "+Side project" (A5-21): the profile the task goes to.
+            PropertyChip {
+                outlined: true
+                objectName: "qc-profile-chip"
+                visible: !!(root._parsed && root._parsed.profileName)
+                small: false
+                key: I18n.t("capture.profile")
+                value: visible ? root._parsed.profileName : ""
             }
             Repeater {
                 model: (root._parsed && root._parsed.labels) || []
@@ -1011,5 +1041,6 @@ Popup {
     MentionAutocomplete {
         id: at
         target: inputField
+        enableProfiles: true
     }
 }

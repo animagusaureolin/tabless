@@ -64,6 +64,8 @@ Popup {
     signal queryRequested(string query, string mode)
     // "Nothing found · create «…»": the task input with the words in it.
     signal createRequested(string text)
+    // "Перенести в профиль…" for the task(s) the line opened on (A5-14).
+    signal moveToProfileRequested(var ids)
 
     // function () → the ids of the task(s) the cursor or selection was on
     // when the line opened (Main's _keyTaskIds): the "For the selected task"
@@ -552,6 +554,8 @@ Popup {
             root._taskAction("archive", ids, t.archived ? "taskcard.unarchive" : "taskcard.archive", "board.archive")
         ];
         if (url.length > 0) out.splice(5, 0, root._taskAction("external", ids, "cmd.openInTracker", "task.openExternal"));
+        if ((AppController.profiles || []).length > 1)
+            out.push(root._taskAction("moveProfile", ids, "taskmenu.moveProfile", "task.moveProfile"));
         const q = String(filter || "").trim();
         return q.length === 0 ? out : out.filter(a => Match.score(q, a.label) >= 0);
     }
@@ -814,6 +818,7 @@ Popup {
             root.searchNotes(e.text);
             break;
         case "create": root.createRequested(e.text); break;
+        case "moveProfile": root.moveToProfileRequested(ids); break;
         }
     }
 

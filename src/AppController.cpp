@@ -569,6 +569,16 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.deleted", {"Profile removed: %1", "Удалён профиль: %1"}},
       {"profile.restored", {"Profile restored: %1", "Восстановлен профиль: %1"}},
       {"profile.duplicated", {"Profile duplicated: %1", "Дублирован профиль: %1"}},
+      // Moving tasks to another profile (A5-14).
+      {"move.profile.one", {"%1 moved to %2", "%1 перенесена в «%2»"}},
+      {"move.profile.many", {"%1 tasks moved to %2", "Перенесено в «%2»: %1"}},
+      {"move.profile.renamed", {"%1 is %2 there: the id was taken", "%1 там — %2: этот ID был занят"}},
+      {"move.profile.trackerKept",
+       {"Tracker cards stay in %1, whose integration pulled them: %2",
+        "Карточки трекера остаются в «%1» — их подтянула его интеграция: %2"}},
+      {"move.profile.undone", {"Back in %1: %2", "Снова в «%1»: %2"}},
+      {"move.profile.redone", {"Moved to %1 again: %2", "Снова в «%1»: %2"}},
+      {"move.profile.gone", {"Can't take the move back: a profile is gone", "Перенос не отменить: профиля больше нет"}},
       {"profile.exported", {"Profile exported: %1", "Профиль экспортирован: %1"}},
       {"profile.mdCopied", {"Profile Markdown copied to clipboard", "Markdown профиля скопирован в буфер"}},
       {"profile.weeklyCopied", {"Weekly report copied to clipboard", "Недельный отчёт скопирован в буфер"}},
@@ -812,6 +822,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.task.createBranch.label", {"Create git branch", "Создать ветку git"}},
       {"shortcut.task.createBranch.desc",
        {"A branch named after the task in the active repository.", "Ветка с именем задачи в активном репозитории."}},
+      {"shortcut.task.moveProfile.label", {"Move to profile…", "Перенести в профиль…"}},
+      {"shortcut.task.moveProfile.desc",
+       {"The task, or the selection, to another profile: a picker, type to filter.",
+        "Задачу или выбранные — в другой профиль: список, печатайте для фильтра."}},
       {"shortcut.selection.toggle.label", {"Select task", "Отметить задачу"}},
       {"shortcut.selection.toggle.desc",
        {"Add the task under the cursor to the selection, or take it out.", "Добавить задачу под курсором в выделение или убрать."}},
@@ -3809,9 +3823,22 @@ bool AppController::ticketKeyTaken(const QString& key) const {
   return !taskIdForKey(key).isEmpty();
 }
 
+heap::capture::ProfileSigil AppController::profileSigilIn(const QString& raw) const {
+  QStringList names;
+  names.reserve(m_profiles.size());
+  for(const Profile& p : m_profiles) {
+    names.append(p.name);
+  }
+  return heap::capture::findProfileSigil(raw, names);
+}
+
 QVariantMap AppController::captureParse(const QString& raw, const QDateTime& reference, const QStringList& rejected) const {
-  const heap::text::TaskMeta meta = heap::text::extractMeta(raw);
+  // "+Side project" names the profile (A5-21); the rest is read without it.
+  const heap::capture::ProfileSigil sigil = profileSigilIn(raw);
+  const heap::text::TaskMeta meta = heap::text::extractMeta(heap::capture::withoutSigil(raw, sigil));
   QVariantMap out;
+  out["profileId"] = sigil.index >= 0 ? m_profiles.at(sigil.index).id : QString();
+  out["profileName"] = sigil.index >= 0 ? m_profiles.at(sigil.index).name : QString();
   heap::capture::Parsed p;
   if(m_chrono) {
     p = heap::capture::parse(meta.title, *m_chrono, reference.isValid() ? reference : QDateTime::currentDateTime(), rejected);
@@ -3863,6 +3890,9 @@ QVariantMap AppController::captureParse(const QString& raw, const QDateTime& ref
   for(const QString& l : meta.labels) {
     mark(QLatin1Char('#') + l, QStringLiteral("label"));
   }
+  if(sigil.index >= 0) {
+    marks.append(QVariantMap{{"start", sigil.start}, {"end", sigil.end}, {"kind", QStringLiteral("profile")}});
+  }
   out["marks"] = marks;
   return out;
 }
@@ -3872,12 +3902,18 @@ QVariantMap AppController::quickTaskDraft(const QString& raw, const QDateTime& r
   // (newQuickTaskDraft falls back to the prefix), so it stays in the title:
   // "APP-101 follow up with QA" used to lose its only link to the ticket
   // (TASKS-22, audit 2026-09-30).
-  heap::text::TaskMeta meta = heap::text::extractMeta(raw);
+  const heap::capture::ProfileSigil sigil = profileSigilIn(raw);
+  const QString text = heap::capture::withoutSigil(raw, sigil);
+  heap::text::TaskMeta meta = heap::text::extractMeta(text);
   if(ticketKeyTaken(meta.ticketKey)) {
-    meta = heap::text::extractMeta(raw, /*keepTicketKey=*/true);
+    meta = heap::text::extractMeta(text, /*keepTicketKey=*/true);
   }
   QVariantMap draft = newQuickTaskDraft(meta.ticketKey);
   draft["_isNew"] = true;
+  // "+Side project": the profile the capture saves into (A5-21).
+  if(sigil.index >= 0) {
+    draft["_targetProfileId"] = m_profiles.at(sigil.index).id;
+  }
 
   // The date words and the estimate are cut out of the title. A date after
   // a deadline word ("до пятницы", "due fri") is the deadline; any other is
@@ -4816,6 +4852,7 @@ QVariantMap blockToVariant(const heap::plan::Block& b) {
           {"attendees", b.attendees},
           {"occurrence", b.occurrence},
           {"profileName", b.profileName},
+          {"profileId", b.profileId},
           {"start", b.start},
           {"end", b.end},
           {"past", b.past},
@@ -4898,12 +4935,15 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
     const Task* task;
     QString profileName;
     bool own;
+    QString profileId;
   };
 
   QVector<Src> all;
   for(const Task& t : m_tasks.items()) {
-    all.append({&t, QString(), true});
+    all.append({&t, QString(), true, QString()});
   }
+  // Another profile's row says whose it is (A1-17): its name and colour.
+  QHash<QString, QString> colorOf;
   QVector<Profile> snapshot;
   if(allProfiles) {
     snapshot = profilesSnapshot();
@@ -4911,8 +4951,9 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
       if(p.id == m_activeProfileId) {
         continue;
       }
+      colorOf.insert(p.id, p.color);
       for(const Task& t : p.tasks) {
-        all.append({&t, p.name, false});
+        all.append({&t, p.name, false, p.id});
       }
     }
   }
@@ -4934,6 +4975,7 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
     in.scheduledAt = t.scheduledAt;
     in.minutes = s.own ? taskBlockMinutes(t.id) : (t.estimateMinutes > 0 ? t.estimateMinutes : 60);
     in.profileName = s.profileName;
+    in.profileId = s.profileId;
     timed.append(in);
   }
 
@@ -4962,6 +5004,9 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
   int planned = 0;
   for(const heap::plan::Block& b : day.blocks) {
     QVariantMap bm = blockToVariant(b);
+    if(!b.profileId.isEmpty()) {
+      bm["profileColor"] = colorOf.value(b.profileId);
+    }
     if(b.kind == QLatin1String("meeting")) {
       ++meetings;
     } else {
@@ -5001,14 +5046,24 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
                     {"category", cat},
                     {"isTiming", t.timerStartedAt.isValid()},
                     {"branch", t.branch},
-                    {"profileName", s.profileName}};
+                    {"profileName", s.profileName},
+                    {"profileId", s.profileId},
+                    {"profileColor", colorOf.value(s.profileId)}};
       if(t.id == m_focusedTaskId) {
         m["repo"] = m_focusedRepoState;
       }
       inProgress.append(m);
     }
-    if(due.isValid() && due.date() < date && date == m_today) {
-      overdue.append(QVariantMap{{"id", t.id}, {"title", t.title}, {"category", cat}, {"due", due}, {"profileName", s.profileName}});
+    // Like "undated": its link opens this profile's list, so it counts this
+    // profile's tasks only (A1-17).
+    if(s.own && due.isValid() && due.date() < date && date == m_today) {
+      overdue.append(QVariantMap{{"id", t.id},
+                                 {"title", t.title},
+                                 {"category", cat},
+                                 {"due", due},
+                                 {"profileName", s.profileName},
+                                 {"profileId", s.profileId},
+                                 {"profileColor", colorOf.value(s.profileId)}});
     }
     if(due.isValid() && due.date() == date) {
       ++dueToday;
@@ -5025,9 +5080,12 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
                                    {"due", due},
                                    {"dueHasTime", dueHasTime},
                                    {"tomorrow", due.date() != date},
-                                   {"profileName", s.profileName}});
+                                   {"profileName", s.profileName},
+                                   {"profileId", s.profileId},
+                                   {"profileColor", colorOf.value(s.profileId)}});
     }
-    if(!t.someday && !due.isValid() && !t.scheduledAt.isValid()) {
+    // Its link opens this profile's list, so it counts this profile's.
+    if(s.own && !t.someday && !due.isValid() && !t.scheduledAt.isValid()) {
       ++undated;
     }
     // Planned for the day without a time (IDIOT-CAL-10): "fix login
@@ -5040,7 +5098,9 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
                                  {"category", cat},
                                  {"dayOnly", true},
                                  {"waiting", s.own ? waitingName.value(t.id) : QString()},
-                                 {"profileName", s.profileName}});
+                                 {"profileName", s.profileName},
+                                 {"profileId", s.profileId},
+                                 {"profileColor", colorOf.value(s.profileId)}});
       ++planned;
     }
   }
@@ -9839,6 +9899,21 @@ bool AppController::undoEntry(double serialValue) {
     return false;
   }
   const heap::undo::Entry copy = *found;
+  if(copy.profileMove) {
+    heap::undo::Entry e = copy;
+    const QString other = profileMoveOtherSide_(e);
+    const bool ok = applyProfileMove_(e, /*backward=*/true);
+    m_undo.removeUndoable(serial);
+    if(m_parkedUndo.contains(other)) {
+      m_parkedUndo[other].removeUndoable(serial);
+    }
+    emit pendingUndoChanged();
+    if(ok) {
+      emit toast(copy.label);
+    }
+    scheduleSave();
+    return ok;
+  }
   if(copy.profileRemoved) {
     // A profile swap only makes sense off the top of the stack.
     emit toast(tr_("undo.changedSince"), QStringLiteral("warning"));
@@ -9955,7 +10030,7 @@ bool AppController::undoWouldRemoveTask(const QString& id) const {
 
 bool AppController::undoIsKnowledgeOnly() const {
   const heap::undo::Entry* top = m_undo.peekUndo();
-  if(top == nullptr || top->profileRemoved || top->statusesTouched || top->savedViewsTouched) {
+  if(top == nullptr || top->profileRemoved || top->profileMove || top->statusesTouched || top->savedViewsTouched) {
     return false;
   }
   return top->tasks.isEmpty() && top->events.isEmpty() && top->people.isEmpty();
@@ -9968,6 +10043,29 @@ void AppController::undo() {
   flushNotesForUndo();
   heap::undo::Entry* entry = m_undo.takeUndo();
   if(entry == nullptr) {
+    return;
+  }
+  if(entry->profileMove) {
+    // A move between profiles (A5-14): back from the other profile, and the
+    // other profile's copy of the step goes with it.
+    const quint64 serial = entry->serial;
+    const QString other = profileMoveOtherSide_(*entry);
+    const bool ok = applyProfileMove_(*entry, /*backward=*/true);
+    const QString label = entry->label;
+    if(!ok) {
+      // The step is spent: it would fail forward too, and nothing recorded
+      // on top of it can be redone without it. What is below stays.
+      m_undo.discardRedo();
+    }
+    if(m_parkedUndo.contains(other)) {
+      m_parkedUndo[other].removeUndoable(serial);
+    }
+    emit pendingUndoChanged();
+    if(ok) {
+      emit toast(label);
+      playSound_(static_cast<int>(heap::platform::SoundCue::Undo));
+    }
+    scheduleSave();
     return;
   }
   heap::undo::refreshLeaving(m_notes, entry->notes, /*backward=*/true);
@@ -9994,6 +10092,20 @@ void AppController::redo() {
   flushNotesForUndo();
   heap::undo::Entry* entry = m_undo.takeRedo();
   if(entry == nullptr) {
+    return;
+  }
+  if(entry->profileMove) {
+    const bool ok = applyProfileMove_(*entry, /*backward=*/false);
+    const heap::undo::Entry copy = *entry;
+    if(ok) {
+      m_parkedUndo[profileMoveOtherSide_(copy)].push(copy);
+      emit toast(copy.redoLabel.isEmpty() ? tr_("undo.redone") : copy.redoLabel);
+    } else {
+      // Only this step goes (with the redo tail above it); older undo stays.
+      m_undo.removeUndoable(copy.serial);
+    }
+    emit pendingUndoChanged();
+    scheduleSave();
     return;
   }
   heap::undo::refreshLeaving(m_notes, entry->notes, /*backward=*/false);
@@ -15441,6 +15553,8 @@ void AppController::seedShortcutCatalog() {
   add("task.copyBranch", "Y, B");
   add("task.copyLink", "Y, L");
   add("task.createBranch", "C, B");
+  // To another profile (A5-14): M is the menu, Shift M moves it out.
+  add("task.moveProfile", "Shift+M");
   // Open the issue in its tracker, or the link under the cursor (Vim's gx).
   add("task.openExternal", "G, X");
   add("selection.toggle", "V");

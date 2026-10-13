@@ -19,6 +19,12 @@ Item {
     property bool boardKeys: false
 
     signal openRequested()
+    // "Перенести в профиль…": the window's picker, for this task (A5-14),
+    // the same one Shift M and Ctrl K open. The menu closes first.
+    function moveToProfile() {
+        const id = host._t ? host._t.id : host.taskId;
+        if (id) Qt.callLater(() => AppController.requestMoveToProfile([id]));
+    }
     // "Решить конфликт…": the here-vs-tracker dialog, from the keyboard too;
     // the mark's "решить" link was the only way in (A3-9). Made on first use.
     Loader {
@@ -339,6 +345,20 @@ Item {
             onTriggered: if (_has) AppController.copyToClipboard(host._t.branch)
         }
         AppMenuSeparator {}
+        // To another profile (A5-14). A tracker card stays in the profile
+        // whose integration pulled it: its sheet has no such row, and Shift M
+        // on one says why.
+        AppMenuItem {
+            objectName: "tc-menu-move-profile"
+            readonly property bool _one: (AppController.profiles || []).length < 2
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
+            text: I18n.t("taskmenu.moveProfile")
+            shortcutId: "task.moveProfile"
+            enabled: !_one
+            note: _one ? I18n.t("moveProfile.why.one") : ""
+            onTriggered: host.moveToProfile()
+        }
         AppMenuItem {
             objectName: "tc-menu-archive"
             visible: !host._isTicket

@@ -311,4 +311,67 @@ Parsed parse(const QString& text, const heap::chrono::ChronoParser& chrono, cons
   return out;
 }
 
+ProfileSigil findProfileSigil(const QString& text, const QStringList& names) {
+  ProfileSigil out;
+  qsizetype lineEnd = text.indexOf(QLatin1Char('\n'));
+  if(lineEnd < 0) {
+    lineEnd = text.size();
+  }
+  const qsizetype note = text.left(lineEnd).indexOf(QStringLiteral("//"));
+  if(note >= 0) {
+    lineEnd = note;
+  }
+  const auto isWordChar = [](QChar c) {
+    return c.isLetterOrNumber() || c == QLatin1Char('_') || c == QLatin1Char('-');
+  };
+  for(qsizetype at = text.indexOf(QLatin1Char('+')); at >= 0 && at < lineEnd; at = text.indexOf(QLatin1Char('+'), at + 1)) {
+    if(at > 0 && !text.at(at - 1).isSpace()) {
+      continue;
+    }
+    int best = -1;
+    qsizetype bestLen = 0;
+    for(int i = 0; i < names.size(); ++i) {
+      const QString name = names.at(i).trimmed();
+      if(name.isEmpty() || name.size() <= bestLen || at + 1 + name.size() > lineEnd) {
+        continue;
+      }
+      if(QStringView(text).mid(at + 1, name.size()).compare(name, Qt::CaseInsensitive) != 0) {
+        continue;
+      }
+      const qsizetype after = at + 1 + name.size();
+      if(after < text.size() && isWordChar(text.at(after))) {
+        continue;
+      }
+      best = i;
+      bestLen = name.size();
+    }
+    if(best >= 0) {
+      out.index = best;
+      out.start = static_cast<int>(at);
+      out.end = static_cast<int>(at + 1 + bestLen);
+      out.text = text.mid(at, 1 + bestLen);
+      return out;
+    }
+  }
+  return out;
+}
+
+QString withoutSigil(const QString& text, const ProfileSigil& sigil) {
+  if(sigil.index < 0 || sigil.start < 0) {
+    return text;
+  }
+  QString left = text.left(sigil.start);
+  QString right = text.mid(sigil.end);
+  while(left.endsWith(QLatin1Char(' '))) {
+    left.chop(1);
+  }
+  while(right.startsWith(QLatin1Char(' '))) {
+    right.remove(0, 1);
+  }
+  if(left.isEmpty() || right.isEmpty() || right.startsWith(QLatin1Char('\n'))) {
+    return left + right;
+  }
+  return left + QLatin1Char(' ') + right;
+}
+
 }  // namespace heap::capture

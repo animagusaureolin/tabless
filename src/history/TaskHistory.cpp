@@ -91,6 +91,44 @@ QVector<HistoryEvent> TaskHistory::events(const QString& profileId, const QStrin
   return m_log.value(profileId).value(taskId);
 }
 
+void TaskHistory::rekey(const QString& fromProfile, const QString& fromTask, const QString& toProfile, const QString& toTask) {
+  if(fromProfile == toProfile && fromTask == toTask) {
+    return;
+  }
+  const auto p = m_log.find(fromProfile);
+  if(p == m_log.end()) {
+    return;
+  }
+  const auto t = p->find(fromTask);
+  if(t == p->end()) {
+    return;
+  }
+  QVector<HistoryEvent> moved = std::move(*t);
+  p->erase(t);
+  if(p->isEmpty()) {
+    m_log.erase(p);
+  }
+  QVector<HistoryEvent>& into = m_log[toProfile][toTask];
+  // Anything already under the new key (it should not be) stays after.
+  moved += into;
+  into = std::move(moved);
+}
+
+void TaskHistory::dropLast(const QString& profileId, const QString& taskId, const QString& kind) {
+  const auto p = m_log.find(profileId);
+  if(p == m_log.end()) {
+    return;
+  }
+  const auto t = p->find(taskId);
+  if(t == p->end() || t->isEmpty() || t->last().kind != kind) {
+    return;
+  }
+  t->removeLast();
+  if(t->isEmpty()) {
+    p->erase(t);
+  }
+}
+
 int TaskHistory::count(const QString& profileId, const QString& taskId) const {
   return static_cast<int>(m_log.value(profileId).value(taskId).size());
 }

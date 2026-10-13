@@ -29,6 +29,7 @@ struct HistoryEvent {
   QDateTime at;
   // "created" | "status" | "title" | "priority" | "due" | "scheduled"
   // | "pushed" (a status written to the tracker)
+  // | "profile" (moved to another profile; from/to are the profiles' names)
   QString kind;
   QString from;
   QString to;
@@ -57,6 +58,11 @@ class TaskHistory {
   void append(const QString& profileId, const QString& taskId, const HistoryEvent& e);
 
   QVector<HistoryEvent> events(const QString& profileId, const QString& taskId) const;
+  // A task moved to another profile, or renumbered there (A5-14): its events
+  // go with it, as they are, under the new key.
+  void rekey(const QString& fromProfile, const QString& fromTask, const QString& toProfile, const QString& toTask);
+  // Takes back the task's last event when it is of `kind` (an undone move).
+  void dropLast(const QString& profileId, const QString& taskId, const QString& kind);
   int count(const QString& profileId, const QString& taskId) const;
 
   void clear();

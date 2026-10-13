@@ -2711,7 +2711,29 @@ QtObject {
             "selection.bar.archive": "Archive",
             "selection.bar.unarchive": "Restore",
             "selection.bar.delete": "Delete",
-            "selection.bar.clear": "Clear"
+            "selection.bar.clear": "Clear",
+
+            // ── Profiles: move, capture, Today (A5-14, A5-21, A1-17) ──
+            "taskmenu.moveProfile": "Move to profile…",
+            "moveProfile.title": "Move to profile",
+            "moveProfile.count": "%1 task|%1 tasks",
+            "moveProfile.field": "Profile",
+            "moveProfile.ph": "Type to filter",
+            "moveProfile.none": "No other profile is called that",
+            "moveProfile.move": "Move",
+            "moveProfile.trackerNote": "Tracker cards stay here: %1",
+            "moveProfile.why.one": "only one profile",
+            "selection.bar.profile": "To profile",
+            "keys.row.moveProfile": "Move to another profile",
+            "capture.profile": "profile",
+            "capture.inProfileHint": "+name: another profile",
+            "history.profile": "Moved: %1 → %2",
+            "settings.cal.todayScope": "Today shows",
+            "settings.cal.todayScope.hint": "another profile's tasks carry its name and open in it",
+            "settings.cal.todayScope.this": "This profile",
+            "settings.cal.todayScope.all": "All profiles",
+            "today.openedIn": "Opened in %1: %2",
+            "today.otherProfileKeys": "%1 is in %2: Enter opens it there"
         },
         ru: {
             // ── Common ──
@@ -5376,7 +5398,29 @@ QtObject {
             "selection.bar.archive": "В архив",
             "selection.bar.unarchive": "Вернуть",
             "selection.bar.delete": "Удалить",
-            "selection.bar.clear": "Снять"
+            "selection.bar.clear": "Снять",
+
+            // ── Profiles: move, capture, Today (A5-14, A5-21, A1-17) ──
+            "taskmenu.moveProfile": "Перенести в профиль…",
+            "moveProfile.title": "Перенести в профиль",
+            "moveProfile.count": "%1 задача|%1 задачи|%1 задач",
+            "moveProfile.field": "Профиль",
+            "moveProfile.ph": "Начните вводить название",
+            "moveProfile.none": "Другого профиля с таким названием нет",
+            "moveProfile.move": "Перенести",
+            "moveProfile.trackerNote": "Карточки трекера останутся здесь: %1",
+            "moveProfile.why.one": "профиль один",
+            "selection.bar.profile": "В профиль",
+            "keys.row.moveProfile": "Перенести в другой профиль",
+            "capture.profile": "профиль",
+            "capture.inProfileHint": "+название: другой профиль",
+            "history.profile": "Перенесена: %1 → %2",
+            "settings.cal.todayScope": "«Сегодня» показывает",
+            "settings.cal.todayScope.hint": "задачи другого профиля подписаны его названием и открываются в нём",
+            "settings.cal.todayScope.this": "Этот профиль",
+            "settings.cal.todayScope.all": "Все профили",
+            "today.openedIn": "Открыто в «%1»: %2",
+            "today.otherProfileKeys": "%1 — в профиле «%2»: Enter откроет его там"
         }
     })
 

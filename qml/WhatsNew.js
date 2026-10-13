@@ -7,6 +7,27 @@
 //
 // line: "0.8" for 0.8.0, 0.8.1, …
 var notes = {
+    "0.9": {
+        sections: [
+            { title: { en: "Move to profile", ru: "Перенос в профиль" },
+              body: { en: "M → “Move to profile…”, or the selection bar; Ctrl N and quick capture take “+Work” for the profile",
+                      ru: "M → «Перенести в профиль…» или панель выделения; Ctrl N и быстрый ввод понимают «+Работа»" } },
+            { title: { en: "Repeats", ru: "Повторы" },
+              body: { en: "“every 2 weeks”, “every mon, wed”, “every other day”; the next ones show faintly in Week and Month",
+                      ru: "«каждые 2 недели», «каждый пн и ср», «через день»; следующие видны бледно в Неделе и Месяце" } },
+            { title: { en: "Time zones", ru: "Часовые пояса" },
+              body: { en: "a meeting keeps its own zone: pick it in the meeting, or type “15:00 EST”; your local time stays next to it",
+                      ru: "у встречи свой пояс: выбрать в встрече или написать «15:00 по Москве»; рядом — ваше время" } },
+            { title: { en: "Today for every profile", ru: "Сегодня по всем профилям" },
+              body: { en: "Settings → Calendar → “Today shows”: this profile or all of them",
+                      ru: "Настройки → Календарь → «Сегодня» показывает: этот профиль или все" } },
+            { title: { en: "Fewer stumbles", ru: "Меньше заминок" },
+              body: { en: "about two hundred fixes from a day-long test by twenty kinds of engineers: keys, dates in Russian, the week grid, end of day, undo",
+                      ru: "около двухсот исправлений после теста «рабочий день» двадцати разных инженеров: клавиши, даты по-русски, сетка недели, конец дня, отмена" } }
+        ],
+        moved: { en: "Deadline is now “Due” everywhere · Scale and Contrast → Settings → Appearance · Docs got a key: G D",
+                 ru: "«Дедлайн» теперь везде «Срок» · Масштаб и Контраст → Настройки → Внешний вид · у Доков своя клавиша: G D" }
+    },
     "0.8": {
         sections: [
             { title: { en: "New name", ru: "Новое имя" },
