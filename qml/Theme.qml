@@ -27,6 +27,8 @@ QtObject {
 
     // Convenience reads — all view'ы / делегаты могут идти через Theme.
     readonly property string weekStart:    _calendar.weekStart    || "mon"
+    // Today with every profile's tasks (A1-17, Settings → Calendar).
+    readonly property bool todayAllProfiles: _calendar.todayScope === "all"
     readonly property string timeFormat:   _calendar.timeFormat   || "24h"
     // "system" (Settings → Language, DG-100): the clock of the system's locale.
     readonly property bool twelveHour: timeFormat === "12h"

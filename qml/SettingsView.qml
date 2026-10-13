@@ -110,7 +110,7 @@ Item {
             weekStart: "mon", timeFormat: "24h",
             snapMinutes: 15, showWeekends: true,
             autoFocusBlock: true, focusBlockDuration: 90,
-            standupTime: "10:00"
+            standupTime: "10:00", todayScope: "profile"
         },
         tasks: {
             idPrefix: "TASK", defaultPriority: "P2", defaultStatus: "todo",
@@ -1924,6 +1924,19 @@ Item {
                         ({value: "sun", label: I18n.t("settings.cal.weekStart.sun")})
                     ]
                     onSelected: (value) => root.set("calendar", "weekStart", value)
+                }
+                // Today with one profile or every one (A1-17): another
+                // profile's rows are labelled and open in that profile.
+                SegRow {
+                    objectName: "settings-today-scope"
+                    label: I18n.t("settings.cal.todayScope")
+                    hint: I18n.t("settings.cal.todayScope.hint")
+                    value: (root.settings.calendar && root.settings.calendar.todayScope) || "profile"
+                    options: [
+                        ({value: "profile", label: I18n.t("settings.cal.todayScope.this")}),
+                        ({value: "all", label: I18n.t("settings.cal.todayScope.all")})
+                    ]
+                    onSelected: (value) => root.set("calendar", "todayScope", value)
                 }
             }
             MoreBlock {

@@ -70,6 +70,7 @@ var ITEMS = [
     ["calendar", "row", "settings.cal.workDays"],
     ["calendar", "row", "settings.cal.workHours"],
     ["calendar", "row", "settings.cal.weekStart"],
+    ["calendar", "row", "settings.cal.todayScope"],
     ["calendar", "row", "settings.cal.showWeekends"],
     ["calendar", "row", "settings.cal.snap"],
     ["calendar", "row", "settings.cal.autoFocus"],

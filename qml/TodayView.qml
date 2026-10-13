@@ -47,7 +47,19 @@ FocusScope {
     // "+ Добавить человека" under the list: a new person to write to.
     signal personAddRequested()
 
-    property bool allProfiles: false
+    // Every profile's tasks (A1-17, a setting): another profile's rows are
+    // labelled with its name and colour and read-only here; Enter opens one
+    // in its own profile.
+    property bool allProfiles: Theme.todayAllProfiles
+    signal otherProfileTaskClicked(string id, string profileId)
+    // A task key pressed on another profile's row: it says where it lives.
+    signal otherProfileKeys(string id, string profileName)
+    function _isOther(t) { return !!(t && t.profileId && String(t.profileId).length > 0); }
+    function _openTask(t) {
+        if (!t || !t.id) return;
+        if (root._isOther(t)) root.otherProfileTaskClicked(t.id, t.profileId);
+        else root.taskClicked(t.id);
+    }
     function focusView() {
         if (root.firstRun) firstRunHero.focusInput();
         else root.forceActiveFocus();
@@ -291,7 +303,7 @@ FocusScope {
     }
     readonly property string cursorTaskId: {
         const it = root._cursorItem();
-        return it && it.kind === "task" ? it.id : "";
+        return it && it.kind === "task" && !root._isOther(it.block) ? it.id : "";
     }
     function clearCursor() {
         root.cursorVisible = false;
@@ -327,6 +339,10 @@ FocusScope {
     onRowsChanged: if (root.cursorVisible) Qt.callLater(root._reconcile)
     function _actionCardId() {
         const it = root._cursorItem();
+        if (it && it.kind === "task" && root._isOther(it.block)) {
+            root.otherProfileKeys(it.id, it.block.profileName || "");
+            return "";
+        }
         if (it) return it.kind === "task" ? it.id : "";
         if (AppController.selectionCount === 1) return AppController.selectedTaskIds[0];
         return "";
@@ -335,14 +351,14 @@ FocusScope {
         const it = root._cursorItem();
         if (!it) { root.moveCursor(0, 0); return; }
         if (it.kind === "undated") { root.undatedRequested(); return; }
-        if (it.kind === "task") root.taskClicked(it.id);
+        if (it.kind === "task") root._openTask(it.block);
         // The day's occurrence, not the series (IDIOT-CAL-1): Main finds it
         // by the ISO date the block carries.
         else root.eventClicked(it.id, it.block.occurrence || null);
     }
     function toggleCursorSelection() {
         const it = root._cursorItem();
-        if (it && it.kind === "task") AppController.toggleTaskSelection(it.id);
+        if (it && it.kind === "task" && !root._isOther(it.block)) AppController.toggleTaskSelection(it.id);
         else if (!it) root.moveCursor(0, 0);
     }
     function openCursorMenu() {
@@ -356,7 +372,7 @@ FocusScope {
     // Shift J / K: a grid step; Ctrl Shift J / K: its block longer / shorter.
     function moveSelectionOrCard(dx) {
         const it = root._cursorItem();
-        if (!it || it.kind !== "task") return;
+        if (!it || it.kind !== "task" || root._isOther(it.block)) return;
         const t = AppController.taskById(it.id);
         if (!t || !t.id) return;
         const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, dx, root.day, AppController.today);
@@ -364,14 +380,14 @@ FocusScope {
     }
     function moveCursorCard(dx, dy) {
         const it = root._cursorItem();
-        if (!it || it.kind !== "task" || dy === 0) return;
+        if (!it || it.kind !== "task" || dy === 0 || root._isOther(it.block)) return;
         const t = AppController.taskById(it.id);
         const r = t ? Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, dy, Theme.snapMinutes) : null;
         if (r) AppController.rescheduleTask(it.id, "scheduled", r.when, true);
     }
     function resizeCursor(steps) {
         const it = root._cursorItem();
-        if (!it || it.kind !== "task" || it.block.dayOnly || it.block.fromPrevDay || it.block.toNextDay) return false;
+        if (!it || it.kind !== "task" || it.block.dayOnly || it.block.fromPrevDay || it.block.toNextDay || root._isOther(it.block)) return false;
         const step = Theme.snapMinutes / 60;
         const end = Math.min(24, it.block.end + steps * step);
         if (end - it.block.start < step - 1e-9) return false;
@@ -691,7 +707,7 @@ FocusScope {
                                     TimerMark { visible: !!leadCard.t.isTiming; taskId: leadCard.t.id || "" }
                                 }
                             }
-                            ClickArea { label: leadCard.t.title || ""; onActivated: root.taskClicked(leadCard.t.id) }
+                            ClickArea { label: leadCard.t.title || ""; onActivated: root._openTask(leadCard.t) }
                         }
                         // The others in progress, as lines; quiet draws all
                         // of them this way.
@@ -714,7 +730,7 @@ FocusScope {
                                     color: Theme.text
                                     font.family: Theme.fontUi
                                     font.pixelSize: Theme.fsMd
-                                    ClickArea { label: parent.text; onActivated: root.taskClicked(ipRow.modelData.id) }
+                                    ClickArea { label: parent.text; onActivated: root._openTask(ipRow.modelData) }
                                 }
                                 TimerMark { visible: !!ipRow.modelData.isTiming; taskId: ipRow.modelData.id }
                             }
@@ -1023,6 +1039,18 @@ FocusScope {
         ClickArea { id: nbCA; label: nb.label; shortcutId: nb.shortcutId; onActivated: nb.activated() }
     }
 
+    // Another profile's row (A1-17): a dot in that profile's colour before
+    // the title; its name is in the caption.
+    component ProfileDot: Rectangle {
+        property var block: ({})
+        visible: root._isOther(block)
+        Layout.alignment: Qt.AlignVCenter
+        implicitWidth: Theme.spSm
+        implicitHeight: Theme.spSm
+        radius: width / 2
+        color: block && block.profileColor ? block.profileColor : Theme.textDim
+    }
+
     // A heading on the side: the bold section title, or quiet's small grey
     // words.
     component SideHead: Text {
@@ -1118,20 +1146,25 @@ FocusScope {
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: Theme.spXs / 2
                 StatusRing { size: root.cards ? Theme.statusRingSize : Theme.statusRingSize - 2; category: tl.task.category || "todo" }
-                ClickArea { label: I18n.t("taskmenu.done"); shortcutId: "task.done"; onActivated: AppController.toggleDone([tl.task.id]) }
+                ClickArea { enabled: !root._isOther(tl.task); label: I18n.t("taskmenu.done"); shortcutId: "task.done"; onActivated: AppController.toggleDone([tl.task.id]) }
             }
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spXs / 2
-                Text {
+                RowLayout {
                     Layout.fillWidth: true
-                    text: tl.task.title || ""
-                    elide: Text.ElideRight
-                    color: Theme.text
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsMd
-                    font.weight: root.cards ? Theme.fwTitle : Theme.fwBody
-                    ClickArea { label: parent.text; onActivated: root.taskClicked(tl.task.id) }
+                    spacing: Theme.spSm
+                    ProfileDot { block: tl.task }
+                    Text {
+                        Layout.fillWidth: true
+                        text: tl.task.title || ""
+                        elide: Text.ElideRight
+                        color: Theme.text
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                        font.weight: root.cards ? Theme.fwTitle : Theme.fwBody
+                        ClickArea { label: parent.text; onActivated: root._openTask(tl.task) }
+                    }
                 }
                 Text {
                     visible: tl.sub.length > 0
@@ -1246,20 +1279,25 @@ FocusScope {
                     Layout.topMargin: Theme.spXs / 2
                     implicitWidth: Theme.statusRingSize; implicitHeight: Theme.statusRingSize
                     StatusRing { category: dr.b.category || "todo" }
-                    ClickArea { label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
+                    ClickArea { enabled: !root._isOther(dr.b); label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Theme.spXs / 2
-                    Text {
+                    RowLayout {
                         Layout.fillWidth: true
-                        text: dr.b.title || ""
-                        elide: Text.ElideRight
-                        color: dr.b.past ? Theme.textMuted : Theme.text
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsMd
-                        // The sheets set day rows at 500 (R4-003).
-                        font.weight: Theme.fwTitle
+                        spacing: Theme.spSm
+                        ProfileDot { block: dr.b }
+                        Text {
+                            Layout.fillWidth: true
+                            text: dr.b.title || ""
+                            elide: Text.ElideRight
+                            color: dr.b.past ? Theme.textMuted : Theme.text
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                            // The sheets set day rows at 500 (R4-003).
+                            font.weight: Theme.fwTitle
+                        }
                     }
                     Text {
                         Layout.fillWidth: true
@@ -1299,19 +1337,24 @@ FocusScope {
                 implicitWidth: Theme.statusRingSize; implicitHeight: Theme.statusRingSize
                 MeetingIcon { visible: dr.meeting; anchors.centerIn: parent; ink: Theme.textMuted }
                 StatusRing { visible: !dr.meeting; anchors.centerIn: parent; size: Theme.statusRingSize - 1; category: dr.b.category || "todo" }
-                ClickArea { enabled: !dr.meeting; label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
+                ClickArea { enabled: !dr.meeting && !root._isOther(dr.b); label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
             }
             ColumnLayout {
                 visible: !root.stacked
                 Layout.fillWidth: true
                 spacing: Theme.spXs / 2
-                Text {
+                RowLayout {
                     Layout.fillWidth: true
-                    text: dr.b.title || ""
-                    elide: Text.ElideRight
-                    color: dr.b.past ? Theme.textMuted : Theme.text
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsLg
+                    spacing: Theme.spSm
+                    ProfileDot { block: dr.b }
+                    Text {
+                        Layout.fillWidth: true
+                        text: dr.b.title || ""
+                        elide: Text.ElideRight
+                        color: dr.b.past ? Theme.textMuted : Theme.text
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsLg
+                    }
                 }
                 Text {
                     Layout.fillWidth: true
@@ -1351,7 +1394,7 @@ FocusScope {
             width: parent.width - x
             height: parent.height
             label: dr.b.title || ""
-            onActivated: dr.meeting ? root.eventClicked(dr.b.id, dr.b.occurrence || null) : root.taskClicked(dr.b.id)
+            onActivated: dr.meeting ? root.eventClicked(dr.b.id, dr.b.occurrence || null) : root._openTask(dr.b)
         }
 
         // Bold: a free window and the end of the day, facts beside a line.
