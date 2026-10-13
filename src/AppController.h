@@ -3,10 +3,12 @@
 #include "Models.h"
 
 #include "board/Rank.h"
+#include "capture/CaptureParse.h"
 #include "history/TaskHistory.h"
 #include "integrations/SyncHealth.h"
 #include "notify/EventLog.h"
 #include "notify/NotifyPayload.h"
+#include "profile/ProfileMove.h"
 #include "safety/EndOfDay.h"
 #include "undo/UndoStack.h"
 
@@ -722,7 +724,9 @@ class AppController : public QObject {
   // One line of task input read the way quickTaskDraft reads it (APP-245):
   // {title, when, whenHasTime, due, dueHasTime, estimateMinutes, recurrence,
   //  spans: [{start, end, kind, text}]} — offsets into `raw` after the meta
-  // (priority, #labels, "// …") is taken out, i.e. into `head`.
+  // (priority, #labels, "// …") is taken out, i.e. into `head`. A "+Profile
+  // name" (A5-21) comes back as profileId / profileName and a "profile" mark,
+  // and quickTaskDraft carries it as _targetProfileId.
   Q_INVOKABLE QVariantMap captureParse(const QString& raw,
                                        const QDateTime& reference = QDateTime(),
                                        const QStringList& rejected = {}) const;
@@ -1726,6 +1730,19 @@ class AppController : public QObject {
   Q_INVOKABLE void deleteProfile(const QString& id);
   Q_INVOKABLE QString duplicateProfile(const QString& id, const QString& newName);
   Q_INVOKABLE QVariantMap profileById(const QString& id) const;
+  // Moves tasks of the active profile to `profileId` (A5-14): history,
+  // checklist, local layer and timer sessions with them; a local id the
+  // target holds is renumbered and what pointed at it follows. A tracker card
+  // stays (it belongs to the profile whose integration pulled it) and is
+  // counted. One undo step, on both profiles' stacks. Returns {moved,
+  // trackerKept, renamed: {old: new}, profileName, error}; error "noProfile",
+  // "sameProfile", "tracker" (only tracker cards asked for) or "nothing".
+  Q_INVOKABLE QVariantMap moveTasksToProfile(const QStringList& ids, const QString& profileId);
+
+  // The picker for `ids`, from wherever a task menu is (moveToProfileRequested).
+  Q_INVOKABLE void requestMoveToProfile(const QStringList& ids) {
+    emit moveToProfileRequested(ids);
+  }
   // Whether a profile other than `exceptId` is already called `name`
   // (ignoring case): the editor says so inline (IDIOT-SHELL-12).
   Q_INVOKABLE bool profileNameTaken(const QString& name, const QString& exceptId) const;
@@ -2131,6 +2148,9 @@ class AppController : public QObject {
   // `profileId` is the profile the task lives in; the window switches there
   // only once the editor's unsaved edits are settled (PRES-1).
   void openTaskRequested(const QString& id, const QString& profileId);
+  // A card's menu asked for "Move to profile…" (A5-14): the window opens
+  // its picker for these tasks.
+  void moveToProfileRequested(const QStringList& ids);
   // "Open" on a meeting / standup reminder: the calendar at `date`, and the
   // event's editor when `eventId` names a stored event (APP-155).
   void openEventRequested(const QString& eventId, const QDate& date);
@@ -2709,6 +2729,21 @@ class AppController : public QObject {
   bool ticketKeyTaken(const QString& key) const;
   QString taskIdForKey(const QString& key) const;
   void restoreWorkspaceUndo(const QString& profileId);
+  // Runs a recorded move between profiles back (backward) or again, and
+  // rewrites the entry to say where the tasks are now. False when either
+  // profile is gone or nothing could move.
+  bool applyProfileMove_(heap::undo::Entry& entry, bool backward);
+  // The "+Profile name" in a line of capture (A5-21), against every profile.
+  heap::capture::ProfileSigil profileSigilIn(const QString& raw) const;
+  // The twin of a move entry on the other profile's parked stack goes when
+  // one side takes the move back (and comes back with a redo).
+  QString profileMoveOtherSide_(const heap::undo::Entry& entry) const;
+  // Moves `ids` from one profile to another (either may be the active one)
+  // and brings the live models in step. See profile/ProfileMove.h.
+  heap::profilemove::Result relocateTasks_(const QString& fromId,
+                                           const QString& toId,
+                                           const QStringList& ids,
+                                           heap::profilemove::Options opt);
 
   // Selection state
   QSet<QString> m_selectedTaskIds;

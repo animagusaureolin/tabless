@@ -677,10 +677,22 @@ struct Entry {
   // Events the deletion detached from the profile (profileId cleared), so the
   // undo can hand them back (PLAT-14).
   QStringList profileEventIds;
+  // A move to another profile (A5-14) is not a diff of the active models
+  // either: the tasks leave one workspace for another. The entry sits on
+  // both profiles' stacks under one serial, so u in either takes it back
+  // (AppController::applyProfileMove_), and it says where everything is now.
+  bool profileMove = false;
+  QString moveFrom;
+  QString moveTo;
+  QStringList moveIds;                       // the tasks' ids in moveFrom
+  QHash<QString, QString> moveRenamed;       // id in moveFrom -> id in moveTo, where they differ
+  QHash<QString, int> moveRows;              // id in moveFrom -> its row there
+  QHash<QString, QString> moveStatusBefore;  // id in moveFrom -> its column, where the move changed it
+  QHash<QString, QString> moveStatusAfter;   // id in moveTo -> the column it got
 
   bool isEmpty() const {
-    return !profileRemoved && !statusesTouched && !docsStateTouched && !savedViewsTouched && tasks.isEmpty() && events.isEmpty() &&
-           people.isEmpty() && docPages.isEmpty() && notes.isEmpty();
+    return !profileRemoved && !profileMove && !statusesTouched && !docsStateTouched && !savedViewsTouched && tasks.isEmpty() &&
+           events.isEmpty() && people.isEmpty() && docPages.isEmpty() && notes.isEmpty();
   }
 };
 

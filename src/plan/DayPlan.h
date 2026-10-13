@@ -39,6 +39,7 @@ struct TaskIn {
   QDateTime scheduledAt;
   int minutes = 60;     // the block's length: the estimate, else the setting
   QString profileName;  // when the day shows every profile
+  QString profileId;    // the same, by id (A1-17)
 };
 
 struct Block {
@@ -51,6 +52,7 @@ struct Block {
   QString attendees;
   QString occurrence;
   QString profileName;
+  QString profileId;  // another profile's task when the day shows them all
   double start = 0;  // hours on this day, may run below 0 / past 24 for display
   double end = 0;
   bool past = false;

@@ -137,6 +137,7 @@ Day buildDay(const QDate& date,
     b.status = t.status;
     b.category = t.category;
     b.profileName = t.profileName;
+    b.profileId = t.profileId;
     b.start = t.scheduledAt.time().hour() + (t.scheduledAt.time().minute() / 60.0);
     b.end = b.start + (std::max(15, t.minutes) / 60.0);
     b.past = b.end <= nowHour;
