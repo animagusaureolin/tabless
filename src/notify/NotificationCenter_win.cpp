@@ -84,9 +84,10 @@ class HString {
 };
 
 // The user's own heap owns the registrations; a throwaway run (--data-dir)
-// only fills in what is missing, so it never repoints the real one at itself.
+// or a channel build only fills in what is missing, so it never repoints the
+// real one at itself.
 bool mayOverwriteRegistration() {
-  return !heap::paths::dataDirOverridden();
+  return !heap::paths::dataDirOverridden() && !heap::brand::isChannelBuild();
 }
 
 // tabless://… → `"tabless.exe" "%1"`, so toast clicks reach Tabless. Per

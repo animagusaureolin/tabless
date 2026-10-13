@@ -10,9 +10,24 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    # none: a -dev build attached to the run. A channel publishes it to that
+    # channel's rolling pre-release, as channels.yml does.
+    inputs:
+      channel:
+        type: choice
+        options: [none, unstable, feature]
+        default: none
   # The nightly workflow's release dry run. Called from a branch, it builds
   # like a manual dispatch: a -dev version, nothing tagged or published.
+  # channels.yml passes a channel (feature / unstable): the build is versioned
+  # vX.Y.Z-<channel>.<sha> and replaces the files of that channel's one rolling
+  # pre-release (publish-channel), so a test build is a download away without
+  # a new release per push.
   workflow_call:
+    inputs:
+      channel:
+        type: string
+        default: ""
 
 # Read-only by default; the publish job asks for what it needs.
 permissions:
@@ -40,6 +55,7 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
       release: ${{ steps.tag.outputs.release }}
       prerelease: ${{ steps.tag.outputs.prerelease }}
+      channel: ${{ steps.tag.outputs.channel }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -47,6 +63,8 @@ jobs:
       - name: Resolve version & release kind
         id: tag
         shell: bash
+        env:
+          CHANNEL: ${{ inputs.channel != 'none' && inputs.channel || '' }}
         run: |
           set -euo pipefail
           # Single source of truth for the numeric version.
@@ -55,7 +73,17 @@ jobs:
             echo "::error::could not read project VERSION from CMakeLists.txt"
             exit 1
           fi
-          if [ "${{ github.ref_type }}" = "tag" ]; then
+          case "${CHANNEL:-}" in
+            ""|feature|unstable) ;;
+            *) echo "::error::unknown channel '$CHANNEL' (feature or unstable)"; exit 1 ;;
+          esac
+          if [ -n "${CHANNEL:-}" ]; then
+            # Channel build: a pre-release string the updater ranks below any
+            # real release, published only to the channel's rolling release.
+            tag="v${cmver}-${CHANNEL}.$(git rev-parse --short HEAD)"
+            release=false
+            prerelease=true
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
             # Real release: the pushed tag drives naming. Its numeric core must
             # equal the CMake version so the binary and the release never drift.
             tag="${{ github.ref_name }}"
@@ -83,6 +111,7 @@ jobs:
             echo "tag=$tag"
             echo "release=$release"
             echo "prerelease=$prerelease"
+            echo "channel=${CHANNEL:-}"
           } >> "$GITHUB_OUTPUT"
 
   # ──────────────────────────────────────────────────────────────────
@@ -100,8 +129,10 @@ jobs:
     # Job-level env so the optional signing steps' `if:` can read the secret (a
     # step's own env is not reliably visible to its own `if`, and `secrets`
     # cannot be referenced in `if` directly). Mirrors the macOS signing pattern.
+    # A channel build ships unsigned: it is a test build, and SignPath's quota
+    # is for releases.
     env:
-      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      SIGNPATH_API_TOKEN: ${{ needs.meta.outputs.channel == '' && secrets.SIGNPATH_API_TOKEN || '' }}
       SIGNPATH_ORG_ID: ${{ vars.SIGNPATH_ORG_ID }}
       SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
       SIGNPATH_POLICY_SLUG: ${{ vars.SIGNPATH_POLICY_SLUG }}
@@ -168,7 +199,8 @@ jobs:
         shell: msys2 {0}
         run: |
           MSYS_ROOT=$(cygpath -m "${{ steps.msys2.outputs.msys2-location }}")
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMSYS_ROOT="$MSYS_ROOT"
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMSYS_ROOT="$MSYS_ROOT" \
+            -DHEAP_CHANNEL="${{ needs.meta.outputs.channel }}"
           cmake --build build --target heap --parallel $(nproc)
 
       - name: Assemble portable bundle
@@ -272,8 +304,12 @@ jobs:
 
       - name: Build installer
         shell: pwsh
+        env:
+          CHANNEL: ${{ needs.meta.outputs.channel }}
         run: |
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+          # A channel build installs beside Tabless, not over it (tabless.iss).
+          $channel = @(if ($env:CHANNEL) { "/DChannel=$env:CHANNEL" })
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" @channel `
             /DAppVersion="${{ needs.meta.outputs.tag }}" `
             /DBundleDir="$($PWD.Path)\build\heap-portable" `
             "/Ftabless-${{ needs.meta.outputs.tag }}-windows-setup" `
@@ -390,7 +426,8 @@ jobs:
           HEAP_OAUTH_BITBUCKET_CLIENT_ID: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_ID }}
           HEAP_OAUTH_BITBUCKET_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_SECRET }}
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF \
+            -DHEAP_CHANNEL="${{ needs.meta.outputs.channel }}"
           cmake --build build --parallel --target heap
 
       - name: Build AppImage
@@ -463,8 +500,9 @@ jobs:
     # Job-level env so the optional signing step's `if:` can read it (a step's
     # own env is not reliably visible to its own `if`, and `secrets` cannot be
     # referenced in `if` directly).
+    # A channel build is ad-hoc signed and not notarized, like a fork's.
     env:
-      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_P12: ${{ needs.meta.outputs.channel == '' && secrets.MACOS_CERT_P12 || '' }}
       MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
       MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
       MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
@@ -516,7 +554,8 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DHEAP_BUILD_TESTS=OFF \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DHEAP_CHANNEL="${{ needs.meta.outputs.channel }}"
           cmake --build build --parallel --target heap
           test -d build/Tabless.app
 
@@ -669,19 +708,6 @@ jobs:
             echo "::error::two artifacts share a file name"; find dist -mindepth 2 -type f; exit 1
           fi
 
-      # lowkey 0.8 looks for its update under lowkey's names (Updater::assetNameFor
-      # before APP-283). The same files go up under those names too, so every
-      # 0.8 install finds this release and moves to Tabless by its own updater.
-      # Drop this once 0.8 is no longer worth carrying.
-      - name: Copies under lowkey's names for 0.8 updaters
-        working-directory: dist
-        run: |
-          set -eu
-          for f in tabless-*-windows-setup.exe tabless-*-windows-portable.zip tabless-*-macos.dmg tabless-*-linux-x86_64.AppImage; do
-            [ -f "$f" ] && cp "$f" "lowkey-${f#tabless-}"
-          done
-          ls -1
-
       - name: List artifacts
         run: find dist -type f -printf '%p (%s bytes)\n'
 
@@ -756,6 +782,85 @@ jobs:
           prerelease: true
           make_latest: false
           files: dist/*
+
+  # ──────────────────────────────────────────────────────────────────
+  # Channel build (APP-309): one rolling pre-release per channel, tag
+  # channel-<name>, moved to the built commit, its files replaced. Never the
+  # latest release, so the updater (/releases/latest) never offers it, and
+  # the release list gains two entries, not one per push.
+  # ──────────────────────────────────────────────────────────────────
+  publish-channel:
+    name: Publish channel build
+    needs: [meta, package-windows, package-linux, package-macos]
+    if: >-
+      ${{ always() && needs.meta.result == 'success'
+          && needs.meta.outputs.channel != ''
+          && needs.package-windows.result == 'success'
+          && needs.package-linux.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # One upload at a time per channel: two runs replacing the same assets
+    # would leave a mix of both builds.
+    concurrency:
+      group: publish-channel-${{ needs.meta.outputs.channel }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: Flatten artifacts & checksums
+        run: |
+          set -eu
+          find dist -mindepth 2 -type f -exec mv -n -t dist {} +
+          find dist -mindepth 1 -type d -empty -delete
+          cd dist
+          find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Replace the channel release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CHANNEL: ${{ needs.meta.outputs.channel }}
+          VERSION: ${{ needs.meta.outputs.tag }}
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          tag="channel-$CHANNEL"
+          {
+            echo "Rolling **$CHANNEL** build — replaced on every build, not a release. The in-app updater never offers it."
+            echo
+            echo "- Version: \`$VERSION\`"
+            echo "- Commit: $SHA ($REF)"
+            echo "- Built by: $RUN_URL"
+            echo
+            echo "Unsigned. Windows: SmartScreen → **More info → Run anyway**. macOS: right-click Tabless.app → **Open**."
+            echo
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } > notes.md
+          if gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then
+            # Point the tag at this commit, then swap every asset.
+            gh api -X PATCH "repos/$REPO/git/refs/tags/$tag" -f sha="$SHA" -F force=true >/dev/null
+            gh release view "$tag" --repo "$REPO" --json assets --jq '.assets[].name' |
+              while IFS= read -r a; do gh release delete-asset "$tag" "$a" --repo "$REPO" --yes; done
+            gh release edit "$tag" --repo "$REPO" --title "Tabless $CHANNEL build" \
+              --notes-file notes.md --prerelease --latest=false
+          else
+            gh release create "$tag" --repo "$REPO" --target "$SHA" \
+              --title "Tabless $CHANNEL build" --notes-file notes.md --prerelease --latest=false
+          fi
+          gh release upload "$tag" dist/* --repo "$REPO" --clobber
+          echo "published to $(gh release view "$tag" --repo "$REPO" --json url --jq .url)"
 
   # ──────────────────────────────────────────────────────────────────
   # The full CI tier on the tagged commit (macOS QML suite, ASan + UBSan —

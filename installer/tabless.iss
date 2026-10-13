@@ -16,17 +16,34 @@
   #define BundleDir "..\build\heap-portable"
 #endif
 
+; A channel build (APP-309, /DChannel=feature or unstable) installs beside the
+; user's own Tabless as a program of its own: its own AppId, folder, name and
+; uninstaller, and none of the shared registrations below (URL schemes, login
+; item, the old installs' leftovers), which its uninstall would otherwise take
+; away from the real Tabless.
+#ifdef Channel
+  #define AppTitle "Tabless " + Channel
+  #if Channel == "feature"
+    #define AppIdValue "{{9B3E7C41-5A2D-4F8E-B6C1-3D7A9E2F4B18}"
+  #else
+    #define AppIdValue "{{C4A81F6E-2B9D-4E37-8F5A-6D1E3B7C9A25}"
+  #endif
+#else
+  #define AppTitle "Tabless"
+  #define AppIdValue "{{6F4C9E2A-3B7D-4E1F-9A6C-0D2B1E8F5A44}"
+#endif
+
 [Setup]
 ; The same AppId heap and lowkey used: installing Tabless over lowkey 0.8 or
 ; heap 0.7 is an upgrade of the same program (one entry in Apps & features,
 ; one uninstaller), not a second app beside it (APP-280, APP-283).
-AppId={{6F4C9E2A-3B7D-4E1F-9A6C-0D2B1E8F5A44}
-AppName=Tabless
+AppId={#AppIdValue}
+AppName={#AppTitle}
 AppVersion={#AppVersion}
 AppPublisher=Tabless
 ; A new install goes to …\Tabless. An upgrade keeps the previous install's
 ; folder (lowkey's or heap's), so nothing that points into it breaks.
-DefaultDirName={autopf}\Tabless
+DefaultDirName={autopf}\{#AppTitle}
 ; Always ask where to install, also on an upgrade (prefilled with the folder
 ; of the previous install).
 DisableDirPage=no
@@ -36,11 +53,11 @@ DisableDirPage=no
 ; previous install used.
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog commandline
-DefaultGroupName=Tabless
+DefaultGroupName={#AppTitle}
 DisableProgramGroupPage=yes
 SetupIconFile=..\design\brand-export\tabless\tabless.ico
 UninstallDisplayIcon={app}\tabless.exe
-UninstallDisplayName=Tabless
+UninstallDisplayName={#AppTitle}
 OutputDir={#SourcePath}\Output
 Compression=lzma2
 SolidCompression=yes
@@ -54,6 +71,7 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 
+#ifndef Channel
 [InstallDelete]
 ; heap 0.7's and lowkey 0.8's shortcuts and files: the program is tabless.exe,
 ; and Tabless moves the autostart entry over itself. lowkey.exe stays, as a
@@ -68,6 +86,7 @@ Type: files; Name: "{autodesktop}\lowkey.lnk"
 Type: files; Name: "{app}\lowkey-cli.exe"
 Type: files; Name: "{app}\lowkey-updater.exe"
 Type: files; Name: "{app}\lowkey-portable.txt"
+#endif
 
 [Files]
 ; Recursively pack the entire portable bundle (tabless.exe + Qt runtime + QML,
@@ -77,10 +96,11 @@ Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdi
 [Icons]
 ; The AppUserModelID is what Windows shows toasts under (APP-155); tabless.exe
 ; sets the same one on its process (NotificationCenter_win.cpp).
-Name: "{group}\Tabless"; Filename: "{app}\tabless.exe"; AppUserModelID: "local.tabless.app"
-Name: "{group}\Uninstall Tabless"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Tabless"; Filename: "{app}\tabless.exe"; AppUserModelID: "local.tabless.app"; Tasks: desktopicon
+Name: "{group}\{#AppTitle}"; Filename: "{app}\tabless.exe"; AppUserModelID: "local.tabless.app"
+Name: "{group}\Uninstall {#AppTitle}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#AppTitle}"; Filename: "{app}\tabless.exe"; AppUserModelID: "local.tabless.app"; Tasks: desktopicon
 
+#ifndef Channel
 [Registry]
 ; tabless:// — toast buttons start Tabless with a tabless://notify URI (APP-155).
 ; Tabless also registers it per user at startup; this covers the first toast.
@@ -100,6 +120,7 @@ Root: HKA; Subkey: "Software\Classes\heap\shell\open\command"; ValueType: string
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "tabless"; Flags: uninsdeletevalue dontcreatekey
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "lowkey"; Flags: uninsdeletevalue dontcreatekey
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "heap"; Flags: uninsdeletevalue dontcreatekey
+#endif
 
 [Run]
-Filename: "{app}\tabless.exe"; Description: "Launch Tabless"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\tabless.exe"; Description: "Launch {#AppTitle}"; Flags: nowait postinstall skipifsilent

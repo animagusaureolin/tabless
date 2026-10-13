@@ -57,6 +57,7 @@
 #include "plan/DayPlan.h"
 #include "plan/FreeWindow.h"
 #include "platform/Accessibility.h"
+#include "platform/Brand.h"
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
 #include "platform/Sound.h"
@@ -1439,7 +1440,8 @@ AppController::AppController(QObject* parent) :
     // Opt-out background check shortly after startup (never auto-downloads). The
     // delay lets settings load and the QML toast bar come up first.
     QTimer::singleShot(3000, this, [this]() {
-      if(settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
+      // A channel build is replaced by the next one, not updated (APP-309).
+      if(!heap::brand::isChannelBuild() && settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
         checkForUpdates();
       }
     });
