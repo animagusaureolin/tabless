@@ -12,6 +12,7 @@ import QtQuick.Controls
 import TodoCpp
 import "PaletteMatch.js" as Match
 import "KeyRules.js" as KeyRules
+import "SettingsIndex.js" as SettingsIdx
 
 Popup {
     PopupArrival { popup: root }
@@ -131,8 +132,16 @@ Popup {
         "welcome.replay":   "palette.cmd.replayTour"
     })
 
-    readonly property var _settingsSections: ["profile", "appearance", "language", "notifications", "safety",
-                                              "calendar", "tasks", "shortcuts", "integrations", "git", "data", "help", "about"]
+    // The sections Settings has, from its own catalogue: a hand-kept list
+    // still offered "Profile · Name, role, team", gone since DG-101 (F3-EYES-2).
+    readonly property var _settingsSections: SettingsIdx.SECTIONS.map(s => s.id)
+    // The English name of a command beside the Russian one: engineers type
+    // "sett", "backup" whatever the UI language (F3-EYES-7).
+    function _withEnglish(words, enLabel) {
+        if (I18n.lang === "en" || !enLabel) return words || "";
+        return ((words || "") + " " + enLabel).trim();
+    }
+    function _enOf(key) { return root._withEnglish("", I18n.dict.en[key] || ""); }
 
     // Commands: every app-wide action in the shortcut catalog (so the palette
     // and the keys never disagree on what exists or what it is called), each
@@ -156,11 +165,13 @@ Popup {
             // The 0.6 tools read clearer in the palette with what they do.
             const label = _paletteLabels[c.id] ? I18n.t(_paletteLabels[c.id]) : c.label;
             out.push({ kind: "command", commandId: c.id, label: label, sub: AppController.keyText(c.sequence || ""),
-                       body: c.description || "", keywords: root._keywordsFor(c.id) });
+                       body: c.description || "",
+                       keywords: root._withEnglish(root._keywordsFor(c.id),
+                                                   _paletteLabels[c.id] ? I18n.dict.en[_paletteLabels[c.id]] : c.labelEn) });
         }
         // A new event at 9:00 of the selected day; the catalog's key for a
         // new event (at the next free slot) is the nearest thing to a hint.
-        out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"),
+        out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"), keywords: root._enOf("palette.cmd.newEvent"),
                    sub: AppController.shortcutText("cal.newEvent") });
         // Saved views: one command per view, by name, plus saving the current
         // filters as one.
@@ -171,7 +182,8 @@ Popup {
                        sub: v < 9 ? AppController.shortcutText("savedView." + (v + 1)) : "",
                        body: views[v].query });
         }
-        out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "" });
+        out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "",
+                   keywords: root._enOf("palette.cmd.saveView") });
         // What left the selection bar, the profile menu and the column menu
         // for the sheets (DG-025, DG-026, DG-151): still one command away.
         // "когда-нибудь" / "someday" / "отложить" find parking the task in
@@ -183,18 +195,26 @@ Popup {
             out.push({ kind: "command", commandId: "selection.carry", label: I18n.t("palette.cmd.selCarry"), sub: "" });
         }
         for (const pc of ["profile.duplicate", "ics.import", "ics.export", "vault.import", "vault.export"])
-            out.push({ kind: "command", commandId: pc, label: I18n.t("palette.cmd." + pc), sub: "" });
+            out.push({ kind: "command", commandId: pc, label: I18n.t("palette.cmd." + pc), sub: "",
+                       keywords: root._enOf("palette.cmd." + pc) });
         if (AppController.currentView === "board")
             for (const cc of ["color", "archive", "doing"])
-                out.push({ kind: "command", commandId: "column:" + cc, label: I18n.t("palette.cmd.column." + cc), sub: "" });
+                out.push({ kind: "command", commandId: "column:" + cc, label: I18n.t("palette.cmd.column." + cc), sub: "",
+                           keywords: root._enOf("palette.cmd.column." + cc) });
         // Integrations health (APP-164) lives at the top of that section.
         out.push({ kind: "setting", commandId: "settings:integrations", label: I18n.t("palette.cmd.integrationsHealth"),
-                   sub: I18n.t("health.hint") });
+                   sub: I18n.t("health.hint"), keywords: root._enOf("palette.cmd.integrationsHealth") });
         for (let j = 0; j < _settingsSections.length; j++) {
             const id = _settingsSections[j];
+            // "Tabless %1 · stable": the version in, as the page's header has
+            // it (F3-EYES-3).
+            const sub = I18n.t("settings.section." + id + ".sub");
+            const enTitle = I18n.dict.en["settings.section." + id + ".title"] || "";
             out.push({ kind: "setting", commandId: "settings:" + id,
                        label: I18n.t("palette.cmd.settings").arg(I18n.t("settings.section." + id + ".title")),
-                       sub: I18n.t("settings.section." + id + ".sub"), keywords: root._keywordsFor("settings:" + id) });
+                       sub: id === "about" ? sub.replace("%1", AppController.appVersion) : sub,
+                       keywords: root._withEnglish(root._keywordsFor("settings:" + id),
+                                                   enTitle ? I18n.dict.en["palette.cmd.settings"].arg(enTitle) : "") });
         }
         return out;
     }

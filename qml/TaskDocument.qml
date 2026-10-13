@@ -184,6 +184,7 @@ FocusScope {
     function _load() {
         if (!root._exists) return;
         root._loading = true;
+        root._passingThrough = false;
         titleField.text = root.task.title;
         body.load(root._isTicket ? AppController.taskLocalNotes(root.taskId) : String(root.task.desc || ""));
         root._loadedId = root.taskId;
@@ -468,19 +469,113 @@ FocusScope {
             root._shown = root._shown.filter((k) => k !== "recurrence");
         root._recurChipAdded = false;
     }
+    // The body is one Tab stop: its open block, the drawn text, a link drawn
+    // in it — not my plan under it, which lives in the same scroll.
+    function _inBody(it) {
+        const tail = root._tail;
+        for (let p = it; p; p = p.parent) {
+            if (tail && p === tail) return false;
+            if (p === body) return true;
+        }
+        return false;
+    }
+    // The visible Tab stops under an item, in the order they are drawn.
+    function _stopsIn(item) {
+        if (!item || !item.visible) return [];
+        let out = item.activeFocusOnTab === true && item.enabled ? [item] : [];
+        const kids = item.children || [];
+        for (let i = 0; i < kids.length; i++) out = out.concat(root._stopsIn(kids[i]));
+        return out;
+    }
+    // How many lines the title takes at its full size, measured apart from
+    // the field so the size it picks does not feed back into it.
+    TextMetrics {
+        id: titleMetrics
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.typeStep(root._quiet ? 7 : 8)
+        font.weight: root._quiet ? Theme.fwTitle : Theme.fwHeading
+        text: titleField.text
+    }
+    readonly property int _titleStepsDown: {
+        const w = titleField.width;
+        if (w <= 0) return 0;
+        // A word wrapped whole leaves the end of each line short: a fifth.
+        const lines = Math.ceil(titleMetrics.advanceWidth * 1.2 / w);
+        return lines > 6 ? 3 : (lines > 3 ? 2 : 0);
+    }
+    // Where Tab in the text indents rather than moves on: lines selected, a
+    // list item, inside a ``` fence; Shift+Tab only where there is an indent
+    // to take back. Not while the keyboard is only passing through: Tab from
+    // the chips into a text that opens on "- item" indented it.
+    property bool _passingThrough: false
+    function _tabIndents(field, forward) {
+        if (root._passingThrough) return false;
+        const t = String(field.text);
+        const a = field.selectionStart, b = field.selectionEnd;
+        if (b > a && t.substring(a, b).indexOf("\n") >= 0) return true;
+        const caret = field.cursorPosition;
+        const start = t.lastIndexOf("\n", caret - 1) + 1;
+        let end = t.indexOf("\n", caret);
+        if (end < 0) end = t.length;
+        const line = t.substring(start, end);
+        if (!forward && !/^\s/.test(line)) return false;
+        if (/^\s*([-*+]|\d+[.)])\s/.test(line)) return true;
+        const fences = t.substring(0, start).split("\n").filter(l => /^\s*```/.test(l)).length;
+        return fences % 2 === 1;
+    }
     function _tabWithin(forward) {
-        let next = (root.Window.activeFocusItem || root).nextItemInFocusChain(forward);
+        const cur = root.Window.activeFocusItem || root;
+        const fromBody = cur !== bodyStop && root._inBody(cur);
+        root._passingThrough = false;
+        // Out of the body forward: my plan under it first. The field sits
+        // over the list, outside it, so the focus chain went from the text
+        // past the plan, round to the stop that hands the caret back to the
+        // text: Tab never left the description (F2-REG-1, A4-15).
+        if (fromBody && forward) {
+            const stops = root._stopsIn(root._tail);
+            if (stops.length > 0) {
+                stops[0].forceActiveFocus(Qt.TabFocusReason);
+                return;
+            }
+        }
+        // Out of the body backward: the last chip before it. The chain from
+        // the text went round to the plan's add field instead, and the chips
+        // and the title were never reached backward (F2-REG-1).
+        if (fromBody && !forward) {
+            const kids = bodyStop.parent ? bodyStop.parent.children : [];
+            let before = [];
+            for (let i = 0; i < kids.length && kids[i] !== bodyStop; i++)
+                before = before.concat(root._stopsIn(kids[i]));
+            if (before.length > 0) {
+                before[before.length - 1].forceActiveFocus(Qt.BacktabFocusReason);
+                return;
+            }
+        }
+        // Leaving the body, never back into it: neither the stop that opens
+        // it nor what is drawn inside it.
+        const fits = function (it) {
+            return it !== docFocus && it.visible
+                && !(fromBody && (it === bodyStop || root._inBody(it)))
+                && !(!fromBody && it !== bodyStop && root._inBody(it));
+        };
+        const reason = forward ? Qt.TabFocusReason : Qt.BacktabFocusReason;
+        let next = cur.nextItemInFocusChain(forward);
         for (let n = 0; n < 200 && next; n++) {
             let inside = false;
             for (let p = next; p; p = p.parent)
                 if (p === root) { inside = true; break; }
-            if (inside && next !== docFocus && next.visible) {
-                next.forceActiveFocus(forward ? Qt.TabFocusReason : Qt.BacktabFocusReason);
+            // Out of the document: round to its other end. Shift+Tab from
+            // the top went on to the board's cards behind it.
+            if (!inside) break;
+            if (fits(next)) {
+                next.forceActiveFocus(reason);
                 return;
             }
             next = next.nextItemInFocusChain(forward);
         }
-        root.focusTitle();
+        const all = root._stopsIn(root).filter(fits);
+        if (all.length > 0) all[forward ? 0 : all.length - 1].forceActiveFocus(reason);
+        else root.focusTitle();
     }
     Keys.onReturnPressed: (e) => {
         if (titleField.activeFocus || body.editing) { e.accepted = false; return; }
@@ -532,7 +627,14 @@ FocusScope {
                     Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
-                    ClickArea { id: crumbCA; label: parent.text; onActivated: root.close() }
+                    ClickArea {
+                        id: crumbCA
+                        label: parent.text
+                        onActivated: root.close()
+                        // The first stop: Shift+Tab here goes round to the
+                        // end, not on to the board behind the document.
+                        Keys.onBacktabPressed: (e) => { root._tabWithin(false); e.accepted = true; }
+                    }
                 }
                 Text {
                     objectName: "task-doc-crumbs"
@@ -675,8 +777,10 @@ FocusScope {
                 selectByMouse: true
                 color: Theme.text
                 font.family: Theme.fontUi
-                // 32 px bold, 28 px quiet (H2-Task / Q-Task).
-                font.pixelSize: Theme.typeStep(root._quiet ? 7 : 8)
+                // 32 px bold, 28 px quiet (H2-Task / Q-Task); a step or two
+                // down for a title of more than three lines at that size: one
+                // of seven lines took most of a 720 px panel (F3-EYES-10).
+                font.pixelSize: Theme.typeStep((root._quiet ? 7 : 8) - root._titleStepsDown)
                 font.weight: root._quiet ? Theme.fwTitle : Theme.fwHeading
                 padding: 0
                 // Basic binds its own side padding; the title shares the
@@ -1013,11 +1117,15 @@ FocusScope {
             // The body is a Tab stop of its own, after the chips and before
             // Done (A4-14): this stop hands the caret to it.
             Item {
+                id: bodyStop
                 objectName: "task-doc-body-stop"
                 Layout.preferredHeight: 0
                 Layout.preferredWidth: 0
                 activeFocusOnTab: true
-                onActiveFocusChanged: if (activeFocus) body.focusEditor()
+                onActiveFocusChanged: if (activeFocus) {
+                    root._passingThrough = true;
+                    body.focusEditor();
+                }
             }
 
             // The body, then my plan under it and the slash hint (DG-062),
@@ -1029,6 +1137,9 @@ FocusScope {
                 Layout.fillHeight: true
                 Layout.leftMargin: -Theme.px(24)
                 Layout.rightMargin: -Theme.px(24)
+                // The text ends above Done: it ran on beneath the button, with
+                // nothing between them (F3-EYES-10).
+                clip: true
                 placeholder: I18n.t("taskdoc.bodyPh")
                 menuTitle: I18n.t("textmenu.title.taskBody")
                 // The note look (APP-292): the same md4c drawing as Knowledge.
@@ -1039,6 +1150,24 @@ FocusScope {
                 onEdited: if (!root._loading) { root._dirtyBody = true; saveTimer.restart(); }
                 onEscaped: root.close()
                 onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
+                // Tab in the text moves on to my plan, as everywhere in the
+                // document; it indents only where an indent means something
+                // (a list item, code, lines selected). The caret arrives in
+                // the text now, and Tab there indented an empty line for ever
+                // (F2-REG-1).
+                onBlockKey: (event) => {
+                    const isTab = event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab;
+                    // Any other key: the keyboard is at work in the text now.
+                    if (!isTab) {
+                        if (event.key !== Qt.Key_Shift) root._passingThrough = false;
+                        return;
+                    }
+                    const forward = event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier);
+                    if ((event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
+                        || root._tabIndents(body.editor, forward)) return;
+                    root._tabWithin(forward);
+                    event.accepted = true;
+                }
                 tail: Component { DocTail {} }
             }
 
@@ -1398,6 +1527,7 @@ FocusScope {
             taskId: root.taskId
             rev: root._rev
             onOpenTask: (id) => root.openOther(id)
+            onTabOut: (forward) => root._tabWithin(forward)
         }
         // "Пишите прямо здесь. / — вставить чек-лист, код, ссылку на задачу."
         Text {

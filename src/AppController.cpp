@@ -1671,21 +1671,25 @@ void AppController::setLanguage(const QString& v) {
 }
 
 QString AppController::tr_(const QString& key) const {
+  return trIn_(key, m_language == QStringLiteral("ru"));
+}
+
+QString AppController::trIn_(const QString& key, bool ru) const {
   const auto& table = i18nTable();
   const auto it = table.constFind(key);
   if(it == table.constEnd()) {
     // The integrations keep their own strings (audit INT-7).
     // …and so do saved views.
-    QString own = heap::integrations::integrationText(key, m_language == QStringLiteral("ru"));
+    QString own = heap::integrations::integrationText(key, ru);
     if(own.isNull()) {
-      own = heap::savedviews::text(key, m_language == QStringLiteral("ru"));
+      own = heap::savedviews::text(key, ru);
     }
     if(own.isNull()) {
-      own = heap::safety::text(key, m_language == QStringLiteral("ru"));
+      own = heap::safety::text(key, ru);
     }
     return own.isNull() ? key : own;
   }
-  return QString::fromUtf8((m_language == "ru") ? it->ru : it->en);
+  return QString::fromUtf8(ru ? it->ru : it->en);
 }
 
 void AppController::setCurrentView(const QString& requested) {
@@ -15463,6 +15467,13 @@ void AppController::seedShortcutCatalog() {
     };
     m["id"] = sid;
     m["label"] = text("label");
+    // The English name too: the command line finds a command by it in any
+    // UI language ("sett" in Russian found nothing, F3-EYES-7).
+    {
+      const QString own = QStringLiteral("shortcut.%1.label").arg(sid);
+      const QString t = trIn_(own, false);
+      m["labelEn"] = t != own ? t : trIn_(QStringLiteral("shortcut.%1.label").arg(baseShortcutId(sid)), false);
+    }
     m["description"] = text("desc");
     const QString def = normalizeSequence(QString::fromUtf8(defaultSeq));
     m["defaultSequence"] = def;

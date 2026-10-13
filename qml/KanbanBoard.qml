@@ -1043,7 +1043,8 @@ Item {
                             Text {
                                 objectName: "column-done-show"
                                 // Quiet: the header itself opens it (Q-Board).
-                                visible: Style.chipFill || col.dragOver
+                                // Nothing done, nothing to show (F3-EYES-18).
+                                visible: (Style.chipFill && col.shownCount > 0) || col.dragOver
                                 text: col.dragOver ? I18n.t("kanban.done.drop") : I18n.t("kanban.done.show")
                                 color: col.dragOver ? Theme.text : Theme.textMuted
                                 font.family: Theme.fontUi
