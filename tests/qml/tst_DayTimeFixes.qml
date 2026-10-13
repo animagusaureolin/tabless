@@ -367,11 +367,13 @@ TestCase {
             // The calendar's width in a 1280-1312px window: the sidebar
             // folds to icons at 150%.
             // The third value: the tray must stay. Those are the calendar's
-            // widths in 1280x720 @100/110/125%, 1440x900 @125/150% and
-            // 1366x768 @150% windows (the sidebar folds to icons from 125%).
+            // widths in 1280x720 @100/110/125% and 1440x900 @125/150% windows
+            // (the sidebar folds to icons from 125%). 1366x768 @150% (1300) is
+            // checked by the rules only: whether 90px are left there depends on
+            // the platform's font, so the tray may give way on Linux and macOS.
             for (const c of [[1, 1050], [1.1, 1083], [1.25, 1083], [1.5, 1200],
                              [1, 1072, true], [1.1, 1051, true], [1.25, 1218, true],
-                             [1.25, 1180, true], [1.5, 1374, true], [1.5, 1300, true]]) {
+                             [1.25, 1180, true], [1.5, 1374, true], [1.5, 1300]]) {
                 const o = JSON.parse(saved || "{}");
                 o.appearance = Object.assign({}, o.appearance || {}, { uiScale: c[0] });
                 AppController.appSettingsJson = JSON.stringify(o);
