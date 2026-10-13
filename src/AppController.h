@@ -373,6 +373,8 @@ class AppController : public QObject {
   // identifier (e.g. "task.created"); returns the EN form as a last-resort
   // fallback if the key is missing in the active table.
   Q_INVOKABLE QString tr_(const QString& key) const;
+  // The same string in a given language, whatever the UI's is.
+  QString trIn_(const QString& key, bool ru) const;
   // The name a task goes by on screen: its tracker key, else its id (A3-10).
   Q_INVOKABLE QString displayKey(const QString& id) const;
 

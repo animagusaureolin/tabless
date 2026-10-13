@@ -285,4 +285,36 @@ TestCase {
         AppController.selectedDate = was;
         AppController.currentView = view;
     }
+
+    // F3-EYES-2/3: the Settings commands are the sections Settings has (no
+    // "Profile" since DG-101), and About shows the version, not "%1".
+    function test_settings_commands_match_the_page() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        cp._refresh();
+        const st = cp._entries.filter(e => e.kind === "setting");
+        verify(!st.some(e => e.commandId === "settings:profile"), "a removed section is offered");
+        const about = st.filter(e => e.commandId === "settings:about")[0];
+        verify(about !== undefined);
+        verify(String(about.sub).indexOf("%1") < 0, "raw placeholder: " + about.sub);
+        verify(String(about.sub).indexOf(AppController.appVersion) >= 0, about.sub);
+    }
+
+    // F3-EYES-7: in the Russian UI a command is found by its English name too.
+    function test_english_words_find_commands_in_russian() {
+        const was = AppController.language;
+        AppController.language = "ru";
+        try {
+            const cp = make('import TodoCpp; CommandPalette { }');
+            cp.openWith("sett");
+            tryVerify(function () { return cp._matches.some(m => m.kind === "setting"); }, 2000,
+                      "'sett' found no settings in Russian");
+            cp.close();
+            cp.openWith("event log");
+            tryVerify(function () { return cp._matches.some(m => m.commandId === "log.open"); }, 2000,
+                      "a catalogue command is not found by its English name");
+            cp.close();
+        } finally {
+            AppController.language = was;
+        }
+    }
 }
