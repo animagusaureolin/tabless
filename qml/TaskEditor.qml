@@ -130,6 +130,28 @@ Popup {
     // saved or deleted here goes there, whatever profile is active by then
     // (PRES-1).
     property string _profileId: ""
+    // A new task's profile (A5-14, A5-21): the one picked in the header, or
+    // the one a "+Name" in the title names; the one it was opened in by
+    // default. Saving goes there, as quick capture's picker does.
+    property string _pickedProfileId: ""
+    property string _titleProfileId: ""
+    readonly property string _targetProfileId: root._titleProfileId || root._pickedProfileId || root._profileId
+    readonly property string _targetProfileName: {
+        const p = AppController.profileById(root._targetProfileId);
+        return p && p.name ? p.name : "";
+    }
+    // Takes the "+Name" out of the title: it said where, not what.
+    function _cutTitleProfile() {
+        const p = AppController.captureParse(titleField.text || "", new Date(), []);
+        const marks = p.marks || [];
+        for (let i = 0; i < marks.length; i++) {
+            if (marks[i].kind !== "profile") continue;
+            const raw = titleField.text;
+            titleField.text = (raw.slice(0, marks[i].start) + " " + raw.slice(marks[i].end)).replace(/\s+/g, " ").trim();
+            return p.profileId || "";
+        }
+        return "";
+    }
     function _backToOwnProfile() {
         if (root._profileId && AppController.activeProfileId !== root._profileId)
             AppController.activeProfileId = root._profileId;
@@ -238,6 +260,7 @@ Popup {
         case "priority":  line = I18n.t("history.priority").arg(v(e.from)).arg(v(e.to)); break;
         case "due":       line = I18n.t("history.due").arg(v(e.from)).arg(v(e.to)); break;
         case "scheduled": line = I18n.t("history.scheduled").arg(v(e.from)).arg(v(e.to)); break;
+        case "profile":   line = I18n.t("history.profile").arg(v(e.from)).arg(v(e.to)); break;
         default:          line = String(e.kind);
         }
         return e.sync ? I18n.t("history.viaTracker").arg(line) : line;
@@ -277,6 +300,8 @@ Popup {
         // Opening a card a sync brought in is seeing it (APP-180).
         if (_originalId.length > 0) AppController.markTaskSeen(_originalId);
         _profileId = AppController.activeProfileId;
+        _pickedProfileId = "";
+        _titleProfileId = "";
         // New tasks: leave idField empty with a TODO hint — real id is
         // assigned on save. Edit: pre-fill with existing id (editable).
         idField.text = isNew ? "" : (draft.id || "");
@@ -535,11 +560,14 @@ Popup {
     function _refreshTitleChips() {
         if (!root.isNew || titleField.text.trim().length === 0) {
             root._titleChips = [];
+            root._titleProfileId = "";
             return;
         }
         const meta = root._extractMeta(titleField.text);
         const typedId = idField.text.trim() || root.draft.id || "";
-        const t = root._titleTokens(meta, typedId, root._readTitle(titleField.text));
+        const read = root._readTitle(titleField.text);
+        root._titleProfileId = String(read.profileId || "");
+        const t = root._titleTokens(meta, typedId, read);
         const when = (d, hasTime) => I18n.fmtDate(d, "weekdayDay") + (hasTime ? " · " + I18n.fmtTime(d) : "");
         const chips = [];
         if (t.when) chips.push({ kind: "when", key: I18n.t("capture.when"), value: when(t.when, t.whenHasTime) });
@@ -548,6 +576,7 @@ Popup {
         if (t.estimate) chips.push({ kind: "estimate", key: I18n.t("capture.estimate"), value: I18n.fmtMinutes(t.estimate) });
         if (t.priority) chips.push({ kind: "priority", key: I18n.t("capture.priority"), value: t.priority });
         for (const l of (t.labels || [])) chips.push({ kind: "label", key: I18n.t("capture.label"), value: "#" + l });
+        if (read.profileName) chips.push({ kind: "profile", key: I18n.t("capture.profile"), value: String(read.profileName) });
         root._titleChips = chips;
     }
     function _recurText(r) {
@@ -631,6 +660,12 @@ Popup {
             root.detailsOpen = true;
             scheduledField.forceActiveFocus();
             return false;
+        }
+        // A new task goes to the profile picked for it ("+Name" in the
+        // title wins), and the "+Name" leaves the title.
+        if (root.isNew) {
+            const named = root._cutTitleProfile();
+            root._profileId = named || root._pickedProfileId || root._profileId;
         }
         // New tasks: if user left idField blank, fall back to the
         // auto-generated id captured in the draft. Edit: take the
@@ -816,6 +851,67 @@ Popup {
                 font.weight: Theme.fwTitle
             }
             Item { Layout.fillWidth: true }
+            // "в Работа ▾" (A5-14): where a new task goes, as quick capture
+            // says it; another profile from the menu, or "+Name" in the title.
+            Item {
+                objectName: "te-profile"
+                visible: root.isNew
+                implicitWidth: teProfRow.implicitWidth
+                implicitHeight: teProfRow.implicitHeight
+                Layout.maximumWidth: Theme.px(220)
+                Row {
+                    id: teProfRow
+                    spacing: Theme.spXs
+                    Text {
+                        objectName: "te-profile-name"
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: I18n.t("capture.inProfile").arg(root._targetProfileName)
+                        color: teProfCA.hovered ? Theme.text : Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
+                        elide: Text.ElideRight
+                        width: Math.min(implicitWidth, Theme.px(200))
+                    }
+                    Icon {
+                        visible: (AppController.profiles || []).length > 1
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "chevron-down"
+                        size: Theme.iconSize - 4
+                        color: teProfCA.hovered ? Theme.text : Theme.textMuted
+                    }
+                }
+                ClickArea {
+                    id: teProfCA
+                    label: I18n.t("capture.inProfile").arg(root._targetProfileName)
+                    tip: I18n.t("capture.inProfileHint")
+                    enabled: (AppController.profiles || []).length > 1
+                    onActivated: teProfileMenu.popup(teProfRow, 0, teProfRow.height + Theme.spXs)
+                }
+                AppMenu {
+                    id: teProfileMenu
+                    Instantiator {
+                        model: AppController.profiles
+                        delegate: AppMenuItem {
+                            id: teProfItem
+                            required property var modelData
+                            text: teProfItem.modelData.name
+                        }
+                        // Wired here, where the editor is in scope.
+                        onObjectAdded: (idx, obj) => {
+                            teProfileMenu.insertItem(idx, obj);
+                            const item = obj as AppMenuItem;
+                            const id = String((AppController.profiles[idx] || {}).id || "");
+                            if (!item) return;
+                            item.marked = Qt.binding(() => id === root._targetProfileId);
+                            item.triggered.connect(() => {
+                                root._pickedProfileId = id;
+                                Qt.callLater(() => titleField.forceActiveFocus());
+                            });
+                        }
+                        onObjectRemoved: (idx, obj) => teProfileMenu.removeItem(obj)
+                    }
+                }
+            }
             PillButton {
                 objectName: "te-ticket-open"
                 visible: root._isTicket && String(root._ticket.url || "").length > 0
@@ -955,6 +1051,25 @@ Popup {
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
                     Keys.onPressed: (event) => {
+                        // "+Na…" offers the profiles (A5-21): arrows walk the
+                        // list, Tab takes one, Enter only once one is picked.
+                        if (titleAc.isOpen) {
+                            if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+                                titleAc.moveSelection(event.key === Qt.Key_Down ? 1 : -1);
+                                event.accepted = true;
+                                return;
+                            }
+                            if ((event.key === Qt.Key_Tab || ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                                 && titleAc.navigated)) && titleAc.accept()) {
+                                event.accepted = true;
+                                return;
+                            }
+                            if (event.key === Qt.Key_Escape) {
+                                titleAc.dismiss();
+                                event.accepted = true;
+                                return;
+                            }
+                        }
                         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                             // Ctrl+Enter is the save shortcut's. Plain Enter in a
                             // new task's title creates it, as quick capture does;
@@ -971,12 +1086,21 @@ Popup {
                         if (next) next.forceActiveFocus(back ? Qt.BacktabFocusReason : Qt.TabFocusReason);
                         event.accepted = true;
                     }
+                    onCursorPositionChanged: if (root.isNew) titleAc.refresh()
                     onTextChanged: {
                         titleReadTimer.restart();
+                        if (root.isNew) titleAc.refresh();
                         if (!/[\r\n\t]/.test(text)) return;
                         const at = cursorPosition;
                         text = text.replace(/[\r\n\t]+/g, " ");
                         cursorPosition = Math.min(at, text.length);
+                    }
+                    MentionAutocomplete {
+                        id: titleAc
+                        target: titleField
+                        enablePeople: false
+                        enableTickets: false
+                        enableProfiles: true
                     }
                     Timer {
                         id: titleReadTimer
