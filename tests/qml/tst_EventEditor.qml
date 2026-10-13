@@ -293,6 +293,21 @@ TestCase {
         AppController.deleteEvent(made);
     }
 
+    // F3-EYES-17: the one-line input says how to commit and how to leave,
+    // as quick capture does.
+    function test_one_line_input_names_its_keys() {
+        const cap = make('import TodoCpp; EventCapture { }');
+        cap.openAt({ date: new Date(), start: 9, end: 10 });
+        tryVerify(() => cap.opened);
+        const row = findChild(cap.contentItem, "event-capture-keys-hint");
+        verify(row !== null && row.visible, "no key hint row");
+        const texts = [];
+        for (const c of row.children) if (c.text !== undefined) texts.push(c.text);
+        compare(texts.join(" · "), I18n.t("event.capture.hints"));
+        verify(row.height > 0);
+        cap.close();
+    }
+
     // IDIOT-CAL-11: a meeting past midnight ends on the next day instead of
     // being cut at 24:00.
     function test_one_line_input_keeps_an_overnight_end() {

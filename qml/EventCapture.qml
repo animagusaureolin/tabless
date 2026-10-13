@@ -238,5 +238,23 @@ Popup {
                 value: EventRule.describe(root.parsed.rule, root.parsed.date, I18n)
             }
         }
+        // How to commit or leave, as quick capture says it (F3-EYES-17).
+        Flow {
+            objectName: "event-capture-keys-hint"
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.spLg; Layout.rightMargin: Theme.spLg; Layout.bottomMargin: Theme.spLg
+            spacing: Theme.sp2xl
+            Repeater {
+                model: I18n.t("event.capture.hints").split(" · ")
+                delegate: Text {
+                    required property string modelData
+                    text: modelData
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
+                    font.pixelSize: Theme.fsXs
+                }
+            }
+        }
     }
 }
