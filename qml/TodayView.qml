@@ -188,12 +188,14 @@ FocusScope {
             // the title says it
         } else if (root.plain) {
             // "встреча · 30 мин · Zoom", "APP-105 · 1 ч"
-            if (meeting && root._typeWord(b, true)) parts.push(root._typeWord(b, true));
+            // A meeting titled as its type says neither its type twice
+            // nor its storage id (F3-EYES-1).
+            if (meeting) { if (root._typeWord(b, true)) parts.push(root._typeWord(b, true)); }
             else parts.push(b.id);
             if (kind !== "allday" && !b.dayOnly) parts.push(root._rowLen(b));
             if (!meeting && b.waiting) parts.push(I18n.t("today.waitingOn").arg(b.waiting));
         } else {
-            if (meeting && root._typeWord(b, false)) parts.push(root._typeWord(b, false));
+            if (meeting) { if (root._typeWord(b, false)) parts.push(root._typeWord(b, false)); }
             else parts.push(b.id, I18n.t("today.plannedByYou"));
         }
         // A repeating task is marked as one (A2-25).
