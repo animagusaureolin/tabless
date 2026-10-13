@@ -95,12 +95,43 @@ TEST(CliVerbScan, FirstPositionalDecides) {
 TEST(CliVerbScan, WindowLaunchesStayWindowLaunches) {
   EXPECT_EQ(classifyArgs({}), Invocation::Window);
   EXPECT_EQ(classifyArgs({"--view", "board"}), Invocation::Window);
-  EXPECT_EQ(classifyArgs({"board"}), Invocation::Window);  // refused later, as before
+  // A notification click hands the window its URI.
+  EXPECT_EQ(classifyArgs({"tabless://notify?task=TASK-1"}), Invocation::Window);
   // An option's value is never the verb: a data dir called "add".
   EXPECT_EQ(classifyArgs({"--data-dir", "add"}), Invocation::Window);
   EXPECT_EQ(classifyArgs({"-platform", "now"}), Invocation::Window);
   EXPECT_EQ(classifyArgs({"--", "add"}), Invocation::Window);
   EXPECT_EQ(classifyArgs({"--smoke"}), Invocation::Window);
+}
+
+// A typo is not a window launch: `tabless tody` printed nothing, exited 0 and
+// opened the window (A3-17, A4-18).
+TEST(CliVerbScan, AnyOtherWordIsAnUnknownCommand) {
+  EXPECT_EQ(classifyArgs({"frobnicate"}), Invocation::Command);
+  EXPECT_EQ(classifyArgs({"tody"}), Invocation::Command);
+  EXPECT_EQ(classifyArgs({"board"}), Invocation::Command);
+  EXPECT_EQ(classifyArgs({"--data-dir", "C:/x", "frobnicate"}), Invocation::Command);
+  const ParsedArgs p = parseArgs({QStringLiteral("frobnicate")});
+  EXPECT_FALSE(p.ok);
+  EXPECT_EQ(p.error, QStringLiteral("unknown command 'frobnicate'"));
+}
+
+// A stray word after a window option, or a path, is the window launch's own
+// mistake: the window refuses it as an unexpected argument instead of the
+// command line reporting "Unknown option 'view'".
+TEST(CliVerbScan, StrayWordAfterAWindowOptionStaysTheWindows) {
+  EXPECT_EQ(classifyArgs({"--view", "board", "extra"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--capture", "extra"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--minimized", "extra"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--data-dir", "C:/x", "C:/tmp/dd"}), Invocation::Window);
+  EXPECT_EQ(classifyArgs({"--view", "board", "add"}), Invocation::Command);
+}
+
+TEST(CliVerbScan, VersionIsAVerb) {
+  EXPECT_EQ(classifyArgs({"version"}), Invocation::Command);
+  const ParsedArgs p = parseArgs({QStringLiteral("version")});
+  EXPECT_TRUE(p.ok) << p.error.toStdString();
+  EXPECT_EQ(p.request.verb, Verb::Version);
 }
 
 // ── Arguments ─────────────────────────────────────────────────────────────
@@ -490,6 +521,58 @@ TEST_F(CliHeadlessTest, DoneMovesToDoneAndIsIdempotent) {
   EXPECT_EQ(s.profiles.at(ref.profile).tasks.at(ref.task).status, QStringLiteral("done"));
 }
 
+// A3-10: `list` names a tracker card by its key, so the lines that answer a
+// change do too — "Done INC-100", never the local id behind it.
+TEST_F(CliHeadlessTest, ChangeLinesNameATrackerCardByItsKey) {
+  {
+    AppController c;
+    Request add;
+    add.verb = Verb::Add;
+    add.text = QStringLiteral("raise the k8s limits");
+    ASSERT_EQ(execute(c, add, QDateTime::currentDateTime()).exitCode, kExitOk);
+    c.flushSave();
+  }
+  {
+    QFile f(dataFile());
+    ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+    QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
+    f.close();
+    QJsonArray profiles = root.value(QStringLiteral("profiles")).toArray();
+    QJsonObject prof = profiles.at(0).toObject();
+    QJsonArray tasks = prof.value(QStringLiteral("tasks")).toArray();
+    ASSERT_EQ(tasks.size(), 1);
+    QJsonObject t = tasks.at(0).toObject();
+    t.insert(QStringLiteral("externalId"), QStringLiteral("INC-100"));
+    t.insert(QStringLiteral("externalProvider"), QStringLiteral("jira"));
+    tasks.replace(0, t);
+    prof.insert(QStringLiteral("tasks"), tasks);
+    profiles.replace(0, prof);
+    root.insert(QStringLiteral("profiles"), profiles);
+    ASSERT_TRUE(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    f.write(QJsonDocument(root).toJson());
+  }
+  const QDateTime now(QDate(2026, 10, 6), QTime(9, 0));
+  AppController c;
+  Request r;
+  r.taskId = QStringLiteral("INC-100");
+  r.verb = Verb::Est;
+  r.value = QStringLiteral("2h");
+  Response resp = execute(c, r, now);
+  EXPECT_EQ(resp.exitCode, kExitOk) << qPrintable(resp.err);
+  EXPECT_EQ(resp.out, QStringLiteral("INC-100: estimate 2h\n"));
+  r.verb = Verb::Sched;
+  r.value = QStringLiteral("tomorrow");
+  EXPECT_TRUE(execute(c, r, now).out.startsWith(QStringLiteral("INC-100: when"))) << qPrintable(execute(c, r, now).out);
+  r.verb = Verb::Done;
+  r.value.clear();
+  resp = execute(c, r, now);
+  EXPECT_EQ(resp.exitCode, kExitOk) << qPrintable(resp.err);
+  EXPECT_TRUE(resp.out.startsWith(QStringLiteral("Done INC-100"))) << qPrintable(resp.out);
+  EXPECT_TRUE(execute(c, r, now).out.contains(QStringLiteral("INC-100")));
+  r.verb = Verb::Open;
+  EXPECT_TRUE(execute(c, r, now).out.contains(QStringLiteral("INC-100")));
+}
+
 TEST_F(CliHeadlessTest, AddToAnotherProfileLeavesTheActiveOne) {
   QString other;
   {
@@ -513,6 +596,49 @@ TEST_F(CliHeadlessTest, AddToAnotherProfileLeavesTheActiveOne) {
   ASSERT_GE(side, 0);
   ASSERT_EQ(s.profiles.at(side).tasks.size(), 1);
   EXPECT_EQ(s.profiles.at(side).tasks.at(0).title, QStringLiteral("side quest"));
+}
+
+// F1-new-2: "+Globex" in the text sends the task there, as quick capture
+// does; it used to be cut from the title and the task saved in the active
+// profile. An explicit --profile wins, and the CLI says the "+Name" was not
+// followed.
+TEST_F(CliHeadlessTest, AddFollowsAPlusProfileInTheText) {
+  QString globex;
+  QString active;
+  {
+    AppController c;
+    active = c.activeProfileId();
+    globex = c.createProfile(QStringLiteral("Globex"));
+    c.setActiveProfileId(active);
+    Request r;
+    r.verb = Verb::Add;
+    r.text = QStringLiteral("Call vendor tomorrow +Globex");
+    Response resp = execute(c, r, QDateTime::currentDateTime());
+    EXPECT_EQ(resp.exitCode, kExitOk) << qPrintable(resp.err);
+    EXPECT_TRUE(resp.out.contains(QStringLiteral(" to Globex: Call vendor"))) << qPrintable(resp.out);
+    EXPECT_EQ(c.activeProfileId(), active) << "the CLI does not switch the app";
+    r.text = QStringLiteral("Ship it +globex");
+    EXPECT_EQ(execute(c, r, QDateTime::currentDateTime()).exitCode, kExitOk);
+    // --profile given: it wins, and the note says so.
+    r.text = QStringLiteral("Recap +Globex");
+    r.profile = active;
+    resp = execute(c, r, QDateTime::currentDateTime());
+    EXPECT_EQ(resp.exitCode, kExitOk) << qPrintable(resp.err);
+    EXPECT_TRUE(resp.err.contains(QStringLiteral("+Globex not followed"))) << qPrintable(resp.err);
+    c.flushSave();
+  }
+  const Snapshot s = reload();
+  const int g = findProfile(s, globex);
+  const int a = findProfile(s, active);
+  ASSERT_GE(g, 0);
+  ASSERT_GE(a, 0);
+  QStringList inGlobex;
+  for(const Task& t : s.profiles.at(g).tasks) {
+    inGlobex << t.title;
+  }
+  EXPECT_EQ(inGlobex, (QStringList{QStringLiteral("Call vendor"), QStringLiteral("Ship it")}));
+  ASSERT_EQ(s.profiles.at(a).tasks.size(), 1);
+  EXPECT_EQ(s.profiles.at(a).tasks.at(0).title, QStringLiteral("Recap"));
 }
 
 // CLI-1: `heap add` with no window used to load a damaged state.json the way
@@ -677,6 +803,10 @@ TEST(CliPlanVerbs, EstimatesAndDurations) {
   EXPECT_EQ(parseEstimate(QStringLiteral("none")), 0);
   EXPECT_EQ(parseEstimate(QStringLiteral("soon")), -1);
   EXPECT_EQ(parseEstimate(QStringLiteral("0m")), -1);
+  // A bare number is minutes (A4-19).
+  EXPECT_EQ(parseEstimate(QStringLiteral("90")), 90);
+  EXPECT_EQ(parseEstimate(QStringLiteral("~25")), 25);
+  EXPECT_EQ(parseEstimate(QStringLiteral("99999")), -1);
   EXPECT_EQ(humanMinutes(120, QStringLiteral("en")), QStringLiteral("2h"));
   EXPECT_EQ(humanMinutes(90, QStringLiteral("en")), QStringLiteral("1h 30m"));
   EXPECT_EQ(humanMinutes(45, QStringLiteral("ru")), QStringLiteral("45м"));
@@ -786,7 +916,7 @@ TEST_F(CliHeadlessTest, SchedDueEstSomedayChangeTheTask) {
     r.verb = Verb::Due;
     r.value = QStringLiteral("2026-10-09");
     resp = execute(c, r, now);
-    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: deadline → Fri, Oct 9\n")) << qPrintable(resp.err);
+    EXPECT_EQ(resp.out, QStringLiteral("TASK-1: due → Fri, Oct 9\n")) << qPrintable(resp.err);
 
     r.verb = Verb::Est;
     r.value = QStringLiteral("1h30m");

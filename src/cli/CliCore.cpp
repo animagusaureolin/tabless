@@ -85,12 +85,13 @@ QString helpText() {
              "Commands:\n"
              "  add \"<text>\" [--profile <p>] [--json]   capture a task, read like quick capture:\n"
              "                                          dates (\"tomorrow 14:00\"), p1 / !!, #label,\n"
-             "                                          \"// description\", a tracker key as the id\n"
+             "                                          \"// description\", a tracker key as the id,\n"
+             "                                          +Profile to add it to that profile\n"
              "  now [--json] [--format \"<fmt>\"]         the current task: the one with a running\n"
              "                                          timer, else the one the git branch of the\n"
              "                                          current directory names; prints nothing\n"
              "                                          when there is none. Format fields: {id}\n"
-             "                                          {title} {status} {priority} {profile}\n"
+             "                                          {key} {title} {status} {priority} {profile}\n"
              "                                          {source} {elapsed}\n"
              "  list [--profile <p>] [--status <s>] [--json]\n"
              "                                          tasks in board order (archived left out)\n"
@@ -99,7 +100,7 @@ QString helpText() {
              "  open <ID>                               show the task in the window\n"
              "  sched <ID> <when>                       plan it for a day: \"tomorrow 14:00\",\n"
              "                                          \"fri\", \"2026-10-12\"; \"none\" takes it off\n"
-             "  due <ID> <date>                         its deadline (a tracker card's: your own\n"
+             "  due <ID> <date>                         its due date (a tracker card's: your own\n"
              "                                          date, the tracker keeps its own); \"none\"\n"
              "  est <ID> <time>                         estimate: 2h, 90m, 1h30m; \"none\" clears\n"
              "  someday <ID> [off]                      park it as someday (or take it back)\n"
@@ -172,11 +173,12 @@ ParsedArgs parseArgs(const QStringList& args) {
 
   const QString name = positional.takeFirst();
   const std::optional<Verb> verb = verbFromName(name);
-  if(!verb || *verb == Verb::Version) {
+  if(!verb) {
     return fail(QStringLiteral("unknown command '%1'").arg(name));
   }
   r.verb = parser.isSet(help) ? Verb::Help : *verb;
-  if(r.verb == Verb::Help) {
+  // `tabless version` answers like --version.
+  if(r.verb == Verb::Help || r.verb == Verb::Version) {
     out.ok = true;
     return out;
   }
@@ -733,9 +735,15 @@ QVector<int> todayTasks(const ProfileData& p, const QDate& today) {
 
 // ── Output ─────────────────────────────────────────────────────────────────
 
+QString shownKey(const Task& t) {
+  const QString key = externalKeyOf(t);
+  return key.isEmpty() ? t.id : key;
+}
+
 QJsonObject taskJson(const ProfileData& p, const Task& t, const QDateTime& now) {
   QJsonObject o;
   o.insert(QStringLiteral("id"), t.id);
+  o.insert(QStringLiteral("key"), shownKey(t));
   o.insert(QStringLiteral("title"), t.title);
   o.insert(QStringLiteral("status"), t.status);
   o.insert(QStringLiteral("statusName"), statusName(p.statuses, t.status));
@@ -769,13 +777,13 @@ QString taskLines(const ProfileData& p, const QVector<int>& rows) {
   qsizetype idWidth = 0;
   qsizetype statusWidth = 0;
   for(const int r : rows) {
-    idWidth = std::max(idWidth, p.tasks.at(r).id.size());
+    idWidth = std::max(idWidth, shownKey(p.tasks.at(r)).size());
     statusWidth = std::max(statusWidth, statusName(p.statuses, p.tasks.at(r).status).size() + 2);
   }
   QString out;
   for(const int r : rows) {
     const Task& t = p.tasks.at(r);
-    QString line = t.id.leftJustified(idWidth) + QStringLiteral("  ") +
+    QString line = shownKey(t).leftJustified(idWidth) + QStringLiteral("  ") +
                    (QChar('[') + statusName(p.statuses, t.status) + QChar(']')).leftJustified(statusWidth) + QStringLiteral("  ") +
                    heap::local::effectivePriority(t).leftJustified(2) + QStringLiteral("  ") + t.title;
     if(heap::local::effectiveDueAt(t).isValid()) {
@@ -793,6 +801,7 @@ QString formatNow(const QString& format, const ProfileData& p, const Task& t, co
   // One pass, left to right, so a title containing "{id}" stays as typed.
   const QVector<QPair<QString, QString>> fields = {
       {QStringLiteral("{id}"), t.id},
+      {QStringLiteral("{key}"), shownKey(t)},
       {QStringLiteral("{title}"), t.title},
       {QStringLiteral("{status}"), statusName(p.statuses, t.status)},
       {QStringLiteral("{priority}"), heap::local::effectivePriority(t)},
@@ -928,19 +937,23 @@ QString cliText(const QString& key, const QString& language) {
       {QStringLiteral("overdue"), {"Overdue", "Просрочено"}},
       {QStringLiteral("today"), {"Today", "Сегодня"}},
       {QStringLiteral("added"), {"Added %1: %2", "Добавлено %1: %2"}},
+      {QStringLiteral("addedTo"), {"Added %1 to %2: %3", "Добавлено %1 в «%2»: %3"}},
+      {QStringLiteral("profileWins"), {"+%1 not followed: --profile %2 was given", "+%1 не учтён: указан --profile %2"}},
       {QStringLiteral("done"), {"Done %1: %2", "Готово %1: %2"}},
       {QStringLiteral("alreadyDone"), {"Already done %1: %2", "Уже готово %1: %2"}},
       {QStringLiteral("opened"), {"Opened %1", "Открыто %1"}},
       {QStringLiteral("opening"), {"Opening %1", "Открываю %1"}},
       {QStringLiteral("sched"), {"%1: when → %2", "%1: когда → %2"}},
       {QStringLiteral("schedCleared"), {"%1: no longer planned for a day", "%1: больше не запланировано на день"}},
-      {QStringLiteral("due"), {"%1: deadline → %2", "%1: срок → %2"}},
-      {QStringLiteral("dueCleared"), {"%1: deadline removed", "%1: срок снят"}},
+      {QStringLiteral("due"), {"%1: due → %2", "%1: срок → %2"}},
+      {QStringLiteral("dueCleared"), {"%1: due date removed", "%1: срок снят"}},
       {QStringLiteral("dueMine"), {"your date; the tracker keeps its own", "ваш срок; в трекере остаётся свой"}},
       {QStringLiteral("est"), {"%1: estimate %2", "%1: оценка %2"}},
       {QStringLiteral("estCleared"), {"%1: estimate removed", "%1: оценка снята"}},
       {QStringLiteral("someday"), {"%1: someday", "%1: когда-нибудь"}},
       {QStringLiteral("somedayOff"), {"%1: no longer someday", "%1: больше не «когда-нибудь»"}},
+      {QStringLiteral("column"), {" → %1", " → %1"}},
+      {QStringLiteral("stays"), {" (stays in %1)", " (остаётся в «%1»)"}},
       {QStringLiteral("unchanged"), {"%1: already so", "%1: уже так"}},
   };
   const auto it = kTable.constFind(key);
@@ -982,7 +995,8 @@ int parseEstimate(const QString& text) {
   }
   t.remove(QChar(' '));
   static const QRegularExpression kHours(QStringLiteral(R"(^(\d+(?:[.,]\d+)?)(?:h|ч|час|часа|часов)(?:(\d+)(?:m|м|мин|min))?$)"));
-  static const QRegularExpression kMinutes(QStringLiteral(R"(^(\d+)(?:m|м|мин|min)$)"));
+  // A bare number is minutes, the commonest way to say it (A4-19).
+  static const QRegularExpression kMinutes(QStringLiteral(R"(^(\d+)(?:m|м|мин|min)?$)"));
   if(const QRegularExpressionMatch m = kHours.match(t); m.hasMatch()) {
     QString hours = m.captured(1);
     hours.replace(QChar(','), QChar('.'));

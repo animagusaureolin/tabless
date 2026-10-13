@@ -94,4 +94,53 @@ TestCase {
         AppController.activeProfileId = own;
         compare(AppController.tasks.rowCount(), ownTasks, "the person's tasks changed");
     }
+
+    // A5-9: the placeholder typed out as shown, lead word and all, makes the
+    // task the example names, not "например: …".
+    function test_the_placeholder_typed_literally_drops_its_lead_word() {
+        const hero = createTemporaryQmlObject('import TodoCpp; FirstRunHero { width: 800 }', host);
+        const input = findChild(hero, "first-run-input");
+        const ph = I18n.t("first.placeholder");
+        input.text = ph;
+        const keepDay = AppController.selectedDate;
+        const id = hero.submit();
+        verify(id.length > 0);
+        const t = AppController.taskById(id);
+        const lead = ph.slice(0, ph.indexOf(":") + 1);
+        verify(t.title.indexOf(lead) < 0, "the lead word stayed: " + t.title);
+        verify(t.title.length > 0);
+        AppController.deleteTask(id);
+        AppController.selectedDate = keepDay;
+    }
+
+    // A5-10: the first task, made for another day, is shown on its day.
+    function test_a_first_task_for_another_day_is_shown_on_its_day() {
+        const hero = createTemporaryQmlObject('import TodoCpp; FirstRunHero { width: 800 }', host);
+        const input = findChild(hero, "first-run-input");
+        const keepDay = AppController.selectedDate;
+        AppController.selectedDate = AppController.today;
+        input.text = "first run later in 3 days";
+        const id = hero.submit();
+        verify(id.length > 0);
+        const t = AppController.taskById(id);
+        compare(Qt.formatDate(AppController.selectedDate, "yyyy-MM-dd"), Qt.formatDate(t.scheduledAt, "yyyy-MM-dd"));
+        AppController.deleteTask(id);
+        AppController.selectedDate = keepDay;
+    }
+
+    // A5-13: "d" and "?" are page keys; the line over the cards says so and
+    // Esc takes the caret out of the field, so they no longer type "d?".
+    function test_esc_leaves_the_field_for_the_page_keys() {
+        const hero = createTemporaryQmlObject('import TodoCpp; FirstRunHero { width: 800 }', host);
+        const input = findChild(hero, "first-run-input");
+        hero.focusInput();
+        verify(input.activeFocus);
+        keyClick(Qt.Key_Escape);
+        verify(!input.activeFocus, "Esc left the caret in the field");
+        keyClick(Qt.Key_D);
+        compare(input.text, "", "d went into the field");
+        const where = findChild(hero, "first-run-keys-where");
+        verify(where !== null);
+        compare(where.text, I18n.t("first.keys.outside"));
+    }
 }

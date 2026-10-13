@@ -275,17 +275,15 @@ TestCase {
         pr.close();
     }
 
-    // IDIOT-KNOW-5/6: arriving puts the caret in the text; a letter typed on
-    // the drawn note (after Esc) lands in it.
+    // A4-4: arriving puts the keyboard on the drawn note (the keymap's
+    // chords are keys there); IDIOT-KNOW-6: a letter typed on it lands in
+    // the text, at the end, not in the title.
     function test_take_focus_and_typing_land_in_the_note() {
         const n = note("Caret probe", "# Caret probe\n\nfirst para");
         const nv = liveNotes(n);
         nv.takeFocus();
-        const f = focusedField();
-        verify(f !== null, "the caret is in a block");
-        compare(f.text, "first para", "at the end of the text, not in the title");
-        keyClick(Qt.Key_Escape);
-        verify(focusedField() === null);
+        verify(focusedField() === null, "no block opened on arrival");
+        verify(findChild(nv, "notes-live").documentFocused, "the drawn note holds the keyboard");
         typeStr("Z");
         verify(focusedField() !== null);
         nv._flushPending();
@@ -325,7 +323,8 @@ TestCase {
         const gone = note("Goner", "# Goner\n\n");
         const nv = liveNotes(gone);
         AppController.deleteNote(gone);
-        nv.takeFocus();
+        // In a block: arriving lands on the drawn note now (A4-4).
+        findChild(nv, "notes-live").focusEnd();
         verify(focusedField() !== null);
         keyClick(Qt.Key_Z, Qt.ControlModifier);
         verify(AppController.notes.indexOfId(gone) >= 0, "the note is back");
@@ -452,7 +451,9 @@ TestCase {
         keyClick(Qt.Key_Escape);
         compare(findChild(nv, "note-filter").text, "");
         keyClick(Qt.Key_Escape);
-        tryVerify(function () { return focusedField() !== null; });
+        // Back to the note, drawn: Esc never puts the caret in the text (A4-6).
+        tryVerify(function () { return findChild(nv, "notes-live").documentFocused; });
+        verify(focusedField() === null);
         findChild(nv, "notes-list-pane").focusList();
         keyClick(Qt.Key_Return);
         tryVerify(function () { return focusedField() !== null; });

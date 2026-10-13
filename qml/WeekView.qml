@@ -9,6 +9,7 @@ import "Search.js" as Search
 import "QueryWords.js" as QueryWords
 import "Reschedule.js" as Resched
 import "EventRule.js" as EventRule
+import "TaskDates.js" as TaskDates
 
 Item {
     id: root
@@ -150,7 +151,7 @@ Item {
         const src = AppController.eventById(String(root._menuOcc.masterId || "") || e.id);
         const d = AppController.newEventDraft(e.start, e.date);
         for (const k of ["title", "type", "attendees", "taskId", "profileId", "context", "location", "notes", "url",
-                         "reminderMinutes"])
+                         "reminderMinutes", "tz"])
             if (src[k] !== undefined) d[k] = src[k];
         d.end = e.end;
         AppController.saveEvent(d);
@@ -350,9 +351,9 @@ Item {
 
     function _renderedIdsForDay(dayIdx) {
         if (dayIdx < 0 || dayIdx >= days.length) return [];
-        const list = days[dayIdx].tasks.slice(0, 4);
+        const list = days[dayIdx].tasks.slice(0, root.dayZoom ? 3 : gridHost.dueMaxLines);
         const ids = [];
-        for (let i = 0; i < list.length; i++) ids.push(list[i].id);
+        for (let i = 0; i < list.length; i++) if (!list[i].ghost) ids.push(list[i].id);
         return ids;
     }
 
@@ -406,11 +407,15 @@ Item {
     property date now: new Date()
 
     // Returns false while the grid has no height to scroll yet.
+    // The hour the grid opens on (rows from hoursStart): the working day,
+    // or the hour before now when that is earlier. Pure, for the tests.
+    function workdayFirstHour(nowHour) {
+        return Math.max(0, Math.min(root.workStart, nowHour - 1) - root.hoursStart);
+    }
     function scrollToWorkday() {
         const flick = hourScroll.contentItem;
         if (!flick || flick.height <= 0 || flick.contentHeight <= flick.height) return false;
-        const nowHour = new Date().getHours();
-        const first = Math.max(0, Math.min(root.workStart, nowHour - 1) - root.hoursStart);
+        const first = root.workdayFirstHour(new Date().getHours());
         const maxY = Math.max(0, flick.contentHeight - flick.height);
         flick.contentY = Math.min(maxY, first * root.hourH);
         return true;
@@ -440,6 +445,9 @@ Item {
     // the time on top of a title.
     readonly property int eventOneLineH: Math.ceil(Theme.fsXs * 1.4) + 2 * Theme.sp2xs
     readonly property int eventTwoLineH: Math.ceil((Theme.fsXs + Theme.fsSm) * 1.4) + 2 * Theme.sp2xs
+    // The top of a block its time and a title of up to three lines take:
+    // a "+N" chip stays below it.
+    readonly property int blockTitleH: Math.ceil((Theme.fsXs + 3 * Theme.fsSm) * 1.4) + 2 * Theme.sp2xs
     function eventBlock(start, end) {
         return Overlap.block(start, end, root.hourH, root.eventOneLineH, root.eventTwoLineH);
     }
@@ -453,6 +461,10 @@ Item {
         return out;
     }
 
+    function _dow(d) {
+        const n = root.dowLabelsByJsDow[d.getDay()];
+        return I18n.lang === "ru" ? n.toLowerCase() : n;
+    }
     function isSameDay(a, b) {
         if (!a || !b || !a.getFullYear || !b.getFullYear) return false;
         return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -669,6 +681,15 @@ Item {
         for (let k = 0; k < days.length; k++) {
             days[k].tasks.sort((a, b) => (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9));
         }
+        // A2-25: the occurrences ahead of a repeating task, worked out from
+        // its rule, faint and read-only after the day's real chips. Shown,
+        // never created; Return on one opens the task itself.
+        const ghosts = AppController.calendarRepeats(start, end);
+        for (let i = 0; i < ghosts.length; i++) {
+            const g = ghosts[i];
+            const col = g.day >= 0 && g.day < colOf.length ? colOf[g.day] : -1;
+            if (col >= 0 && root.passesFilter(g)) days[col].tasks.push(g);
+        }
         return days;
     }
 
@@ -705,6 +726,17 @@ Item {
         return parts.join(" · ");
     }
 
+    // A repeat ahead (A2-25): its clock time when the task has one, then the
+    // title — "09:00 Проверить бэкапы". What the tip and a reader say.
+    function ghostTitle(g) {
+        if (!g || !g.hasTime || !(g.hour >= 0)) return g ? g.title : "";
+        const h = Math.floor(g.hour);
+        return I18n.fmtTime(new Date(2000, 0, 1, h, Math.round((g.hour - h) * 60))) + " " + g.title;
+    }
+    function ghostTip(g) {
+        return I18n.t("cal.ghost.tip").arg(g.title).arg(TaskDates.repeatText(g.recurrence));
+    }
+
     // The day zoom's header line (DG-051, X-Oth-DayMonth): "2 встречи ·
     // 1 задача · срок:", the deadlines following as links. Facts only.
     function dayFacts(day) {
@@ -714,6 +746,7 @@ Item {
         let planned = day.blocks ? day.blocks.length : 0;
         let dues = 0;
         for (let i = 0; i < day.tasks.length; i++) {
+            if (day.tasks[i].ghost) continue;   // a repeat ahead is not a fact of the day
             if (day.tasks[i].scheduled) planned++;
             else dues++;
         }
@@ -915,8 +948,14 @@ Item {
         const day = root.days[d];
         const out = [];
         const chips = day.tasks.slice(0, 4);
-        for (let i = 0; i < chips.length; i++)
-            out.push({ kind: "task", id: chips[i].id, key: "task:" + chips[i].id, start: -1 });
+        for (let i = 0; i < chips.length; i++) {
+            // A repeat ahead (A2-25) is its own stop: Return opens the task,
+            // nothing moves, selects or archives it.
+            if (chips[i].ghost)
+                out.push({ kind: "ghost", id: chips[i].id, key: "ghost:" + chips[i].id + "@" + d, start: -1 });
+            else
+                out.push({ kind: "task", id: chips[i].id, key: "task:" + chips[i].id, start: -1 });
+        }
         const timed = [];
         for (let i = 0; i < day.events.length; i++) {
             const e = day.events[i];
@@ -1034,7 +1073,7 @@ Item {
     function openCursor() {
         const it = root._cursorItem();
         if (!it) { if (!root.cursorVisible) root.moveCursor(0, 0); return; }
-        if (it.kind === "task") root.taskClicked(it.id);
+        if (it.kind === "task" || it.kind === "ghost") root.taskClicked(it.id);
         else root.eventClicked(it.id, it.ev.occ);
     }
     function toggleCursorSelection() {
@@ -1142,7 +1181,7 @@ Item {
     // 10:00 were drawn exactly on top of each other here: the second hid the
     // first, and only the top one could be clicked. The day grid had solved
     // this; this one had never been taught. Both call the same module now.
-    function buildOverlaps() {
+    function buildOverlapItems() {
         const perDay = [];
         for (let i = 0; i < days.length; i++) {
             const list = [];
@@ -1158,14 +1197,72 @@ Item {
             }
             perDay.push(list);
         }
-        return Overlap.computeByDay(perDay);
+        return perDay;
     }
-    readonly property var overlaps: buildOverlaps()
+    readonly property var overlapItems: buildOverlapItems()
+    readonly property var overlaps: Overlap.computeByDay(root.overlapItems)
+    // The narrowest lane drawn; past it the rest fold onto "+N" (A1-7).
+    // Measured in the title's own font, so it grows with the scale: six
+    // letters and the ellipsis in a slim block's small title ("o" is a
+    // letter of average width: "Design…", "Синхро…" fit), inside its
+    // padding and the gap between lanes. At a fixed 44px a lane showed
+    // "Sta…" or one letter at 150% (F2-REG-2..4).
+    TextMetrics {
+        id: laneSample
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsXs
+        font.weight: Theme.fwHeading
+        text: "oooooo…"
+    }
+    // The same six letters in a block's usual title: narrower than that
+    // with its usual padding, a block goes slim.
+    TextMetrics {
+        id: laneSampleSm
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsSm
+        font.weight: Theme.fwHeading
+        text: laneSample.text
+    }
+    // A block narrower than its usual padding allows keeps to this one.
+    readonly property int slimPadL: Theme.spXs
+    readonly property int slimPadR: Theme.sp2xs
+    // + the bar, the padding and the gap between lanes.
+    readonly property int minLaneW: Math.ceil(laneSample.advanceWidth) + 3 + root.slimPadL + root.slimPadR + 2
+    // A day holds two such lanes side by side: the tray and the rail give
+    // way to the grid before a day gets narrower than that.
+    readonly property int minDayW: Math.max(Theme.px(96), 2 * root.minLaneW + 2 * root.laneInset)
+    readonly property int minGridW: gridHost.gutterW + gridHost.dayCount * root.minDayW
+    // Whether a block `w` wide, with `chrome` px of its usual padding and
+    // icon, would leave its title less than the sample: then it drops the
+    // icon and keeps to the slim padding.
+    function slimBlock(w: real, chrome: int): bool {
+        return !root.dayZoom && w < Math.ceil(laneSampleSm.advanceWidth) + chrome + 2;
+    }
+    // Whether every word of `text` fits `w` px in `fm`: else a wrapped
+    // title would cut a long word at the block's edge, so it keeps to one
+    // line and ends in an ellipsis instead (F3-EYES-8).
+    function wordsFit(text: string, fm: var, w: real): bool {
+        const words = String(text || "").split(/\s+/);
+        for (let i = 0; i < words.length; i++)
+            if (words[i].length > 0 && fm.advanceWidth(words[i]) > w + 0.5) return false;
+        return true;
+    }
+    readonly property int laneAvail: gridHost.dayW - 2 * root.laneInset
+    readonly property int laneFit: Overlap.capacity(root.laneAvail, root.minLaneW, 1)
+    // The "+N" chips: what is folded, per day, from what hour.
+    readonly property var foldChips: {
+        const out = [];
+        for (let i = 0; i < root.overlapItems.length; i++) {
+            const f = Overlap.folds(root.overlapItems[i], root.overlaps, root.laneFit);
+            for (let j = 0; j < f.length; j++) out.push(Object.assign({ dayIndex: i }, f[j]));
+        }
+        return out;
+    }
 
     function totalTasks() {
         let n = 0;
         for (let i = 0; i < days.length; i++)
-            for (let j = 0; j < days[i].tasks.length; j++) if (!days[i].tasks[j].scheduled) n++;
+            for (let j = 0; j < days[i].tasks.length; j++) if (!days[i].tasks[j].scheduled && !days[i].tasks[j].ghost) n++;
         return n;
     }
     function totalEvents() {
@@ -1274,7 +1371,9 @@ Item {
             readonly property int gutterW: root.dayZoom || Style.fills ? Theme.px(48) : Theme.px(40)
             readonly property int dayCount: Math.max(1, root.days.length)
             // Narrowest a day column may get before the rail has to give way.
-            readonly property int minDayW: 96
+            // Scaled (A6-11): at 150% the rail left 105 px days, every
+            // title cut.
+            readonly property int minDayW: root.minDayW
             // The rail takes its width off the grid rather than overlapping it,
             // and folds away whenever keeping it would squeeze the days below
             // minDayW. The old test was a fixed 900px, while dayW refused to go
@@ -1289,13 +1388,17 @@ Item {
             // as the busiest day needs. The day zoom says them in its header
             // line instead (DG-051), so it has no row of its own.
             readonly property int dueLineH: Theme.px(18)
+            // Deadline lines per day before "+N": four, fewer when they would
+            // take more than a fifth of the height (A6-11): at 150% the
+            // header ate half the window and the grid showed four hours.
+            readonly property int dueMaxLines: Math.max(1, Math.min(4, Math.floor((height * 0.2 - 2 * Theme.spXs - dueLineH) / (dueLineH + Theme.sp2xs))))
             readonly property int dueRowH: {
                 if (root.dayZoom) return 0;
                 const floor = Style.fills ? Theme.px(30) : Theme.px(22);
                 let most = 0;
                 for (let i = 0; i < root.days.length; i++) {
                     const n = root.days[i].tasks.length;
-                    if (n > 0) most = Math.max(most, 2 * Theme.spXs + Math.min(4, n) * (dueLineH + Theme.sp2xs) + (n > 4 ? dueLineH : 0));
+                    if (n > 0) most = Math.max(most, 2 * Theme.spXs + Math.min(dueMaxLines, n) * (dueLineH + Theme.sp2xs) + (n > dueMaxLines ? dueLineH : 0));
                 }
                 return Math.max(floor, most);
             }
@@ -1381,6 +1484,14 @@ Item {
                                     delay: 400
                                     text: headMA.loadText
                                     y: headMA.height + Theme.spXs
+                                    // Kept over the grid (A1-22): centred on a narrow
+                                    // first column it ran over the sidebar.
+                                    x: {
+                                        const centred = (headMA.width - implicitWidth) / 2;
+                                        if (!visible || !gridHost) return centred;
+                                        const colX = headMA.mapToItem(gridHost, 0, 0).x;
+                                        return Math.max(gridHost.gutterW - colX, Math.min(centred, gridHost.width - colX - implicitWidth));
+                                    }
                                 }
                             }
                             Row {
@@ -1396,8 +1507,8 @@ Item {
                                     objectName: "week-head-dow"
                                     anchors.baseline: dayNumber.baseline
                                     // "пт, 9 октября" (X-Oth-DayMonth).
-                                    text: root.dayZoom ? root.dowLabelsByJsDow[headCol.modelData.date.getDay()].toLowerCase()
-                                                         + ", " + I18n.fmtDate(headCol.modelData.date, "longDay")
+                                    // Lower case is Russian usage; English keeps "Mon" (A2-16).
+                                    text: root.dayZoom ? root._dow(headCol.modelData.date) + ", " + I18n.fmtDate(headCol.modelData.date, "longDay")
                                         : root.dowLabelsByJsDow[headCol.modelData.date.getDay()].toLowerCase()
                                           + (Style.fills ? "" : " " + headCol.modelData.date.getDate())
                                     color: root.dayZoom || (headCol.isToday && !Style.fills) ? Theme.text : Theme.textDim
@@ -1445,11 +1556,13 @@ Item {
                                 width: parent.width
                                 spacing: root.dayZoom ? Theme.spMd : Theme.sp2xs
                                 Repeater {
-                                    model: headCol.modelData.tasks.slice(0, root.dayZoom ? 3 : 4)
+                                    model: headCol.modelData.tasks.slice(0, root.dayZoom ? 3 : gridHost.dueMaxLines)
                                     delegate: Rectangle {
                                         id: dueChip
                                         required property var modelData
-                                        readonly property bool _selected: AppController.selectionCount >= 0
+                                        // A repeat ahead (A2-25): faint, read-only.
+                                        readonly property bool ghost: !!modelData.ghost
+                                        readonly property bool _selected: !ghost && AppController.selectionCount >= 0
                                             && AppController.isTaskSelected(modelData.id)
                                         width: root.dayZoom ? dueLine.implicitWidth + 2 * Theme.spXs : dueFlow.width
                                         height: gridHost.dueLineH
@@ -1463,7 +1576,8 @@ Item {
                                         border.width: _selected ? 2 : 0
                                         // A deadline is orange in bold and grey
                                         // in quiet; a planned day is a ring.
-                                        readonly property color ink: modelData.scheduled ? Theme.textMuted
+                                        readonly property color ink: ghost ? Theme.textDim
+                                            : modelData.scheduled ? Theme.textMuted
                                             : Style.urgency ? Theme.signalNow : Theme.textMuted
 
                                         Row {
@@ -1474,21 +1588,35 @@ Item {
                                             spacing: Theme.spXs
                                             Icon {
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                visible: !dueChip.modelData.scheduled
+                                                visible: !dueChip.modelData.scheduled && !dueChip.ghost
                                                 name: "flag"
                                                 size: Theme.px(10)
                                                 color: dueChip.ink
                                             }
                                             StatusRing {
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                visible: !!dueChip.modelData.scheduled
+                                                visible: !!dueChip.modelData.scheduled && !dueChip.ghost
                                                 category: AppController.statusCategory(dueChip.modelData.status || "")
                                                 size: Theme.px(10)
                                             }
+                                            // The repeat mark the card and Today use.
                                             Text {
-                                                objectName: "week-due-title"
-                                                width: root.dayZoom ? implicitWidth : dueLine.width - Theme.px(10) - Theme.spXs
-                                                text: dueChip.modelData.title
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: dueChip.ghost
+                                                width: Theme.px(10)
+                                                horizontalAlignment: Text.AlignHCenter
+                                                text: "↻"
+                                                color: dueChip.ink
+                                                font.family: Theme.fontUi
+                                                font.pixelSize: root.dayZoom ? Theme.fsSm : Theme.fsXs
+                                            }
+                                            Text {
+                                                // A day's chips share the line and elide (A2-16): a
+                                                // long title ran past the edge cut mid-word.
+                                                width: root.dayZoom ? Math.min(implicitWidth, Math.max(Theme.px(60), dueFlow.width / Math.max(1, Math.min(3, headCol.modelData.tasks.length)) - Theme.px(10) - 3 * Theme.spXs - Theme.spMd))
+                                                                    : dueLine.width - Theme.px(10) - Theme.spXs
+                                                objectName: dueChip.ghost ? "week-ghost-title" : "week-due-title"
+                                                text: dueChip.ghost ? root.ghostTitle(dueChip.modelData) : dueChip.modelData.title
                                                 textFormat: Text.PlainText
                                                 color: dueChip.ink
                                                 font.family: Theme.fontUi
@@ -1499,7 +1627,8 @@ Item {
                                         FocusRing {
                                             objectName: "week-cursor"
                                             visible: root.cursorVisible && root.cursorDay === headCol.index
-                                                     && root.cursorKey === "task:" + dueChip.modelData.id
+                                                     && root.cursorKey === (dueChip.ghost ? "ghost:" + dueChip.modelData.id + "@" + headCol.index
+                                                                                          : "task:" + dueChip.modelData.id)
                                         }
                                         // The keyboard's way in (design audit
                                         // DES-19). Under the MouseArea and deaf
@@ -1507,19 +1636,21 @@ Item {
                                         // there, with its Ctrl / Shift.
                                         ClickArea {
                                             id: dueKey
-                                            objectName: "week-due-" + dueChip.modelData.id
-                                            label: dueChip.modelData.title
+                                            objectName: (dueChip.ghost ? "week-ghost-" : "week-due-") + dueChip.modelData.id
+                                            label: dueChip.ghost ? root.ghostTip(dueChip.modelData) : dueChip.modelData.title
                                             showTip: false
                                             acceptedButtons: Qt.NoButton
                                             onActivated: chipMA.open()
-                                            // The move keys act on it (APP-249).
-                                            onActiveFocusChanged: if (activeFocus) {
+                                            // The move keys act on it (APP-249); never
+                                            // on a repeat ahead, which is not a task.
+                                            onActiveFocusChanged: if (activeFocus && !dueChip.ghost) {
                                                 root.keyTaskId = dueChip.modelData.id;
                                                 root.keyTaskDay = headCol.modelData.date;
                                             }
                                         }
                                         // The task's menu, the same in every view (APP-268).
                                         TapHandler {
+                                            enabled: !dueChip.ghost
                                             acceptedButtons: Qt.RightButton
                                             onTapped: root.openTaskMenu(dueChip.modelData.id)
                                         }
@@ -1538,7 +1669,7 @@ Item {
                                             property bool inert: false
                                             onPressed: (mouse) => { pressX = mouse.x; pressY = mouse.y; inert = false; }
                                             onPositionChanged: (mouse) => {
-                                                if (!pressed || inert) return;
+                                                if (!pressed || inert || dueChip.ghost) return;
                                                 if (!root.chipDrag) {
                                                     if (Math.abs(mouse.x - pressX) < 6 && Math.abs(mouse.y - pressY) < 6) return;
                                                     root.beginChipDrag(dueChip.modelData);
@@ -1551,6 +1682,7 @@ Item {
                                             }
                                             onCanceled: if (root.chipDrag) { root.chipDrag = null; dragLayer.finish(); }
                                             onContainsMouseChanged: {
+                                                if (dueChip.ghost) return;
                                                 if (containsMouse) { root.hoverTaskId = dueChip.modelData.id; root.hoverTaskDay = headCol.modelData.date; }
                                                 else if (root.hoverTaskId === dueChip.modelData.id) root.hoverTaskId = "";
                                             }
@@ -1568,7 +1700,9 @@ Item {
                                                 if (inert) { inert = false; return; }
                                                 const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
                                                 const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
-                                                if (ctrl) {
+                                                if (dueChip.ghost) {
+                                                    chipMA.open();
+                                                } else if (ctrl) {
                                                     AppController.toggleTaskSelection(modelData.id);
                                                 } else if (shift) {
                                                     root._rangeSelect(modelData.id);
@@ -1579,14 +1713,14 @@ Item {
                                             // The full title on Tab too (APP-184).
                                             ToolTip.visible: containsMouse || dueKey.activeFocus
                                             ToolTip.delay: 400
-                                            ToolTip.text: modelData.title
+                                            ToolTip.text: dueChip.ghost ? root.ghostTip(modelData) : modelData.title
                                         }
                                     }
                                 }
                             }
                             // The overflow count selects the day.
                             Text {
-                                readonly property int _shown: root.dayZoom ? 3 : 4
+                                readonly property int _shown: root.dayZoom ? 3 : gridHost.dueMaxLines
                                 visible: headCol.modelData.tasks.length > _shown
                                 leftPadding: Theme.spXs
                                 text: I18n.t("cal.moreN").arg(headCol.modelData.tasks.length - _shown)
@@ -1741,7 +1875,8 @@ Item {
                                 horizontalAlignment: Text.AlignRight
                                 text: root.hourLabel(root.hoursStart + index)
                                 color: Theme.textDim
-                                font.family: Theme.fontMono
+                                // The UI font: the mono zero read as 8 (A2-27).
+                                font.family: Theme.fontUi
                                 font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXs
                             }
@@ -2005,7 +2140,10 @@ Item {
                             readonly property int _col:  (dragDx !== 0 || dragDy !== 0) ? 0 : _slot.col
                             // Tiled, or cascaded once lanes would get
                             // narrower than a readable title (VISU-15).
-                            readonly property var _lane: Overlap.lane(weEv._col, weEv._cols, gridHost.dayW - 2 * root.laneInset)
+                            readonly property var _lane: Overlap.lane(weEv._col, weEv._cols, root.laneAvail, root.minLaneW, 1)
+                            // Folded onto "+N", drawn only under the cursor.
+                            readonly property bool _cursorOn: root.cursorVisible && root.cursorKey === root._evKey(weEv.modelData)
+                            visible: !weEv._lane.folded || weEv._cursorOn
 
                             x: gridHost.gutterW + weEv.effDayIndex * gridHost.dayW + root.laneInset + weEv._lane.x
                             y: (weEv.effStart - root.hoursStart) * root.hourH + weEv.dragDy
@@ -2028,11 +2166,14 @@ Item {
                             border.color: Theme.cardBorder
                             // A later lane is drawn over an earlier one where
                             // they cascade; a dragged event above them all.
-                            z: (weEv.dragDx !== 0 || weEv.dragDy !== 0) ? 7 : 5 + weEv._col / Math.max(1, weEv._cols)
+                            z: (weEv.dragDx !== 0 || weEv.dragDy !== 0) || weEv._lane.folded ? 7 : 5 + weEv._col / Math.max(1, weEv._cols)
                             readonly property string _range: Theme.fmtHour(weEv.effStart) + "–" + Theme.fmtHour(weEv.effEnd)
                             // The day's second line: where, else how it repeats.
                             readonly property string _sub: {
                                 const o = weEv.modelData.occ || {};
+                                // Kept in another zone (A6-4): its hour there.
+                                if (String(o.srcTz || "").length > 0)
+                                    return Theme.fmtHour(Number(o.srcStart) || 0) + " " + String(o.srcTz).split("/").pop().replace(/_/g, " ");
                                 if (String(o.location || "").length > 0) return o.location;
                                 if ((weEv.modelData.context || "").length > 0) return weEv.modelData.context;
                                 const rule = String(o.rrule || "");
@@ -2046,10 +2187,13 @@ Item {
                                 color: Theme.meeting
                                 radius: 1
                             }
+                            // Narrow: no icon, slim padding (F2-REG-3).
+                            readonly property bool slim: root.slimBlock(weEv.width,
+                                (Style.fills ? Theme.spMd : Theme.spSm + Theme.px(11) + Theme.spXs) + Theme.spSm)
                             Column {
                                 anchors.fill: parent
-                                anchors.leftMargin: Style.fills ? Theme.spMd : Theme.spSm
-                                anchors.rightMargin: Theme.spSm
+                                anchors.leftMargin: weEv.slim ? (Style.fills ? 3 : 0) + root.slimPadL : (Style.fills ? Theme.spMd : Theme.spSm)
+                                anchors.rightMargin: weEv.slim ? root.slimPadR : Theme.spSm
                                 anchors.topMargin: weEv.compact ? 0 : (root.dayZoom ? Theme.spXs : Theme.sp2xs)
                                 spacing: root.dayZoom ? Theme.sp2xs : 0
                                 clip: true
@@ -2071,7 +2215,7 @@ Item {
                                     // the title does (SCALE-7).
                                     readonly property bool roomy: evLine.width - evTime.implicitWidth - Theme.spXs >= Theme.px(64)
                                     MeetingIcon {
-                                        visible: !Style.fills || root.dayZoom
+                                        visible: (!Style.fills || root.dayZoom) && !weEv.slim
                                         size: Theme.px(11)
                                         ink: Style.fills ? Theme.meeting : Theme.textMuted
                                     }
@@ -2091,7 +2235,7 @@ Item {
                                         text: weEv.modelData.title
                                         color: Theme.text
                                         font.family: Theme.fontUi
-                                        font.pixelSize: root.dayZoom ? Theme.fsMd : Theme.fsSm
+                                        font.pixelSize: root.dayZoom ? Theme.fsMd : (weEv.slim ? Theme.fsXs : Theme.fsSm)
                                         font.weight: Style.fills && !root.dayZoom ? Theme.fwHeading : Theme.fwBody
                                         elide: Text.ElideRight
                                     }
@@ -2308,7 +2452,9 @@ Item {
                             readonly property real effEnd: !isNaN(pendingEndH) ? pendingEndH : modelData.end
                             readonly property var _slot: root.overlaps[wkBlock.modelData.key] || ({ col: 0, cols: 1 })
                             readonly property int _cols: wkBlock.moving ? 1 : Math.max(1, wkBlock._slot.cols)
-                            readonly property var _lane: Overlap.lane(wkBlock.moving ? 0 : wkBlock._slot.col, wkBlock._cols, gridHost.dayW - 2 * root.laneInset)
+                            readonly property var _lane: Overlap.lane(wkBlock.moving ? 0 : wkBlock._slot.col, wkBlock._cols, root.laneAvail, root.minLaneW, 1)
+                            readonly property bool _cursorOn: root.cursorVisible && root.cursorKey === "task:" + wkBlock.modelData.id
+                            visible: !wkBlock._lane.folded || wkBlock._cursorOn
                             x: gridHost.gutterW + wkBlock.effDayIndex * gridHost.dayW + root.laneInset + wkBlock._lane.x
                             y: (wkBlock.effStart - root.hoursStart) * root.hourH + wkBlock.dragDy
                             width: wkBlock._lane.w - (wkBlock._cols > 1 ? 2 : 0)
@@ -2326,7 +2472,10 @@ Item {
                             readonly property string _range: Theme.fmtHour(wkBlock.effStart) + "–" + Theme.fmtHour(wkBlock.effEnd)
                             // Task blocks sit under events (4 < 5), as in the
                             // day grid; a carried one above everything.
-                            z: wkBlock.moving ? 7 : 4 + wkBlock._slot.col / Math.max(1, wkBlock._slot.cols)
+                            // One ladder with the meetings (A2-12): lanes no
+                            // longer overlap, so a task beside two meetings is
+                            // never under them.
+                            z: wkBlock.moving || wkBlock._lane.folded ? 7 : 5 + wkBlock._slot.col / Math.max(1, wkBlock._slot.cols)
 
                             // Where the block would land, for the hint and the drop.
                             function landing() {
@@ -2360,14 +2509,18 @@ Item {
                             // quiet: the status ring, the title and the range
                             // under it; the day: one row with the range at the
                             // right and the key under it (DG-044, DG-051).
+                            // Narrow: no ring, slim padding (F2-REG-2).
+                            readonly property bool slim: root.slimBlock(wkBlock.width,
+                                2 * Theme.spSm + (Style.fills ? 0 : Theme.px(10) + Theme.spXs))
                             Column {
                                 anchors.fill: parent
-                                anchors.leftMargin: root.dayZoom ? Theme.spLg : Theme.spSm
-                                anchors.rightMargin: root.dayZoom ? Theme.spLg : Theme.spSm
+                                anchors.leftMargin: root.dayZoom ? Theme.spLg : (wkBlock.slim ? root.slimPadL : Theme.spSm)
+                                anchors.rightMargin: root.dayZoom ? Theme.spLg : (wkBlock.slim ? root.slimPadR : Theme.spSm)
                                 anchors.topMargin: wkBlock.oneLine ? 0 : (root.dayZoom ? Theme.spXs : Theme.sp2xs)
                                 spacing: root.dayZoom ? Theme.sp2xs : 0
                                 clip: true
                                 Text {
+                                    id: blkStart
                                     visible: !wkBlock.oneLine && Style.fills && !root.dayZoom
                                     text: Theme.fmtHour(wkBlock.effStart)
                                     color: Theme.textMuted
@@ -2381,7 +2534,7 @@ Item {
                                     spacing: Theme.spXs
                                     StatusRing {
                                         id: blkRing
-                                        visible: !Style.fills || root.dayZoom
+                                        visible: (!Style.fills || root.dayZoom) && !wkBlock.slim
                                         Layout.alignment: wkBlock.oneLine || root.dayZoom ? Qt.AlignVCenter : Qt.AlignTop
                                         Layout.topMargin: wkBlock.oneLine || root.dayZoom ? 0 : Theme.sp2xs
                                         category: AppController.statusCategory(wkBlock.modelData.status || "")
@@ -2400,11 +2553,22 @@ Item {
                                               + (wkBlock.modelData.title || "")
                                         color: Theme.text
                                         font.family: Theme.fontUi
-                                        font.pixelSize: root.dayZoom ? Theme.fsMd : Theme.fsSm
+                                        font.pixelSize: root.dayZoom ? Theme.fsMd : (wkBlock.slim ? Theme.fsXs : Theme.fsSm)
                                         font.weight: Style.fills && !root.dayZoom ? Theme.fwHeading : Theme.fwBody
-                                        wrapMode: wkBlock.oneLine || root.dayZoom || !Style.fills ? Text.NoWrap : Text.Wrap
-                                        maximumLineCount: wkBlock.oneLine || root.dayZoom || !Style.fills ? 1 : 3
+                                        // Wrapped at words only while every word fits;
+                                        // a word wider than the lane was cut through
+                                        // with no ellipsis (F3-EYES-8, F2-REG-2).
+                                        readonly property bool oneLine: wkBlock.oneLine || root.dayZoom || !Style.fills
+                                            || !root.wordsFit(blkTitle.text, blkTitleFm, blkTitle.width)
+                                        wrapMode: blkTitle.oneLine ? Text.NoWrap : Text.WordWrap
+                                        // As many lines as the block holds whole (up to
+                                        // three): a narrow lane wrapped a fourth one
+                                        // cut in half by the block's bottom.
+                                        maximumLineCount: blkTitle.oneLine ? 1
+                                            : Math.max(1, Math.min(3, Math.floor((wkBlock.height - Theme.sp2xs * 2
+                                                - (blkStart.visible ? blkStart.height : 0)) / blkTitleFm.lineSpacing)))
                                         elide: Text.ElideRight
+                                        FontMetrics { id: blkTitleFm; font: blkTitle.font }
                                     }
                                     Text {
                                         visible: root.dayZoom
@@ -2586,9 +2750,124 @@ Item {
                             }
                         }
                     }
+
+                    // "+N": the lanes that do not fit the day's width (A1-7,
+                    // A6-9): how many, at the first of them; a click opens
+                    // the day, where they stand side by side.
+                    Repeater {
+                        model: root.dayZoom ? [] : root.foldChips
+                        delegate: Rectangle {
+                            id: foldChip
+                            required property var modelData
+                            objectName: "week-fold-" + foldChip.modelData.dayIndex
+                            readonly property var _last: Overlap.lane(root.laneFit - 1, root.laneFit, root.laneAvail, root.minLaneW, 1)
+                            x: gridHost.gutterW + foldChip.modelData.dayIndex * gridHost.dayW + root.laneInset + foldChip._last.x + foldChip._last.w - width - Theme.sp2xs
+                            // Off the title of what the last lane draws there.
+                            y: (Overlap.chipStart(foldChip.modelData, (height + Theme.sp2xs) / root.hourH, root.blockTitleH / root.hourH) - root.hoursStart) * root.hourH + Theme.sp2xs
+                            z: 6
+                            width: foldT.implicitWidth + 2 * Theme.spXs
+                            height: foldT.implicitHeight + Theme.sp2xs
+                            radius: Theme.radiusMd
+                            color: Theme.panel2
+                            border.color: Theme.borderStrong
+                            border.width: 1
+                            Text {
+                                id: foldT
+                                anchors.centerIn: parent
+                                text: "+" + foldChip.modelData.n
+                                color: Theme.text
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.fsXs
+                                font.weight: Theme.fwHeading
+                            }
+                            ClickArea {
+                                label: I18n.t("week.foldOpen").arg(foldChip.modelData.n)
+                                onActivated: root.dayRequested(root.days[foldChip.modelData.dayIndex].date)
+                            }
+                        }
+                    }
                 }
             }
+
+            // What the hours on screen do not show (A2-13, A6-8): an 07:00
+            // sync or the after-midnight half of a release sat above the
+            // grid while the header counted it. A chip at the edge says how
+            // many and the nearest; a click scrolls to it.
+            readonly property var offView: {
+                const f = hourScroll.contentItem;
+                const out = { above: [], below: [] };
+                if (!f || f.height <= 0) return out;
+                const top = f.contentY, bot = f.contentY + f.height;
+                const all = root.flatEvents.concat(root.flatBlocks);
+                for (let i = 0; i < all.length; i++) {
+                    const it = all[i];
+                    const y0 = (it.start - root.hoursStart) * root.hourH;
+                    const y1 = Math.max(y0 + 18, (it.end - root.hoursStart) * root.hourH);
+                    if (y1 <= top + 2) out.above.push(it);
+                    else if (y0 >= bot - 2) out.below.push(it);
+                }
+                out.above.sort((a, b) => a.start - b.start);
+                out.below.sort((a, b) => a.start - b.start);
+                return out;
+            }
+            function _scrollTo(it) {
+                const f = hourScroll.contentItem;
+                if (!f || !it) return;
+                const maxY = Math.max(0, f.contentHeight - f.height);
+                f.contentY = Math.max(0, Math.min(maxY, (it.start - root.hoursStart) * root.hourH - root.hourH / 2));
+            }
+            EdgeChip {
+                objectName: "week-more-earlier"
+                anchors.top: hourScroll.top
+                // Between the first two hour labels, not on one.
+                anchors.topMargin: Math.round((root.hourH - height) / 2)
+                items: parent.offView.above
+                up: true
+                countKey: "week.moreEarlier"
+                onActivated: (it) => parent._scrollTo(it)
+            }
+            EdgeChip {
+                objectName: "week-more-later"
+                anchors.bottom: hourScroll.bottom
+                anchors.bottomMargin: Math.round((root.hourH - height) / 2)
+                items: parent.offView.below
+                up: false
+                countKey: "week.moreLater"
+                onActivated: (it) => parent._scrollTo(it)
+            }
         }
+    }
+
+    // An edge chip of the hour grid, in the hour gutter so it never covers a
+    // block: "↑2"; the tooltip and the label say "2 earlier · 07:00 Early sync".
+    component EdgeChip: Rectangle {
+        id: ec
+        property var items: []
+        property bool up: true
+        property string countKey: ""
+        signal activated(var it)
+        readonly property var first: ec.items.length > 0 ? (ec.up ? ec.items[ec.items.length - 1] : ec.items[0]) : null
+        readonly property string fullText: ec.first ? I18n.t(ec.countKey).arg(ec.items.length) + " · " + Theme.fmtHour(ec.first.start) + " " + (ec.first.title || "") : ""
+        visible: ec.items.length > 0
+        x: hourScroll.x + Theme.sp2xs
+        z: 9
+        width: gridHost.gutterW - 2 * Theme.sp2xs
+        height: ecText.implicitHeight + 2 * Theme.sp2xs
+        radius: height / 2
+        color: Theme.panel2
+        border.color: Theme.borderStrong
+        border.width: 1
+        Text {
+            id: ecText
+            anchors.centerIn: parent
+            text: (ec.up ? "↑" : "↓") + ec.items.length
+            color: Theme.text
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
+            font.pixelSize: Theme.fsXs
+            font.weight: Theme.fwHeading
+        }
+        ClickArea { label: ec.fullText; onActivated: ec.activated(ec.first) }
     }
 
     // Empty-week hint — shown only when the week has no tasks and no events, so
@@ -2603,7 +2882,7 @@ Item {
         readonly property bool searching: root.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim().length > 0
         // A search that finds nothing reads as on the board (N/X-Err-Empty, R4-100).
         title: searching ? I18n.t("view.empty.noMatchFor").arg(QueryWords.label(root.searchText, []))
-                         : I18n.t("week.empty.title")
+                         : I18n.t(root.dayZoom ? "day.empty.title" : "week.empty.title")
         line: searching ? I18n.t("view.empty.resetFilter")
                         : I18n.t("calendar.empty.hint").arg(AppController.shortcutText("task.schedule"))
         lineLink: searching

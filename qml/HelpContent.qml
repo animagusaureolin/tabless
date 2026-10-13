@@ -22,20 +22,20 @@ Item {
     }
 
     readonly property var tocModel: [
-        {anchor: "help-views", label: root.tr2("Views — Today, Tasks, Calendar (Week, Month), Archive, Knowledge", "Виды — сегодня, задачи, календарь (неделя, месяц), архив, знания")},
-        {anchor: "help-tasks", label: root.tr2("Tasks — statuses, priorities, deadlines", "Задачи — статусы, приоритеты, сроки")},
+        {anchor: "help-views", label: root.tr2("Views — Today, Tasks, Calendar (Week, Month), Archive, Notes, Docs", "Виды — сегодня, задачи, календарь (неделя, месяц), архив, заметки, доки")},
+        {anchor: "help-tasks", label: root.tr2("Tasks — statuses, priorities, due dates", "Задачи — статусы, приоритеты, сроки")},
         {anchor: "help-capture", label: root.tr2("Quick Capture — text parsing, @-mentions", "Быстрый ввод — разбор текста, @-упоминания")},
         {anchor: "help-calendar", label: root.tr2("Calendar — events, drag-create, focus blocks", "Календарь — события, создание перетаскиванием, фокус-блоки")},
         {anchor: "help-people", label: root.tr2("People — contacts, mentions, state cycle", "Люди — контакты, упоминания, цикл состояний")},
         {anchor: "help-profiles", label: root.tr2("Profiles — workspaces, JSON", "Профили — рабочие пространства, JSON")},
-        {anchor: "help-search", label: root.tr2("Search & Command Palette", "Поиск и палитра команд")},
+        {anchor: "help-search", label: root.tr2("Search & Command line", "Поиск и командная строка")},
         {anchor: "help-filter", label: root.tr2("Filters — priorities, archived, show-done, saved views", "Фильтры — приоритеты, архив, выполненные, сохранённые виды")},
         {anchor: "help-tweaks", label: root.tr2("Appearance — theme, accent, density, style", "Внешний вид — тема, акцент, плотность, стиль")},
         {anchor: "help-hotkeys", label: root.tr2("Hotkeys — rebinding and conflicts", "Горячие клавиши — переназначение и конфликты")},
         {anchor: "help-automation", label: root.tr2("Automation & Notifications", "Автоматизация и уведомления")},
         {anchor: "help-git", label: root.tr2("Git Watcher — branch focus, PR", "Git Watcher — фокус по ветке, PR")},
         {anchor: "help-integrations", label: root.tr2("Integrations — trackers, tokens, OAuth, JQL", "Интеграции — трекеры, токены, OAuth, JQL")},
-        {anchor: "help-undo", label: root.tr2("Undo & Backups", "Отмена и бэкапы")},
+        {anchor: "help-undo", label: root.tr2("Undo & Backups", "Отмена и резервные копии")},
         {anchor: "help-data", label: root.tr2("Data — JSON import/export, reset", "Данные — импорт/экспорт JSON, сброс")},
         {anchor: "help-tips", label: root.tr2("Tips & non-obvious things", "Советы и неочевидные вещи")}
     ]
@@ -200,7 +200,7 @@ Item {
                               "Лента")
             }
             Body {
-                text: root.tr2("Tasks are grouped into buckets: overdue / today / tomorrow / this week / next / later / no deadline. Within a bucket — subgroups by date. Completed tasks are hidden; you can turn them on with the 'Show done' toggle.",
+                text: root.tr2("Tasks are grouped into buckets: overdue / today / tomorrow / this week / next / later / no due date. Within a bucket — subgroups by date. Completed tasks are hidden; you can turn them on with the 'Show done' toggle.",
                               "Задачи разложены по корзинам: просрочено / сегодня / завтра / на этой неделе / дальше / позже / без срока. Внутри корзины — подгруппы по датам. Выполненные скрыты; их можно показать переключателем «Показать выполненные».")
             }
 
@@ -209,7 +209,7 @@ Item {
                               "Неделя")
             }
             Body {
-                text: root.tr2("7 days as columns. At the top — deadline chips (all-day), below — an hourly grid with events. An event can be dragged between days and hours; drag the top/bottom edge to change its duration.",
+                text: root.tr2("7 days as columns. At the top — due-date chips (all-day), below — an hourly grid with events. An event can be dragged between days and hours; drag the top/bottom edge to change its duration.",
                               "7 дней колонками. Сверху — чипы сроков (на весь день), ниже — почасовая сетка с событиями. Событие можно перетащить между днями и часами; потяните за верхний или нижний край, чтобы изменить длительность.")
             }
 
@@ -217,7 +217,7 @@ Item {
                 text: root.tr2("Month View", "Месяц")
             }
             Body {
-                text: root.tr2("A month grid of deadlines and events, the week start from settings. Clicking a day selects it, and the week opens on it; the arrows step a month, T goes to today, G picks any date.",
+                text: root.tr2("A month grid of due dates and events, the week start from settings. Clicking a day selects it, and the week opens on it; the arrows step a month, T goes to today, G picks any date.",
                               "Сетка месяца: сроки и события, начало недели — из настроек. Клик по дню выбирает его, и неделя открывается на нём; стрелки листают месяцы, T — к сегодняшнему дню, G — к любой дате.")
             }
 
@@ -234,7 +234,7 @@ Item {
                               "Сегодня")
             }
             Body {
-                text: root.tr2("The day on one screen: meetings and planned tasks in time order, free time between them, what is in progress, deadlines and “Who to write to”. The current time is a line across the plan. Arrows step to another day.",
+                text: root.tr2("The day on one screen: meetings and planned tasks in time order, free time between them, what is in progress, due dates and “Who to message”. The current time is a line across the plan. Arrows step to another day.",
                               "День на одном экране: встречи и запланированные задачи по времени, свободное время между ними, что в работе, сроки и «Кому написать». Текущее время — линия поперёк плана. Стрелки листают дни.")
             }
             Hint {
@@ -251,8 +251,8 @@ Item {
                               "Две половины. Страницы — дерево длинных markdown-документов: место для абзаца, объясняющего, почему что-то важно. Удаление страницы забирает всё, что под ней, и отменяется, как любое другое действие.")
             }
             Body {
-                text: root.tr2("References is the catalog: sections with tips, code snippets with syntax highlighting, and contact cards. The command palette searches across all of it at once.",
-                              "Справочник — каталог: разделы с подсказками, сниппеты кода с подсветкой синтаксиса и карточки контактов. Палитра команд ищет по всему этому сразу.")
+                text: root.tr2("References is the catalog: sections with tips, code snippets with syntax highlighting, and contact cards. The command line searches across all of it at once.",
+                              "Справочник — каталог: разделы с подсказками, сниппеты кода с подсветкой синтаксиса и карточки контактов. Командная строка ищет по всему этому сразу.")
             }
 
             H3 {
@@ -317,7 +317,7 @@ Item {
                               "Редактор задачи — поля")
             }
             Body {
-                text: root.tr2("The ID is assigned on save (format — a prefix from Settings → Tasks). Title — a short name. Description — a long description with support for @-mentions. Status — the current kanban column. Priority — P0..P3 (affects the chip color and sorting). Branch — the git branch the task lives on (needed for Git Watcher). Deadline — a date, which you can type naturally: 'tomorrow 17:00', 'friday 5pm', 'friday evening'; the parser extracts the date and (if present) the time.",
+                text: root.tr2("The ID is assigned on save (format — a prefix from Settings → Tasks). Title — a short name. Description — a long description with support for @-mentions. Status — the current kanban column. Priority — P0..P3 (affects the chip color and sorting). Branch — the git branch the task lives on (needed for Git Watcher). Due — a date, which you can type naturally: 'tomorrow 17:00', 'friday 5pm', 'friday evening'; the parser extracts the date and (if present) the time.",
                               "ID назначается при сохранении (формат — префикс из Настройки → Задачи). Название — коротко о задаче. Описание — развёрнутый текст с @-упоминаниями. Статус — текущая колонка доски. Приоритет — P0..P3 (влияет на цвет чипа и сортировку). Ветка — git-ветка, в которой живёт задача (нужна для Git Watcher). Срок — дата, которую можно написать обычными словами: «завтра 17:00», «пятница 17:00», «в пятницу вечером»; разборщик вытащит дату и (если есть) время. Tab уходит из описания к следующему полю, Ctrl+Enter сохраняет.")
             }
 
@@ -349,11 +349,11 @@ Item {
             }
 
             H3 {
-                text: root.tr2("Deadlines",
+                text: root.tr2("Due dates",
                               "Сроки")
             }
             Body {
-                text: root.tr2("The date parser accepts natural language. Time is stored separately from the date — if you typed 'tomorrow 17:00', the task keeps deadline=tomorrow, while the time is used for reminders and for auto-scheduling a focus block.",
+                text: root.tr2("The date parser accepts natural language. Time is stored separately from the date — if you typed 'tomorrow 17:00', the task is due tomorrow, while the time is used for reminders and for auto-scheduling a focus block.",
                               "Разборщик дат понимает обычную речь. Время хранится отдельно от даты — если вы написали «завтра 17:00», у задачи срок завтра, а время используется для напоминаний и автопостановки фокус-блока.")
             }
 
@@ -375,7 +375,7 @@ Item {
                               "Быстрый ввод")
             }
             Body {
-                text: root.tr2("When you need to dump a thought without breaking away from what you're doing — open Quick Capture (Ctrl+Shift+Space; rebind it in the Hotkeys panel). You type one line or a paragraph — the popup parses it into title, description, @-mentions, and deadline on its own. Enter starts a new line; Ctrl+Enter saves, Ctrl+Shift+Enter saves and stays open for the next one; Esc closes.",
+                text: root.tr2("When you need to dump a thought without breaking away from what you're doing — open Quick Capture (Ctrl+Shift+Space; rebind it in the Hotkeys panel). You type one line or a paragraph — the popup parses it into title, description, @-mentions, and due date on its own. Enter starts a new line; Ctrl+Enter saves, Ctrl+Shift+Enter saves and stays open for the next one; Esc closes.",
                               "Когда нужно выгрузить мысль, не отрываясь от дела, — откройте быстрый ввод (Ctrl+Shift+Space; переназначается в панели «Горячие клавиши»). Пишете строку или абзац — окно само разберёт их на название, описание, @-упоминания и срок. Enter — новая строка; Ctrl+Enter сохраняет, Ctrl+Shift+Enter сохраняет и оставляет окно для следующей; Esc закрывает.")
             }
 
@@ -455,7 +455,7 @@ Item {
                               "Люди — контакты и упоминания")
             }
             Body {
-                text: root.tr2("“Who to write to” on Today — who you need to reply to or write to; click a name for the full list. Each has: a name, a handle (unique), a role, an avatar color, a current question.",
+                text: root.tr2("“Who to message” on Today — who you need to reply to or write to; click a name for the full list. Each has: a name, a handle (unique), a role, an avatar color, a current question.",
                               "«Кому написать» на «Сегодня» — кому нужно ответить или написать; клик по имени открывает полный список. У каждого: имя, уникальный ник, роль, цвет аватара и текущий вопрос.")
             }
 
@@ -545,21 +545,21 @@ Item {
             }
             Body {
                 text: root.tr2("Export the active profile → a .json file with all its content (tasks, people, statuses, notes, docs). Import — the other way around. Useful for backups and moving between machines.",
-                              "Экспорт активного профиля → .json-файл со всем содержимым (задачи, люди, статусы, заметки, доки). Импорт — наоборот. Пригодится для бэкапов и переезда между машинами.")
+                              "Экспорт активного профиля → .json-файл со всем содержимым (задачи, люди, статусы, заметки, доки). Импорт — наоборот. Пригодится для резервных копий и переезда между машинами.")
             }
         }
 
-        // ─────────────────────────────────────────── SEARCH / PALETTE
+        // ─────────────────────────────────────────── SEARCH / COMMAND LINE
         HelpCard {
             objectName: "help-search"
             H2 {
-                text: root.tr2("Search & Command Palette",
-                              "Поиск и палитра команд")
+                text: root.tr2("Search & Command line",
+                              "Поиск и командная строка")
             }
 
             H3 {
-                text: root.tr2("Command Palette",
-                              "Палитра команд")
+                text: root.tr2("Command line",
+                              "Командная строка")
             }
             RowLayout {
                 spacing: Theme.spSm
@@ -567,8 +567,8 @@ Item {
                     keys: root.kbd("palette.open")
                 }
                 Body {
-                    text: root.tr2("— opens the command palette: commands (switch view, toggle theme, open a Settings section, new task / note / event…), tasks in all profiles, doc sections, ",
-                                  "— открывает палитру: команды (сменить вид, переключить тему, открыть раздел настроек, новая задача / заметка / событие…), задачи всех профилей, разделы доков, ")
+                    text: root.tr2("— opens the command line: commands (switch view, toggle theme, open a Settings section, new task / note / event…), tasks in all profiles, doc sections, ",
+                                  "— открывает командную строку: команды (сменить вид, переключить тему, открыть раздел настроек, новая задача / заметка / событие…), задачи всех профилей, разделы доков, ")
                 }
             }
             Body {
@@ -595,8 +595,8 @@ Item {
                 }
             }
             Body {
-                text: root.tr2("title, ID, description. Esc clears it, a second Esc (or Return) hands the keyboard back to the view. In Notes the same key opens the palette, which searches every note.",
-                              "названию, ID и описанию. Esc очищает поле, второй Esc (или Enter) возвращает клавиатуру виду. В заметках та же клавиша открывает палитру — она ищет по всем заметкам.")
+                text: root.tr2("title, ID, description. Esc clears it, a second Esc (or Return) hands the keyboard back to the view. In Notes the same key opens the command line, which searches every note.",
+                              "названию, ID и описанию. Esc очищает поле, второй Esc (или Enter) возвращает клавиатуру виду. В заметках та же клавиша открывает командную строку — она ищет по всем заметкам.")
             }
         }
 
@@ -640,8 +640,8 @@ Item {
                               "Сохранённые виды")
             }
             Body {
-                text: root.tr2("A saved view is a named set of filters: the search query (status:, priority:, #tag, due:, is:, -, OR), the priority chips, the board sort, Archived, Show done, and the view it opens in. \"Save view…\" in the filter bar or \"Save current view\" in the palette asks for a name (Enter saves, Esc cancels). Views are listed in the sidebar under Saved views, numbered, with how many tasks each one shows; Alt+1…Alt+9 or a click applies one, and the palette has \"View: name\" for each. Once you change a filter the view reads as modified, and the filter bar offers Update view or Save as new. Right click (or Menu) on a view renames, updates, duplicates, moves or deletes it — each one undoable. A query Tabless can no longer read, such as a column that was deleted, shows \"?\" on the view instead of an empty count. Views belong to the profile and travel with its export.",
-                              "Сохранённый вид — это набор фильтров с именем: поисковый запрос (status:, priority:, #метка, due:, is:, -, OR), чипы приоритетов, сортировка доски, «Архив», «Выполненные» и вид, в котором он открывается. «Сохранить вид…» в панели фильтров или «Сохранить текущий вид» в палитре спрашивает название (Enter сохраняет, Esc отменяет). Виды перечислены на боковой панели в разделе «Сохранённые виды», пронумерованы и показывают, сколько задач в каждом; Alt+1…Alt+9 или щелчок применяет вид, а в палитре для каждого есть «Вид: название». Если вы измените фильтр, вид отмечается как изменённый, и панель фильтров предлагает «Обновить вид» или «Сохранить как новый». Правый щелчок (или Menu) по виду переименовывает, обновляет, дублирует, перемещает или удаляет его — всё это можно отменить. Если запрос больше не читается, например колонку удалили, на виде вместо числа стоит «?». Виды принадлежат профилю и переносятся вместе с его экспортом.")
+                text: root.tr2("A saved view is a named set of filters: the search query (status:, priority:, #tag, due:, is:, -, OR), the priority chips, the board sort, Archived, Show done, and the view it opens in. \"Save view…\" in the filter bar or \"Save current view\" in the command line asks for a name (Enter saves, Esc cancels). Views are listed in the sidebar under Saved views, numbered, with how many tasks each one shows; g 1…g 9 (Ctrl+4…Ctrl+9 for the first six) or a click applies one, and the command line has \"View: name\" for each. Once you change a filter the view reads as modified, and the filter bar offers Update view or Save as new. Right click (or Menu) on a view renames, updates, duplicates, moves or deletes it — each one undoable. A query Tabless can no longer read, such as a column that was deleted, shows \"?\" on the view instead of an empty count. Views belong to the profile and travel with its export.",
+                              "Сохранённый вид — это набор фильтров с именем: поисковый запрос (status:, priority:, #метка, due:, is:, -, OR), чипы приоритетов, сортировка доски, «Архив», «Выполненные» и вид, в котором он открывается. «Сохранить вид…» в панели фильтров или «Сохранить текущий вид» в командной строке спрашивает название (Enter сохраняет, Esc отменяет). Виды перечислены на боковой панели в разделе «Сохранённые виды», пронумерованы и показывают, сколько задач в каждом; g 1…g 9 (Ctrl+4…Ctrl+9 для первых шести) или щелчок применяет вид, а в командной строке для каждого есть «Вид: название». Если вы измените фильтр, вид отмечается как изменённый, и панель фильтров предлагает «Обновить вид» или «Сохранить как новый». Правый щелчок (или Menu) по виду переименовывает, обновляет, дублирует, перемещает или удаляет его — всё это можно отменить. Если запрос больше не читается, например колонку удалили, на виде вместо числа стоит «?». Виды принадлежат профилю и переносятся вместе с его экспортом.")
             }
 
             H3 {
@@ -745,8 +745,8 @@ Item {
                               "По умолчанию")
             }
             Body {
-                text: root.tr2("Ctrl+K — palette, Ctrl+N — new task, Ctrl+1…8 — the views in side-rail order (Board, Timeline, Week, Month, Archive, Docs, Notes, Settings), Ctrl+] / Ctrl+[ — next/previous profile, Ctrl+Z / Ctrl+Shift+Z — undo / redo, Ctrl+, — Tweaks, Ctrl+/ — hotkey catalog, Ctrl+F — focus search, Ctrl+= / Ctrl+- / Ctrl+0 — interface scale up, down, back to the default. docs/HOTKEYS.md has the full list.",
-                              "Ctrl+K — палитра, Ctrl+N — новая задача, Ctrl+1…8 — виды в порядке боковой панели (доска, лента, неделя, месяц, архив, доки, заметки, настройки), Ctrl+] / Ctrl+[ — следующий/предыдущий профиль, Ctrl+Z / Ctrl+Shift+Z — отменить / повторить, Ctrl+, — твики, Ctrl+/ — каталог клавиш, Ctrl+F — фокус в поиск, Ctrl+= / Ctrl+- / Ctrl+0 — масштаб интерфейса крупнее, мельче, обратно по умолчанию. Полный список — в docs/HOTKEYS.md.")
+                text: root.tr2("Ctrl+K — command line, Ctrl+N — new task, Ctrl+1…8 — the views in side-rail order (Board, Timeline, Week, Month, Archive, Docs, Notes, Settings), Ctrl+] / Ctrl+[ — next/previous profile, Ctrl+Z / Ctrl+Shift+Z — undo / redo, Ctrl+, — Tweaks, Ctrl+/ — hotkey catalog, Ctrl+F — focus search, Ctrl+= / Ctrl+- / Ctrl+0 — interface scale up, down, back to the default. docs/HOTKEYS.md has the full list.",
+                              "Ctrl+K — командная строка, Ctrl+N — новая задача, Ctrl+1…8 — виды в порядке боковой панели (доска, лента, неделя, месяц, архив, доки, заметки, настройки), Ctrl+] / Ctrl+[ — следующий/предыдущий профиль, Ctrl+Z / Ctrl+Shift+Z — отменить / повторить, Ctrl+, — твики, Ctrl+/ — каталог клавиш, Ctrl+F — фокус в поиск, Ctrl+= / Ctrl+- / Ctrl+0 — масштаб интерфейса крупнее, мельче, обратно по умолчанию. Полный список — в docs/HOTKEYS.md.")
             }
             Body {
                 text: root.tr2("On the board, J/K/H/L (or the arrows) move a cursor between cards and Shift with them moves the card itself; Return opens it, Space adds it to the selection. On the week and month views T goes to today, the arrows step a period, and G opens a date picker. Esc closes the innermost thing first — a menu, a dialog, the editor — and lets go of the selection last.",
@@ -762,16 +762,16 @@ Item {
                               "Автоматизация и уведомления")
             }
             Body {
-                text: root.tr2("Once a minute a background ticker checks: whether deadlines are approaching, whether tasks have been stuck in blocked too long, whether it's time to archive done. Notifications go to the system toast (on Linux — via org.freedesktop.Notifications with real action buttons, on Windows/macOS — a fallback via a tray balloon).",
+                text: root.tr2("Once a minute a background ticker checks: whether due dates are approaching, whether tasks have been stuck in blocked too long, whether it's time to archive done. Notifications go to the system toast (on Linux — via org.freedesktop.Notifications with real action buttons, on Windows/macOS — a fallback via a tray balloon).",
                               "Раз в минуту фоновый таймер проверяет: не подходят ли сроки, не застряли ли задачи в «Заблокировано», не пора ли архивировать выполненные. Уведомления уходят в системные (в Linux — через org.freedesktop.Notifications с настоящими кнопками, в Windows/macOS — запасной вариант через всплывающее окно трея).")
             }
 
             H3 {
-                text: root.tr2("Deadline reminders",
+                text: root.tr2("Due date reminders",
                               "Напоминания о сроках")
             }
             Body {
-                text: root.tr2("N hours before a deadline (24 by default, configurable in Settings → Notifications) — it pushes a notification, and once more if the deadline passes. The notification has a 'Snooze 1h' action.",
+                text: root.tr2("N hours before a task is due (24 by default, configurable in Settings → Notifications) — it pushes a notification, and once more if the due date passes. The notification has a 'Snooze 1h' action.",
                               "За N часов до срока (по умолчанию 24, настраивается в Настройки → Уведомления) приходит уведомление, и ещё одно, если срок прошёл. У него есть действие «Отложить на 1 ч».")
             }
 
@@ -918,7 +918,7 @@ Item {
             }
             Hint {
                 text: root.tr2("Tokens go straight into the OS keychain — never into state.json, its backups or a profile export. A build without a keychain keeps them in a private secrets.json instead.",
-                              "Токены сразу уходят в системное хранилище ключей — никогда в state.json, его бэкапы или экспорт профиля. Сборка без хранилища ключей держит их в закрытом secrets.json.")
+                              "Токены сразу уходят в системное хранилище ключей — никогда в state.json, его резервные копии или экспорт профиля. Сборка без хранилища ключей держит их в закрытом secrets.json.")
             }
 
             H3 {
@@ -979,7 +979,7 @@ Item {
             objectName: "help-undo"
             H2 {
                 text: root.tr2("Undo & Backups",
-                              "Отмена и бэкапы")
+                              "Отмена и резервные копии")
             }
 
             H3 {
@@ -1003,7 +1003,7 @@ Item {
 
             H3 {
                 text: root.tr2("Auto-backups",
-                              "Автобэкапы")
+                              "Автоматические резервные копии")
             }
             Body {
                 text: root.tr2("At most once per interval (hourly, daily — the default — or weekly; Settings → Data), checked on save, Tabless copies state.json into the backups folder next to it. The newest 20 copies are kept, older ones are deleted.",
@@ -1012,7 +1012,7 @@ Item {
             Body {
                 objectName: "help-attachments-backups"
                 text: root.tr2("Backups are copies of state.json only — attached files are not in them. The files stay in the attachments folder, so a restored backup finds them unless Clean up removed them since. To keep everything, copy the whole data folder (Settings → About shows where it is).",
-                              "Бэкапы — это копии только state.json, прикреплённых файлов в них нет. Файлы остаются в папке attachments, так что восстановленный бэкап их найдёт, если с тех пор их не удалила очистка. Чтобы сохранить всё, скопируйте всю папку данных (где она — видно в Настройки → О программе).")
+                              "Резервные копии — это копии только state.json, прикреплённых файлов в них нет. Файлы остаются в папке attachments, так что восстановленная копия их найдёт, если с тех пор их не удалила очистка. Чтобы сохранить всё, скопируйте всю папку данных (где она — видно в Настройки → О программе).")
             }
 
             H3 {
@@ -1021,7 +1021,7 @@ Item {
             }
             Body {
                 text: root.tr2("Settings → Data → the list of backups. Restoring overwrites the current state, but before that it always snapshots the current state (a -prerestore copy) — in case you change your mind. Undo history does not carry across a restore or a profile switch.",
-                              "Настройки → Данные → список бэкапов. Восстановление перезаписывает текущее состояние, но перед этим всегда сохраняет его снимок (копия -prerestore) — на случай, если вы передумаете. История отмены не переносится через восстановление и переключение профиля.")
+                              "Настройки → Данные → список резервных копий. Восстановление перезаписывает текущее состояние, но перед этим всегда сохраняет его снимок (копия -prerestore) — на случай, если вы передумаете. История отмены не переносится через восстановление и переключение профиля.")
             }
         }
 
@@ -1048,7 +1048,7 @@ Item {
             }
             Body {
                 text: root.tr2("Loads a .json into a new profile or over an existing one (with confirmation). Useful for migrating between machines or restoring from a backup.",
-                              "Загружает .json в новый профиль или поверх существующего (с подтверждением). Пригодится для переезда между машинами или восстановления из бэкапа.")
+                              "Загружает .json в новый профиль или поверх существующего (с подтверждением). Пригодится для переезда между машинами или восстановления из резервной копии.")
             }
 
             H3 {
@@ -1067,7 +1067,7 @@ Item {
             }
             Body {
                 text: root.tr2("Wipes all profiles, settings, and history. Makes a backup before resetting, just in case — the path to the backup is shown in a toast.",
-                              "Стирает все профили, настройки и историю. Перед сбросом на всякий случай делает бэкап — путь к нему показывается в тосте.")
+                              "Стирает все профили, настройки и историю. Перед сбросом на всякий случай делает резервную копию — путь к ней показывается в тосте.")
             }
         }
 

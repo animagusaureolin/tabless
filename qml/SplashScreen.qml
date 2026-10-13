@@ -6,7 +6,7 @@
 import QtQuick
 import TodoCpp
 
-Item {
+FocusScope {
     id: root
 
     // The window has drawn its first frame (Main.qml): a normal launch leaves
@@ -16,6 +16,10 @@ Item {
     readonly property bool crashed: AppController.lastExitUnclean
     // finished() was sent; the splash is on its way out.
     property bool _done: false
+    // The crash card is up and not answered yet: it is the only layer. Main
+    // turns every global key off while this holds (A7-2: Ctrl+2 switched the
+    // hidden view, Ctrl+N opened a task over the card).
+    readonly property bool waiting: root.crashed && !root._done
 
     // The splash is done and may fade out.
     signal finished()
@@ -143,6 +147,26 @@ Item {
     // A normal splash never holds the focus, so the first key goes to the app.
     focus: root.crashed
     onCrashedChanged: if (root.crashed) root.forceActiveFocus()
+    // The view built under the card took the keyboard, and Esc / Enter no
+    // longer reached it (A7-2): while it waits, the card takes it back.
+    onActiveFocusChanged: {
+        if (root.activeFocus || !root.waiting) return;
+        Qt.callLater(function () {
+            if (root.waiting && !root.activeFocus) root.forceActiveFocus();
+        });
+    }
     Keys.onEscapePressed: if (root.crashed) skipCA.activated()
     Keys.onReturnPressed: if (root.crashed) viewCA.activated()
+    Keys.onEnterPressed: if (root.crashed) viewCA.activated()
+    // Tab walks the card's two answers, not the hidden app under it.
+    Keys.onTabPressed: (event) => root._cycle(event)
+    Keys.onBacktabPressed: (event) => root._cycle(event)
+    function _cycle(event) {
+        if (!root.waiting) { event.accepted = false; return; }
+        event.accepted = true;
+        if (viewCA.activeFocus) skipCA.forceActiveFocus(Qt.TabFocusReason);
+        else viewCA.forceActiveFocus(Qt.TabFocusReason);
+    }
+    // Any other key is the card's too: nothing behind it moves.
+    Keys.onPressed: (event) => { if (root.waiting) event.accepted = true; }
 }

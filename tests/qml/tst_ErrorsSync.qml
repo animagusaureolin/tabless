@@ -163,6 +163,8 @@ TestCase {
         compare(WhatsNew.lineOf("0.8.1"), "0.8");
         compare(WhatsNew.lineOf("v1.2.3"), "");
         verify(WhatsNew.forVersion("0.8.0") !== null);
+        verify(WhatsNew.forVersion("0.9.0") !== null);
+        compare(WhatsNew.lineOf("0.9.2"), "0.9");
         const dlg = createTemporaryQmlObject('import TodoCpp; WhatsNewDialog { }', host);
         // This profile ran this line already: nothing by itself.
         verify(!AppController.whatsNewDue);

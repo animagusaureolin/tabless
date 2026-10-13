@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
 import TodoCpp
+import "TaskDates.js" as TaskDates
 
 // The task as a document (heap 2, APP-265; sheets H2-Task / Q-Task), in
 // place of the modal editor. Opens as a panel on the right of the view (the
@@ -20,6 +21,8 @@ FocusScope {
     // The open task's id; empty = closed.
     property string taskId: ""
     property bool full: false
+    // How far a toast rises so it does not sit on the bottom Done (A2-34).
+    readonly property real toastLift: root.opened && doneBottom.visible ? doneBottom.height + Theme.sp2xl : 0
     readonly property bool opened: root.taskId.length > 0
     visible: root.opened
     // Slides in from the right edge (APP-175).
@@ -55,6 +58,42 @@ FocusScope {
     readonly property var _ticket: root._exists && root.task.ticket ? root.task.ticket : ({})
     readonly property bool _isTicket: !!root._ticket.provider
     readonly property var _badge: root._isTicket ? (AppController.providerBadges[root._ticket.provider] || ({})) : ({})
+    // A field changed both here and in the tracker since the last sync: the
+    // tracker's side of each, as the editor shows it (A3-8). The document
+    // said nothing; only the card carried a small "решить".
+    readonly property bool _hasConflict: root.hasConflictOf(root.task)
+    readonly property var _conflictRows: root.conflictRowsOf(root.task)
+    function hasConflictOf(task) {
+        return !!(task && task.ticket && task.ticket.provider && task.ticket.conflict);
+    }
+    function conflictRowsOf(task) {
+        if (!root.hasConflictOf(task)) return [];
+        const t = task.ticket;
+        const fields = t.conflicts || [];
+        const out = [];
+        for (let i = 0; i < fields.length; ++i) {
+            const f = fields[i];
+            if (f === "title") out.push({ label: I18n.t("ticket.conflict.title"), value: String(t.remoteTitle || "") });
+            else if (f === "body") out.push({ label: I18n.t("ticket.conflict.body"), value: String(t.remoteBody || "") || "—" });
+            else if (f === "priority") out.push({ label: I18n.t("ticket.conflict.priority"), value: String(t.remotePriority || "") });
+            else if (f === "status")
+                out.push({ label: I18n.t("ticket.conflict.status"),
+                           value: root._statusName(String(t.remoteColumn || "")) + (t.remoteStatus ? " (" + t.remoteStatus + ")" : "") });
+        }
+        return out;
+    }
+    // Keep mine, or take the tracker's: what is typed is saved first, then
+    // the fields show the outcome.
+    function resolveConflict(useTracker) {
+        if (!root._hasConflict) return;
+        // The buttons hide once it is resolved; focus left on them was
+        // stranded on an invisible control.
+        const fromButton = conflictUseTracker.activeFocus || conflictKeepMine.activeFocus;
+        root.flush();
+        AppController.resolveTrackerConflict(root.taskId, useTracker);
+        root._load();
+        if (fromButton) titleField.forceActiveFocus();
+    }
 
     // ── opening and closing ──
     function open(id, intoTitle) {
@@ -145,6 +184,7 @@ FocusScope {
     function _load() {
         if (!root._exists) return;
         root._loading = true;
+        root._passingThrough = false;
         titleField.text = root.task.title;
         body.load(root._isTicket ? AppController.taskLocalNotes(root.taskId) : String(root.task.desc || ""));
         root._loadedId = root.taskId;
@@ -366,19 +406,176 @@ FocusScope {
     // sidebar behind the scrim, where Esc no longer closed it (VERIFY-A-1).
     Keys.onTabPressed: (e) => { root._tabWithin(true); e.accepted = true; }
     Keys.onBacktabPressed: (e) => { root._tabWithin(false); e.accepted = true; }
+    // "каждый месяц, 1-го", "по понедельникам": the rule as it is, its day
+    // included (A2-22); the chip used to drop the ":1".
+    function _recurLabel(r) {
+        const rule = String(r || "");
+        if (rule.length === 0) return "";
+        // "раз в 2 недели", "по пн, ср" (B7).
+        const interval = TaskDates.intervalText(rule);
+        if (interval.length > 0) return interval;
+        const monthly = /^every:month:(\d+)$/.exec(rule);
+        if (monthly) {
+            const l = I18n.t("editor.recur.monthlyOn").arg(monthly[1]);
+            return l.charAt(0).toLowerCase() + l.slice(1);
+        }
+        const key = "taskdoc.repeat." + rule.replace("every:", "");
+        const t = I18n.t(key);
+        return t === key ? rule : t;
+    }
+    // The menu's rules: the five plain ones, the weekday and the day of the
+    // month the task's own date gives, and the current rule when it is none
+    // of these — so it is marked and picking it keeps it (A2-22).
+    readonly property var _recurOptions: {
+        const out = ["", "every:day", "every:weekday", "every:week", "every:2:week", "every:month"];
+        const at = root._valid(root.task.scheduledAt) ? new Date(root.task.scheduledAt)
+                 : root._valid(root.task.dueAt) ? new Date(root.task.dueAt) : new Date();
+        const dows = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+        out.push("every:" + dows[at.getDay()]);
+        out.push("every:month:" + at.getDate());
+        const cur = String(root.task.recurrence || "");
+        if (cur.length > 0 && out.indexOf(cur) < 0) out.push(cur);
+        // Any other interval, typed (B7): "every 3 weeks", "пн, ср".
+        out.push("custom");
+        return out;
+    }
+    // The "Custom interval…" row's field: the words read by the same parser
+    // as quick capture; what is not a repeat stays in the field, marked.
+    property bool _recurEditing: false
+    property bool _recurBad: false
+    // The chip the row brought out for the field, taken back when nothing
+    // is set ("Repeat" with no rule under it).
+    property bool _recurChipAdded: false
+    function startCustomRecur() {
+        root._recurChipAdded = root._shown.indexOf("recurrence") < 0;
+        root._shown = root._shown.concat(["recurrence"]);
+        root._recurBad = false;
+        root._recurEditing = true;
+        recurField.text = "";
+        Qt.callLater(recurField.forceActiveFocus);
+    }
+    function applyCustomRecur(text) {
+        const rule = AppController.recurrenceFromText(text);
+        if (rule.length === 0) { root._recurBad = true; return false; }
+        root._recurEditing = false;
+        root._recurBad = false;
+        root._setField("recurrence", rule);
+        root.focusDocument();
+        return true;
+    }
+    function cancelCustomRecur() {
+        root._recurEditing = false;
+        if (root._recurChipAdded && !root._has("recurrence"))
+            root._shown = root._shown.filter((k) => k !== "recurrence");
+        root._recurChipAdded = false;
+    }
+    // The body is one Tab stop: its open block, the drawn text, a link drawn
+    // in it — not my plan under it, which lives in the same scroll.
+    function _inBody(it) {
+        const tail = root._tail;
+        for (let p = it; p; p = p.parent) {
+            if (tail && p === tail) return false;
+            if (p === body) return true;
+        }
+        return false;
+    }
+    // The visible Tab stops under an item, in the order they are drawn.
+    function _stopsIn(item) {
+        if (!item || !item.visible) return [];
+        let out = item.activeFocusOnTab === true && item.enabled ? [item] : [];
+        const kids = item.children || [];
+        for (let i = 0; i < kids.length; i++) out = out.concat(root._stopsIn(kids[i]));
+        return out;
+    }
+    // How many lines the title takes at its full size, measured apart from
+    // the field so the size it picks does not feed back into it.
+    TextMetrics {
+        id: titleMetrics
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.typeStep(root._quiet ? 7 : 8)
+        font.weight: root._quiet ? Theme.fwTitle : Theme.fwHeading
+        text: titleField.text
+    }
+    readonly property int _titleStepsDown: {
+        const w = titleField.width;
+        if (w <= 0) return 0;
+        // A word wrapped whole leaves the end of each line short: a fifth.
+        const lines = Math.ceil(titleMetrics.advanceWidth * 1.2 / w);
+        return lines > 6 ? 3 : (lines > 3 ? 2 : 0);
+    }
+    // Where Tab in the text indents rather than moves on: lines selected, a
+    // list item, inside a ``` fence; Shift+Tab only where there is an indent
+    // to take back. Not while the keyboard is only passing through: Tab from
+    // the chips into a text that opens on "- item" indented it.
+    property bool _passingThrough: false
+    function _tabIndents(field, forward) {
+        if (root._passingThrough) return false;
+        const t = String(field.text);
+        const a = field.selectionStart, b = field.selectionEnd;
+        if (b > a && t.substring(a, b).indexOf("\n") >= 0) return true;
+        const caret = field.cursorPosition;
+        const start = t.lastIndexOf("\n", caret - 1) + 1;
+        let end = t.indexOf("\n", caret);
+        if (end < 0) end = t.length;
+        const line = t.substring(start, end);
+        if (!forward && !/^\s/.test(line)) return false;
+        if (/^\s*([-*+]|\d+[.)])\s/.test(line)) return true;
+        const fences = t.substring(0, start).split("\n").filter(l => /^\s*```/.test(l)).length;
+        return fences % 2 === 1;
+    }
     function _tabWithin(forward) {
-        let next = (root.Window.activeFocusItem || root).nextItemInFocusChain(forward);
+        const cur = root.Window.activeFocusItem || root;
+        const fromBody = cur !== bodyStop && root._inBody(cur);
+        root._passingThrough = false;
+        // Out of the body forward: my plan under it first. The field sits
+        // over the list, outside it, so the focus chain went from the text
+        // past the plan, round to the stop that hands the caret back to the
+        // text: Tab never left the description (F2-REG-1, A4-15).
+        if (fromBody && forward) {
+            const stops = root._stopsIn(root._tail);
+            if (stops.length > 0) {
+                stops[0].forceActiveFocus(Qt.TabFocusReason);
+                return;
+            }
+        }
+        // Out of the body backward: the last chip before it. The chain from
+        // the text went round to the plan's add field instead, and the chips
+        // and the title were never reached backward (F2-REG-1).
+        if (fromBody && !forward) {
+            const kids = bodyStop.parent ? bodyStop.parent.children : [];
+            let before = [];
+            for (let i = 0; i < kids.length && kids[i] !== bodyStop; i++)
+                before = before.concat(root._stopsIn(kids[i]));
+            if (before.length > 0) {
+                before[before.length - 1].forceActiveFocus(Qt.BacktabFocusReason);
+                return;
+            }
+        }
+        // Leaving the body, never back into it: neither the stop that opens
+        // it nor what is drawn inside it.
+        const fits = function (it) {
+            return it !== docFocus && it.visible
+                && !(fromBody && (it === bodyStop || root._inBody(it)))
+                && !(!fromBody && it !== bodyStop && root._inBody(it));
+        };
+        const reason = forward ? Qt.TabFocusReason : Qt.BacktabFocusReason;
+        let next = cur.nextItemInFocusChain(forward);
         for (let n = 0; n < 200 && next; n++) {
             let inside = false;
             for (let p = next; p; p = p.parent)
                 if (p === root) { inside = true; break; }
-            if (inside && next !== docFocus && next.visible) {
-                next.forceActiveFocus(forward ? Qt.TabFocusReason : Qt.BacktabFocusReason);
+            // Out of the document: round to its other end. Shift+Tab from
+            // the top went on to the board's cards behind it.
+            if (!inside) break;
+            if (fits(next)) {
+                next.forceActiveFocus(reason);
                 return;
             }
             next = next.nextItemInFocusChain(forward);
         }
-        root.focusTitle();
+        const all = root._stopsIn(root).filter(fits);
+        if (all.length > 0) all[forward ? 0 : all.length - 1].forceActiveFocus(reason);
+        else root.focusTitle();
     }
     Keys.onReturnPressed: (e) => {
         if (titleField.activeFocus || body.editing) { e.accepted = false; return; }
@@ -430,7 +627,14 @@ FocusScope {
                     Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
-                    ClickArea { id: crumbCA; label: parent.text; onActivated: root.close() }
+                    ClickArea {
+                        id: crumbCA
+                        label: parent.text
+                        onActivated: root.close()
+                        // The first stop: Shift+Tab here goes round to the
+                        // end, not on to the board behind the document.
+                        Keys.onBacktabPressed: (e) => { root._tabWithin(false); e.accepted = true; }
+                    }
                 }
                 Text {
                     objectName: "task-doc-crumbs"
@@ -440,7 +644,9 @@ FocusScope {
                     font.pixelSize: Theme.fsSm
                 }
                 Text {
-                    text: root.taskId
+                    // The name the card shows: the tracker key (A3-10, A1-29).
+                    objectName: "task-doc-crumb-id"
+                    text: root.task.externalKey || root.taskId
                     color: Theme.textMuted
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsSm
@@ -513,6 +719,54 @@ FocusScope {
                 wrapMode: Text.WordWrap
             }
 
+            ColumnLayout {
+                objectName: "task-doc-conflict"
+                Layout.fillWidth: true
+                Layout.bottomMargin: Theme.spMd
+                visible: root._hasConflict
+                spacing: Theme.spXs
+                Text {
+                    Layout.fillWidth: true
+                    text: I18n.t("ticket.conflict.head")
+                    textFormat: Text.PlainText
+                    color: Theme.warning
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    font.weight: Theme.fwTitle
+                    wrapMode: Text.WordWrap
+                }
+                Repeater {
+                    model: root._conflictRows
+                    delegate: Text {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        text: modelData.label + ": " + modelData.value
+                        textFormat: Text.PlainText
+                        color: Theme.text
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 4
+                        elide: Text.ElideRight
+                    }
+                }
+                RowLayout {
+                    spacing: Theme.spSm
+                    PillButton {
+                        id: conflictUseTracker
+                        objectName: "task-doc-conflict-use-tracker"
+                        text: I18n.t("ticket.conflict.useTracker")
+                        onClicked: root.resolveConflict(true)
+                    }
+                    PillButton {
+                        id: conflictKeepMine
+                        objectName: "task-doc-conflict-keep-mine"
+                        text: I18n.t("ticket.conflict.keepMine")
+                        onClicked: root.resolveConflict(false)
+                    }
+                }
+            }
+
             QQC.TextArea {
                 id: titleField
                 objectName: "task-doc-title"
@@ -523,8 +777,10 @@ FocusScope {
                 selectByMouse: true
                 color: Theme.text
                 font.family: Theme.fontUi
-                // 32 px bold, 28 px quiet (H2-Task / Q-Task).
-                font.pixelSize: Theme.typeStep(root._quiet ? 7 : 8)
+                // 32 px bold, 28 px quiet (H2-Task / Q-Task); a step or two
+                // down for a title of more than three lines at that size: one
+                // of seven lines took most of a 720 px panel (F3-EYES-10).
+                font.pixelSize: Theme.typeStep((root._quiet ? 7 : 8) - root._titleStepsDown)
                 font.weight: root._quiet ? Theme.fwTitle : Theme.fwHeading
                 padding: 0
                 // Basic binds its own side padding; the title shares the
@@ -629,8 +885,37 @@ FocusScope {
                     objectName: "task-doc-recurrence"
                     visible: root._visible("recurrence")
                     key: root._key(I18n.t("taskdoc.prop.repeat"))
-                    value: String(root.task.recurrence || "").length > 0 ? I18n.t("taskdoc.repeat." + String(root.task.recurrence).replace("every:", "").split(":")[0]) : ""
+                    value: root._recurLabel(root.task.recurrence)
                     onClicked: recurMenu.popup(recurChip, 0, recurChip.height + Theme.spXs)
+                }
+                QQC.TextField {
+                    id: recurField
+                    objectName: "task-doc-recur-custom"
+                    visible: root._recurEditing
+                    width: Theme.px(280)
+                    height: Theme.chipH
+                    leftPadding: Theme.spMd
+                    rightPadding: Theme.spMd
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    color: Theme.text
+                    placeholderText: I18n.t("recur.custom.ph")
+                    placeholderTextColor: Theme.textDim
+                    background: Rectangle {
+                        radius: Theme.radiusMd
+                        color: Theme.panel2
+                        border.color: root._recurBad ? Theme.danger : Theme.focusRing
+                        border.width: 1
+                    }
+                    onTextChanged: root._recurBad = false
+                    onAccepted: root.applyCustomRecur(recurField.text)
+                    onActiveFocusChanged: if (!activeFocus && root._recurEditing) root.cancelCustomRecur()
+                    Keys.onEscapePressed: (e) => { root.cancelCustomRecur(); root.focusDocument(); e.accepted = true; }
+                    Keys.onReturnPressed: (e) => { recurField.accepted(); e.accepted = true; }
+                    Keys.onEnterPressed: (e) => { recurField.accepted(); e.accepted = true; }
+                    // What Enter and Esc do, and what was not read.
+                    QQC.ToolTip.visible: recurField.visible && recurField.activeFocus
+                    QQC.ToolTip.text: root._recurBad ? I18n.t("recur.custom.err") : I18n.t("recur.custom.hint")
                 }
                 TextChip {
                     objectName: "task-doc-estimate"
@@ -652,6 +937,55 @@ FocusScope {
                     value: I18n.t("taskdoc.addProp")
                     onClicked: addMenu.popup(addChip, 0, addChip.height + Theme.spXs)
                 }
+            }
+
+            // With the meta column folded away, what it would say about the
+            // tracker and the notes still shows (A1-29, A4-13).
+            RowLayout {
+                objectName: "task-doc-inline-meta"
+                Layout.fillWidth: true
+                Layout.bottomMargin: Theme.spLg
+                visible: !sideCol.visible && (root._isTicket || inlineMentions.count > 0)
+                spacing: Theme.spMd
+                Text {
+                    objectName: "task-doc-tracker-inline"
+                    visible: root._isTicket
+                    text: root._trackerLabel
+                    color: trackerInlineCA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    font.underline: trackerInlineCA.hovered
+                    ClickArea {
+                        id: trackerInlineCA
+                        label: parent.text
+                        enabled: String(root.task.externalUrl || "").length > 0
+                        onActivated: AppController.openTaskExternal(root.taskId)
+                    }
+                }
+                Text {
+                    objectName: "task-doc-local-only"
+                    visible: root._isTicket && !AppController.trackerWriteEnabled(root._ticket.provider || "")
+                    text: "· " + I18n.t("taskdoc.localOnly").arg(root._badge.name || root._ticket.provider || "")
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                }
+                Text {
+                    id: inlineMentions
+                    objectName: "task-doc-mentions-inline"
+                    readonly property int count: root._rev >= 0 && root.opened ? AppController.notesMentioningTask(root.taskId).length : 0
+                    visible: count > 0
+                    text: (root._isTicket ? "· " : "") + I18n.t("taskdoc.mentionedIn").arg(count)
+                    color: mentionsCA.hovered ? Theme.text : Theme.textMuted
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSm
+                    font.underline: mentionsCA.hovered
+                    // The whole document has room for the meta column.
+                    ClickArea { id: mentionsCA; label: parent.text; onActivated: root.full = true }
+                }
+                Item { Layout.fillWidth: true }
             }
 
             // Mine over the tracker's (APP-238): what the tracker says, said
@@ -780,6 +1114,20 @@ FocusScope {
                 }
             }
 
+            // The body is a Tab stop of its own, after the chips and before
+            // Done (A4-14): this stop hands the caret to it.
+            Item {
+                id: bodyStop
+                objectName: "task-doc-body-stop"
+                Layout.preferredHeight: 0
+                Layout.preferredWidth: 0
+                activeFocusOnTab: true
+                onActiveFocusChanged: if (activeFocus) {
+                    root._passingThrough = true;
+                    body.focusEditor();
+                }
+            }
+
             // The body, then my plan under it and the slash hint (DG-062),
             // all in one scroll.
             MdBlockEditor {
@@ -789,6 +1137,9 @@ FocusScope {
                 Layout.fillHeight: true
                 Layout.leftMargin: -Theme.px(24)
                 Layout.rightMargin: -Theme.px(24)
+                // The text ends above Done: it ran on beneath the button, with
+                // nothing between them (F3-EYES-10).
+                clip: true
                 placeholder: I18n.t("taskdoc.bodyPh")
                 menuTitle: I18n.t("textmenu.title.taskBody")
                 // The note look (APP-292): the same md4c drawing as Knowledge.
@@ -799,11 +1150,30 @@ FocusScope {
                 onEdited: if (!root._loading) { root._dirtyBody = true; saveTimer.restart(); }
                 onEscaped: root.close()
                 onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
+                // Tab in the text moves on to my plan, as everywhere in the
+                // document; it indents only where an indent means something
+                // (a list item, code, lines selected). The caret arrives in
+                // the text now, and Tab there indented an empty line for ever
+                // (F2-REG-1).
+                onBlockKey: (event) => {
+                    const isTab = event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab;
+                    // Any other key: the keyboard is at work in the text now.
+                    if (!isTab) {
+                        if (event.key !== Qt.Key_Shift) root._passingThrough = false;
+                        return;
+                    }
+                    const forward = event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier);
+                    if ((event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))
+                        || root._tabIndents(body.editor, forward)) return;
+                    root._tabWithin(forward);
+                    event.accepted = true;
+                }
                 tail: Component { DocTail {} }
             }
 
             // Done, under the text while the meta column is folded away.
             DoneButton {
+                id: doneBottom
                 objectName: "task-doc-done-bottom"
                 visible: !sideCol.visible
                 Layout.bottomMargin: Theme.sp2xl
@@ -1104,12 +1474,14 @@ FocusScope {
     AppMenu {
         id: recurMenu
         Instantiator {
-            model: ["", "every:day", "every:weekday", "every:week", "every:month"]
+            model: root._recurOptions
             delegate: AppMenuItem {
                 required property string modelData
-                text: modelData === "" ? I18n.t("taskdoc.repeat.none") : I18n.t("taskdoc.repeat." + modelData.replace("every:", ""))
+                objectName: modelData === "custom" ? "task-doc-recur-custom-row" : ""
+                text: modelData === "" ? I18n.t("taskdoc.repeat.none")
+                    : modelData === "custom" ? I18n.t("recur.custom") : root._recurLabel(modelData)
                 marked: String(root.task.recurrence || "") === modelData
-                onTriggered: root._setField("recurrence", modelData)
+                onTriggered: modelData === "custom" ? root.startCustomRecur() : root._setField("recurrence", modelData)
             }
             onObjectAdded: (i, o) => recurMenu.insertItem(i, o)
             onObjectRemoved: (i, o) => recurMenu.removeItem(o)
@@ -1155,6 +1527,7 @@ FocusScope {
             taskId: root.taskId
             rev: root._rev
             onOpenTask: (id) => root.openOther(id)
+            onTabOut: (forward) => root._tabWithin(forward)
         }
         // "Пишите прямо здесь. / — вставить чек-лист, код, ссылку на задачу."
         Text {

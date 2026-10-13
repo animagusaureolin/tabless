@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
 import TodoCpp
 import "Reschedule.js" as Resched
+import "TaskDates.js" as TaskDates
 
 // Today (heap 2, APP-260): the start screen. The date and one line of facts;
 // the day by the hours — meetings and tasks with their status, the line of
@@ -20,7 +21,7 @@ import "Reschedule.js" as Resched
 // side under the day in three columns, in both styles.
 //
 // The day shown is AppController.selectedDate, so Alt+←/→ and the arrows in
-// the header move it, and T (cal.today) brings it back.
+// the header move it, and cal.today (0) brings it back.
 FocusScope {
     id: root
     objectName: "today-view"
@@ -46,7 +47,19 @@ FocusScope {
     // "+ Добавить человека" under the list: a new person to write to.
     signal personAddRequested()
 
-    property bool allProfiles: false
+    // Every profile's tasks (A1-17, a setting): another profile's rows are
+    // labelled with its name and colour and read-only here; Enter opens one
+    // in its own profile.
+    property bool allProfiles: Theme.todayAllProfiles
+    signal otherProfileTaskClicked(string id, string profileId)
+    // A task key pressed on another profile's row: it says where it lives.
+    signal otherProfileKeys(string id, string profileName)
+    function _isOther(t) { return !!(t && t.profileId && String(t.profileId).length > 0); }
+    function _openTask(t) {
+        if (!t || !t.id) return;
+        if (root._isOther(t)) root.otherProfileTaskClicked(t.id, t.profileId);
+        else root.taskClicked(t.id);
+    }
     function focusView() {
         if (root.firstRun) firstRunHero.focusInput();
         else root.forceActiveFocus();
@@ -80,7 +93,10 @@ FocusScope {
     // Until the first task (APP-271): the input line, three keys, and the
     // way in for tasks that live elsewhere — instead of a tour. Closed
     // before a task was made, it is here again on the next start.
+    // With "Today shows: all profiles" another profile's day is still a day:
+    // the first-run page hid it while this profile was empty (A1-17).
     readonly property bool firstRun: !AppController.welcomeSeen && root._rev >= 0 && AppController.tasks.rowCount() === 0
+                                     && !(root.allProfiles && (!root.dayEmpty || root.inProgress.length > 0))
     readonly property real nowHour: {
         const n = root._rev >= 0 ? new Date() : new Date();
         return n.getHours() + n.getMinutes() / 60;
@@ -91,39 +107,110 @@ FocusScope {
     function _facts() {
         const f = root.dayData.facts || {};
         const parts = [];
-        if (f.meetings > 0) parts.push(I18n.count(f.meetings, "today.n.meetings"));
+        // Meetings with others (A2-33, A3-20): focus time is not one, and an
+        // all-day block (a conference, an on-call duty) has its own row.
+        const meetings = (root.dayData.blocks || []).filter(b => b.kind === "meeting" && b.eventType !== "focus").length;
+        if (meetings > 0) parts.push(I18n.count(meetings, "today.n.meetings"));
         if (f.planned > 0) parts.push(I18n.count(f.planned, "today.n.planned"));
-        if (f.dueToday > 0) parts.push(I18n.count(f.dueToday, root.plain || !Style.fills ? "today.n.dueShort" : "today.n.due"));
+        // "Due today" only on today (A2-23): browsing another day it is that
+        // day's deadlines, said as tomorrow's or as that day's.
+        if (f.dueToday > 0) {
+            const off = root._daysFromToday(root.day);
+            parts.push(I18n.count(f.dueToday, off === 0 ? (root.plain || !Style.fills ? "today.n.dueShort" : "today.n.due")
+                                              : off === 1 ? "today.n.dueTomorrow" : "today.n.dueThatDay"));
+        }
+        // A plan emptied by Done keeps what was done (A2-24).
+        if (root.isToday && parts.length === 0) {
+            const closed = (AppController.endOfDaySummary().closed || []).length;
+            if (closed > 0) parts.push(I18n.count(closed, "today.n.closed"));
+        }
         return parts.join(" · ");
+    }
+    // Whole days from the real today to `d` (negative before it).
+    function _daysFromToday(d) {
+        const t = AppController.today;
+        const a = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+        const b = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate());
+        return Math.round((a - b) / 86400000);
+    }
+    // A deadline's words on the side (A2-23, A5-18): relative to the real
+    // today, whichever day is shown; a date beyond tomorrow, "overdue" past.
+    function _dueWord(due) {
+        const dd = new Date(due);
+        const off = root._daysFromToday(dd);
+        if (off === 0) return I18n.t("quick.day.today");
+        if (off === 1) return I18n.t("quick.day.tomorrow");
+        if (off < 0) return I18n.t("today.dueWasOn").arg(I18n.fmtDate(dd, "dayMonth"));
+        return I18n.fmtDate(dd, "weekdayDay");
     }
     function _hm(h) {
         const hh = Math.floor(h + 1e-6), mm = Math.round((h - hh) * 60);
         return Theme.fmtHour(hh + mm / 60);
     }
     function _len(a, b) { return I18n.fmtMinutes(Math.round((b - a) * 60)); }
-    function _timer(id) {
-        const s = root._rev >= 0 ? AppController.elapsedSecondsFor(id) : 0;
-        const m = Math.floor(s / 60);
-        return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0");
+    // How long a row lasts: the whole meeting for one across midnight, not
+    // the part of it on this day (A3-3, A6-3).
+    function _rowLen(b) {
+        if ((b.toNextDay || b.fromPrevDay) && b.totalMinutes > 0) return I18n.fmtMinutes(b.totalMinutes);
+        return root._len(b.start || 0, b.end || 0);
+    }
+    // A meeting's type in the words of its editor (A2-33, A3-20): "Синк",
+    // "Фокус-время"; a meeting with no type is a meeting.
+    function _typeName(b, lower) {
+        const ty = String(b.eventType || "");
+        const s = ty.length > 0 && ty !== "none" ? I18n.t("event.type." + ty) : I18n.t("event.kind.meeting");
+        return lower && s.length > 0 ? s.charAt(0).toLowerCase() + s.slice(1) : s;
+    }
+    // The type, unless the title already is that word ("Sync · sync").
+    function _typeWord(b, lower) {
+        const s = root._typeName(b, lower);
+        return s.toLowerCase() === String(b.title || "").trim().toLowerCase() ? "" : s;
+    }
+    // m:ss, h:mm:ss past an hour, as the sidebar and the focus mode (A1-13).
+    function _timer(id, tick) {
+        const s = tick >= 0 ? AppController.elapsedSecondsFor(id) : 0;
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+        const p2 = (n) => (n < 10 ? "0" : "") + n;
+        return h > 0 ? h + ":" + p2(m) + ":" + p2(sec) : m + ":" + p2(sec);
     }
     // The caption under a row of the day.
     function _sub(kind: string, b: var): string {
         const parts = [];
         const meeting = kind !== "task";
-        if (root.plain) {
+        // An all-day block over several days says which days (A6-17); one
+        // with no type is not called a meeting (an on-call duty is not one).
+        const typed = String(b.eventType || "").length > 0 && b.eventType !== "none";
+        if (kind === "allday" && b.dayCount > 1) {
+            if (typed && root._typeWord(b, root.plain)) parts.push(root._typeWord(b, root.plain));
+            parts.push(I18n.fmtDate(new Date(b.firstDay), "dayMonth") + "–" + I18n.fmtDate(new Date(b.lastDay), "dayMonth"));
+            parts.push(I18n.t("today.dayOfSpan").arg(b.dayNo).arg(b.dayCount));
+        } else if (kind === "allday" && !typed) {
+            // the title says it
+        } else if (root.plain) {
             // "встреча · 30 мин · Zoom", "APP-105 · 1 ч"
-            if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.q.withSelf") : I18n.t("today.q.meeting"));
+            // A meeting titled as its type says neither its type twice
+            // nor its storage id (F3-EYES-1).
+            if (meeting) { if (root._typeWord(b, true)) parts.push(root._typeWord(b, true)); }
             else parts.push(b.id);
-            if (kind !== "allday" && !b.dayOnly) parts.push(root._len(b.start || 0, b.end || 0));
+            if (kind !== "allday" && !b.dayOnly) parts.push(root._rowLen(b));
             if (!meeting && b.waiting) parts.push(I18n.t("today.waitingOn").arg(b.waiting));
         } else {
-            if (meeting) parts.push(b.eventType === "focus" ? I18n.t("today.withSelf") : I18n.t("event.kind.meeting"));
+            if (meeting) { if (root._typeWord(b, false)) parts.push(root._typeWord(b, false)); }
             else parts.push(b.id, I18n.t("today.plannedByYou"));
+        }
+        // A repeating task is marked as one (A2-25).
+        if (kind === "task") {
+            const rec = String(AppController.taskById(b.id).recurrence || "");
+            if (rec.length > 0) parts.push("↻ " + TaskDates.repeatText(rec));
         }
         // A focus block is "with yourself"; its people field is a note.
         if (meeting && b.attendees && b.eventType !== "focus") parts.push(b.attendees);
         if (b.profileName) parts.push(b.profileName);
-        if (b.toNextDay) parts.push(I18n.t("today.untilNext").arg(root._hm(b.end % 24)));
+        // Kept in another zone (A6-4): its own hour there, read-only.
+        if (b.srcTz) parts.push(root._hm(b.srcStart) + " " + String(b.srcTz).split("/").pop().replace(/_/g, " "));
+        // Where a meeting across midnight really ends (A3-3, A6-3).
+        if (b.toNextDay) parts.push(I18n.t("today.untilNextDay").arg(root._hm(b.realEnd)));
+        if (b.fromPrevDay) parts.push(I18n.t("today.untilNext").arg(root._hm(b.end)));
         if ((b.overlapsWith || []).length > 0) parts.push(I18n.t("today.overlaps").arg(b.overlapsWith.join(", ")));
         return parts.join(" · ");
     }
@@ -168,6 +255,11 @@ FocusScope {
     // Quiet keeps only today's deadlines (H2-Today-Calm "Срок сегодня").
     readonly property var deadlines: (root.dayData.deadlines || []).filter(t => root.cards || !t.tomorrow)
     readonly property var people: Style.todayExtras === "hidden" ? [] : (root.dayData.people || [])
+    // The widest word the time gutter holds, in the gutter's font.
+    readonly property int timeLabelW: Math.ceil(Math.max(noTimeTM.advanceWidth, allDayTM.advanceWidth, fromPrevTM.advanceWidth)) + 1
+    TextMetrics { id: noTimeTM; text: I18n.t("today.noTime"); font.family: Theme.fontUi; font.pixelSize: Theme.fsXs }
+    TextMetrics { id: allDayTM; text: I18n.t("today.allDay"); font.family: Theme.fontUi; font.pixelSize: Theme.fsXs }
+    TextMetrics { id: fromPrevTM; text: I18n.t("today.fromPrev"); font.family: Theme.fontUi; font.pixelSize: Theme.fsXs }
 
     Keys.onPressed: (e) => {
         if (e.modifiers & Qt.AltModifier && (e.key === Qt.Key_Left || e.key === Qt.Key_Right)) return;
@@ -195,6 +287,10 @@ FocusScope {
             if (r.kind !== "meeting" && r.kind !== "task" && r.kind !== "allday") continue;
             out.push({ kind: r.kind === "task" ? "task" : "event", id: r.block.id, key: root._rowKey(r), row: i, block: r.block });
         }
+        // Past the day's last row, the "N without a date" link (A1-2): it
+        // was 29 Tab presses away.
+        if ((root.dayData.undated || 0) > 0 && !root.firstRun)
+            out.push({ kind: "undated", id: "", key: "undated", row: -1, block: null });
         return out;
     }
     function _cursorIndex() {
@@ -212,7 +308,7 @@ FocusScope {
     }
     readonly property string cursorTaskId: {
         const it = root._cursorItem();
-        return it && it.kind === "task" ? it.id : "";
+        return it && it.kind === "task" && !root._isOther(it.block) ? it.id : "";
     }
     function clearCursor() {
         root.cursorVisible = false;
@@ -229,7 +325,7 @@ FocusScope {
         const at = Math.max(0, Math.min(items.length - 1, i));
         root.cursorKey = items[at].key;
         root._cursorIdx = at;
-        dayList.positionViewAtIndex(items[at].row, ListView.Contain);
+        if (items[at].row >= 0) dayList.positionViewAtIndex(items[at].row, ListView.Contain);
         if (items[at].kind === "task") AppController.markTaskSeen(items[at].id);
     }
     function moveCursor(dx, dy) {
@@ -248,6 +344,10 @@ FocusScope {
     onRowsChanged: if (root.cursorVisible) Qt.callLater(root._reconcile)
     function _actionCardId() {
         const it = root._cursorItem();
+        if (it && it.kind === "task" && root._isOther(it.block)) {
+            root.otherProfileKeys(it.id, it.block.profileName || "");
+            return "";
+        }
         if (it) return it.kind === "task" ? it.id : "";
         if (AppController.selectionCount === 1) return AppController.selectedTaskIds[0];
         return "";
@@ -255,14 +355,15 @@ FocusScope {
     function openCursor() {
         const it = root._cursorItem();
         if (!it) { root.moveCursor(0, 0); return; }
-        if (it.kind === "task") root.taskClicked(it.id);
+        if (it.kind === "undated") { root.undatedRequested(); return; }
+        if (it.kind === "task") root._openTask(it.block);
         // The day's occurrence, not the series (IDIOT-CAL-1): Main finds it
         // by the ISO date the block carries.
         else root.eventClicked(it.id, it.block.occurrence || null);
     }
     function toggleCursorSelection() {
         const it = root._cursorItem();
-        if (it && it.kind === "task") AppController.toggleTaskSelection(it.id);
+        if (it && it.kind === "task" && !root._isOther(it.block)) AppController.toggleTaskSelection(it.id);
         else if (!it) root.moveCursor(0, 0);
     }
     function openCursorMenu() {
@@ -276,7 +377,7 @@ FocusScope {
     // Shift J / K: a grid step; Ctrl Shift J / K: its block longer / shorter.
     function moveSelectionOrCard(dx) {
         const it = root._cursorItem();
-        if (!it || it.kind !== "task") return;
+        if (!it || it.kind !== "task" || root._isOther(it.block)) return;
         const t = AppController.taskById(it.id);
         if (!t || !t.id) return;
         const r = Resched.shiftByDays(t.scheduledAt, t.scheduledHasTime, dx, root.day, AppController.today);
@@ -284,14 +385,14 @@ FocusScope {
     }
     function moveCursorCard(dx, dy) {
         const it = root._cursorItem();
-        if (!it || it.kind !== "task" || dy === 0) return;
+        if (!it || it.kind !== "task" || dy === 0 || root._isOther(it.block)) return;
         const t = AppController.taskById(it.id);
         const r = t ? Resched.shiftByTime(t.scheduledAt, t.scheduledHasTime, dy, Theme.snapMinutes) : null;
         if (r) AppController.rescheduleTask(it.id, "scheduled", r.when, true);
     }
     function resizeCursor(steps) {
         const it = root._cursorItem();
-        if (!it || it.kind !== "task" || it.block.dayOnly || it.block.fromPrevDay || it.block.toNextDay) return false;
+        if (!it || it.kind !== "task" || it.block.dayOnly || it.block.fromPrevDay || it.block.toNextDay || root._isOther(it.block)) return false;
         const step = Theme.snapMinutes / 60;
         const end = Math.min(24, it.block.end + steps * step);
         if (end - it.block.start < step - 1e-9) return false;
@@ -387,7 +488,10 @@ FocusScope {
                 objectName: "today-back"
                 Layout.alignment: Qt.AlignBottom
                 visible: !root.isToday
-                text: I18n.t("today.backToToday")
+                // The key as bound now (A1-6): a literal "(T)" outlived the
+                // move of cal.today to 0, and T is the timer.
+                readonly property string keys: AppController.shortcuts.length >= 0 ? AppController.shortcutText("cal.today") : ""
+                text: I18n.t("today.backToToday") + (keys.length > 0 ? " (" + keys + ")" : "")
                 color: Theme.textMuted
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSm
@@ -456,6 +560,31 @@ FocusScope {
                     font.pixelSize: Theme.fsMd
                     font.underline: emptyUndCA.hovered
                     ClickArea { id: emptyUndCA; label: parent.text; role: Accessible.Link; onActivated: root.undatedRequested() }
+                }
+
+                // "N more above" (A2-10): a band of its own over the rows,
+                // never over the first one's title.
+                Rectangle {
+                    objectName: "today-more-above"
+                    visible: root.hiddenAbove > 0 && !root.stacked
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: root.plain ? 0 : Theme.spSm
+                    Layout.bottomMargin: Theme.spXs
+                    implicitWidth: aboveT.implicitWidth + 2 * Theme.spMd
+                    implicitHeight: aboveT.implicitHeight + Theme.spXs * 2
+                    radius: height / 2
+                    color: Theme.panel2
+                    border.color: Theme.border
+                    border.width: 1
+                    Text {
+                        id: aboveT
+                        anchors.centerIn: parent
+                        text: "↑ " + I18n.t("today.moreAbove").arg(root.hiddenAbove)
+                        color: Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
+                    }
+                    ClickArea { label: aboveT.text; onActivated: dayList.positionViewAtBeginning() }
                 }
 
                 ListView {
@@ -541,6 +670,7 @@ FocusScope {
                                 RowLayout {
                                     spacing: Theme.spMd
                                     StatusRing { category: leadCard.t.category || "prog" }
+                                    ProfileDot { block: leadCard.t }
                                     Text {
                                         Layout.fillWidth: true
                                         text: leadCard.t.title || ""
@@ -555,6 +685,15 @@ FocusScope {
                                     Layout.leftMargin: Theme.statusRingSize + Theme.spMd
                                     spacing: Theme.spLg
                                     Text { text: leadCard.t.id || ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs }
+                                    // Another profile's task says whose it is (A1-17).
+                                    Text {
+                                        objectName: "today-lead-profile"
+                                        visible: root._isOther(leadCard.t)
+                                        text: leadCard.t.profileName || ""
+                                        color: Theme.textMuted
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: Theme.fsXs
+                                    }
                                     Text {
                                         visible: !leadCard.pr && String(leadCard.t.branch || "").length > 0
                                         text: leadCard.t.branch || ""
@@ -583,7 +722,7 @@ FocusScope {
                                     TimerMark { visible: !!leadCard.t.isTiming; taskId: leadCard.t.id || "" }
                                 }
                             }
-                            ClickArea { label: leadCard.t.title || ""; onActivated: root.taskClicked(leadCard.t.id) }
+                            ClickArea { label: leadCard.t.title || ""; onActivated: root._openTask(leadCard.t) }
                         }
                         // The others in progress, as lines; quiet draws all
                         // of them this way.
@@ -599,6 +738,7 @@ FocusScope {
                                     size: Theme.statusRingSize - 2
                                     category: ipRow.modelData.category || "prog"
                                 }
+                                ProfileDot { block: ipRow.modelData }
                                 Text {
                                     Layout.fillWidth: true
                                     text: ipRow.modelData.title
@@ -606,7 +746,18 @@ FocusScope {
                                     color: Theme.text
                                     font.family: Theme.fontUi
                                     font.pixelSize: Theme.fsMd
-                                    ClickArea { label: parent.text; onActivated: root.taskClicked(ipRow.modelData.id) }
+                                    ClickArea { label: parent.text; onActivated: root._openTask(ipRow.modelData) }
+                                }
+                                // Whose it is, when it is another profile's (A1-17).
+                                Text {
+                                    objectName: "today-inprogress-profile"
+                                    visible: root._isOther(ipRow.modelData)
+                                    Layout.maximumWidth: Theme.px(120)
+                                    text: ipRow.modelData.profileName || ""
+                                    elide: Text.ElideRight
+                                    color: Theme.textMuted
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: Theme.fsSm
                                 }
                                 TimerMark { visible: !!ipRow.modelData.isTiming; taskId: ipRow.modelData.id }
                             }
@@ -657,8 +808,8 @@ FocusScope {
                                     if (modelData.profileName) p.push(modelData.profileName);
                                     return root.stacked ? "" : p.join(" · ");
                                 }
-                                when: !root.cards ? "" : modelData.tomorrow ? I18n.t("quick.day.tomorrow") : I18n.t("quick.day.today")
-                                whenSignal: !modelData.tomorrow
+                                when: !root.cards ? "" : root._dueWord(modelData.due)
+                                whenSignal: root._daysFromToday(new Date(modelData.due)) <= 0
                             }
                         }
                         Text {
@@ -823,7 +974,12 @@ FocusScope {
                     // owner: both styles).
                     FooterLink {
                         objectName: "today-undated"
-                        visible: root.cards && (root.dayData.undated || 0) > 0
+                        // Quiet shows it too while the cursor is on it (A1-2).
+                        visible: (root.cards || root.cursorKey === "undated" && root.cursorVisible) && (root.dayData.undated || 0) > 0
+                        FocusRing {
+                            objectName: "today-undated-cursor"
+                            visible: root.cursorVisible && root.cursorKey === "undated"
+                        }
                         text: I18n.t("today.undatedLook").arg(I18n.count(root.dayData.undated || 0, "today.n.undated"))
                         onActivated: root.undatedRequested()
                     }
@@ -853,12 +1009,40 @@ FocusScope {
         const d = root.day;
         AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
     }
+    // Opened, the day shows "now" (A2-10): from the top when the rows above
+    // it fit on the screen with it, so the untimed ones planned for the day
+    // are not scrolled away; else centred on it, a whole row at the top
+    // (EYES-5), and "N more above" says what is up there.
     function _revealNow() {
         for (let i = 0; i < root.rows.length; i++) {
-            if (root.rows[i].kind === "now") { dayList.positionViewAtIndex(i, ListView.Center); return; }
+            if (root.rows[i].kind !== "now") continue;
+            dayList.positionViewAtBeginning();
+            dayList.forceLayout();
+            const it = dayList.itemAtIndex(i);
+            if (it && it.y + it.height - dayList.originY <= dayList.height) return;
+            dayList.positionViewAtIndex(i, ListView.Center);
+            root._snapTopRow();
+            return;
         }
     }
-
+    function _snapTopRow() {
+        const top = dayList.itemAt(dayList.width / 2, dayList.contentY + 1);
+        if (top && top.y < dayList.contentY - 0.5) dayList.contentY = Math.max(dayList.originY, top.y);
+    }
+    // The meetings and tasks above the visible part of the day.
+    readonly property int hiddenAbove: {
+        const y = dayList.contentY;
+        if (y <= dayList.originY + 0.5 || dayList.count === 0) return 0;
+        let n = 0;
+        for (let i = 0; i < root.rows.length; i++) {
+            const r = root.rows[i];
+            if (r.kind !== "meeting" && r.kind !== "task" && r.kind !== "allday") continue;
+            const it = dayList.itemAtIndex(i);
+            if (!it || it.y < y - 0.5) n++;
+            else break;
+        }
+        return n;
+    }
     // ‹ ›: a box in bold, a bare chevron in quiet.
     component NavBtn: Rectangle {
         id: nb
@@ -882,6 +1066,18 @@ FocusScope {
         ClickArea { id: nbCA; label: nb.label; shortcutId: nb.shortcutId; onActivated: nb.activated() }
     }
 
+    // Another profile's row (A1-17): a dot in that profile's colour before
+    // the title; its name is in the caption.
+    component ProfileDot: Rectangle {
+        property var block: ({})
+        visible: root._isOther(block)
+        Layout.alignment: Qt.AlignVCenter
+        implicitWidth: Theme.spSm
+        implicitHeight: Theme.spSm
+        radius: width / 2
+        color: block && block.profileColor ? block.profileColor : Theme.textDim
+    }
+
     // A heading on the side: the bold section title, or quiet's small grey
     // words.
     component SideHead: Text {
@@ -897,7 +1093,9 @@ FocusScope {
     component TimerMark: Row {
         id: tm
         property string taskId: ""
+        property int _tick: 0
         spacing: Theme.spXs
+        Timer { interval: 1000; repeat: true; running: tm.visible && root.visible; onTriggered: tm._tick++ }
         Rectangle {
             visible: Style.urgency
             anchors.verticalCenter: parent.verticalCenter
@@ -906,7 +1104,7 @@ FocusScope {
         }
         Text {
             objectName: "today-timer"
-            text: root._timer(tm.taskId)
+            text: root._timer(tm.taskId, tm._tick + root._rev)
             color: Style.urgency ? Theme.signalNow : Theme.textDim
             font.family: Theme.fontMono
             font.pixelSize: Theme.fsXs
@@ -975,20 +1173,25 @@ FocusScope {
                 Layout.alignment: Qt.AlignTop
                 Layout.topMargin: Theme.spXs / 2
                 StatusRing { size: root.cards ? Theme.statusRingSize : Theme.statusRingSize - 2; category: tl.task.category || "todo" }
-                ClickArea { label: I18n.t("taskmenu.done"); shortcutId: "task.done"; onActivated: AppController.toggleDone([tl.task.id]) }
+                ClickArea { enabled: !root._isOther(tl.task); label: I18n.t("taskmenu.done"); shortcutId: "task.done"; onActivated: AppController.toggleDone([tl.task.id]) }
             }
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spXs / 2
-                Text {
+                RowLayout {
                     Layout.fillWidth: true
-                    text: tl.task.title || ""
-                    elide: Text.ElideRight
-                    color: Theme.text
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsMd
-                    font.weight: root.cards ? Theme.fwTitle : Theme.fwBody
-                    ClickArea { label: parent.text; onActivated: root.taskClicked(tl.task.id) }
+                    spacing: Theme.spSm
+                    ProfileDot { block: tl.task }
+                    Text {
+                        Layout.fillWidth: true
+                        text: tl.task.title || ""
+                        elide: Text.ElideRight
+                        color: Theme.text
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                        font.weight: root.cards ? Theme.fwTitle : Theme.fwBody
+                        ClickArea { label: parent.text; onActivated: root._openTask(tl.task) }
+                    }
                 }
                 Text {
                     visible: tl.sub.length > 0
@@ -1028,7 +1231,9 @@ FocusScope {
         readonly property var b: dr.modelData.block || ({})
         readonly property bool item: dr.modelData.kind === "meeting" || dr.modelData.kind === "task" || dr.modelData.kind === "allday"
         readonly property bool meeting: dr.modelData.kind !== "task"
-        readonly property int timeW: root.plain ? Theme.px(44) : Theme.px(52)
+        // As wide as its longest word (A2-26, A6-14): "без времени" was cut
+        // to "без врем…" in a 52 px gutter.
+        readonly property int timeW: Math.max(root.plain ? Theme.px(44) : Theme.px(52), root.timeLabelW)
         // Quiet: a free window is a gap, the end of the day is not drawn;
         // a small window keeps no gaps at all (DG-012, X-Oth-Small).
         implicitHeight: {
@@ -1060,7 +1265,10 @@ FocusScope {
                 : root._hm(dr.modelData.start)
             elide: Text.ElideRight
             color: dr.modelData.kind === "now" ? Theme.signalNow : dr.item && !root.plain ? Theme.textMuted : Theme.textDim
-            font.family: Theme.fontMono
+            // The UI font with even figures, as the week's blocks: the mono
+            // font's dotted zero ran into an 8 at 11 px (A2-27).
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
             font.pixelSize: Theme.fsXs
         }
 
@@ -1098,20 +1306,25 @@ FocusScope {
                     Layout.topMargin: Theme.spXs / 2
                     implicitWidth: Theme.statusRingSize; implicitHeight: Theme.statusRingSize
                     StatusRing { category: dr.b.category || "todo" }
-                    ClickArea { label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
+                    ClickArea { enabled: !root._isOther(dr.b); label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Theme.spXs / 2
-                    Text {
+                    RowLayout {
                         Layout.fillWidth: true
-                        text: dr.b.title || ""
-                        elide: Text.ElideRight
-                        color: dr.b.past ? Theme.textMuted : Theme.text
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsMd
-                        // The sheets set day rows at 500 (R4-003).
-                        font.weight: Theme.fwTitle
+                        spacing: Theme.spSm
+                        ProfileDot { block: dr.b }
+                        Text {
+                            Layout.fillWidth: true
+                            text: dr.b.title || ""
+                            elide: Text.ElideRight
+                            color: dr.b.past ? Theme.textMuted : Theme.text
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsMd
+                            // The sheets set day rows at 500 (R4-003).
+                            font.weight: Theme.fwTitle
+                        }
                     }
                     Text {
                         Layout.fillWidth: true
@@ -1125,7 +1338,7 @@ FocusScope {
                 Text {
                     Layout.alignment: Qt.AlignTop
                     visible: dr.modelData.kind !== "allday" && !dr.b.dayOnly
-                    text: root._len(dr.b.start || 0, dr.b.end || 0)
+                    text: root._rowLen(dr.b)
                     color: Theme.textDim
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSm
@@ -1151,19 +1364,24 @@ FocusScope {
                 implicitWidth: Theme.statusRingSize; implicitHeight: Theme.statusRingSize
                 MeetingIcon { visible: dr.meeting; anchors.centerIn: parent; ink: Theme.textMuted }
                 StatusRing { visible: !dr.meeting; anchors.centerIn: parent; size: Theme.statusRingSize - 1; category: dr.b.category || "todo" }
-                ClickArea { enabled: !dr.meeting; label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
+                ClickArea { enabled: !dr.meeting && !root._isOther(dr.b); label: I18n.t("taskmenu.done"); onActivated: AppController.toggleDone([dr.b.id]) }
             }
             ColumnLayout {
                 visible: !root.stacked
                 Layout.fillWidth: true
                 spacing: Theme.spXs / 2
-                Text {
+                RowLayout {
                     Layout.fillWidth: true
-                    text: dr.b.title || ""
-                    elide: Text.ElideRight
-                    color: dr.b.past ? Theme.textMuted : Theme.text
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsLg
+                    spacing: Theme.spSm
+                    ProfileDot { block: dr.b }
+                    Text {
+                        Layout.fillWidth: true
+                        text: dr.b.title || ""
+                        elide: Text.ElideRight
+                        color: dr.b.past ? Theme.textMuted : Theme.text
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsLg
+                    }
                 }
                 Text {
                     Layout.fillWidth: true
@@ -1203,7 +1421,7 @@ FocusScope {
             width: parent.width - x
             height: parent.height
             label: dr.b.title || ""
-            onActivated: dr.meeting ? root.eventClicked(dr.b.id, dr.b.occurrence || null) : root.taskClicked(dr.b.id)
+            onActivated: dr.meeting ? root.eventClicked(dr.b.id, dr.b.occurrence || null) : root._openTask(dr.b)
         }
 
         // Bold: a free window and the end of the day, facts beside a line.
@@ -1254,7 +1472,8 @@ FocusScope {
             anchors.verticalCenter: parent.verticalCenter
             text: root._hm(dr.modelData.start)
             color: Theme.textDim
-            font.family: Theme.fontMono
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
             font.pixelSize: Theme.fsXs
         }
     }

@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import TodoCpp
 import "PopupStack.js" as PopupStack
+import "TaskDates.js" as TaskDates
 
 Popup {
     PopupArrival { popup: root }
@@ -130,6 +131,28 @@ Popup {
     // saved or deleted here goes there, whatever profile is active by then
     // (PRES-1).
     property string _profileId: ""
+    // A new task's profile (A5-14, A5-21): the one picked in the header, or
+    // the one a "+Name" in the title names; the one it was opened in by
+    // default. Saving goes there, as quick capture's picker does.
+    property string _pickedProfileId: ""
+    property string _titleProfileId: ""
+    readonly property string _targetProfileId: root._titleProfileId || root._pickedProfileId || root._profileId
+    readonly property string _targetProfileName: {
+        const p = AppController.profileById(root._targetProfileId);
+        return p && p.name ? p.name : "";
+    }
+    // Takes the "+Name" out of the title: it said where, not what.
+    function _cutTitleProfile() {
+        const p = AppController.captureParse(titleField.text || "", new Date(), []);
+        const marks = p.marks || [];
+        for (let i = 0; i < marks.length; i++) {
+            if (marks[i].kind !== "profile") continue;
+            const raw = titleField.text;
+            titleField.text = (raw.slice(0, marks[i].start) + " " + raw.slice(marks[i].end)).replace(/\s+/g, " ").trim();
+            return p.profileId || "";
+        }
+        return "";
+    }
     function _backToOwnProfile() {
         if (root._profileId && AppController.activeProfileId !== root._profileId)
             AppController.activeProfileId = root._profileId;
@@ -238,6 +261,7 @@ Popup {
         case "priority":  line = I18n.t("history.priority").arg(v(e.from)).arg(v(e.to)); break;
         case "due":       line = I18n.t("history.due").arg(v(e.from)).arg(v(e.to)); break;
         case "scheduled": line = I18n.t("history.scheduled").arg(v(e.from)).arg(v(e.to)); break;
+        case "profile":   line = I18n.t("history.profile").arg(v(e.from)).arg(v(e.to)); break;
         default:          line = String(e.kind);
         }
         return e.sync ? I18n.t("history.viaTracker").arg(line) : line;
@@ -277,6 +301,8 @@ Popup {
         // Opening a card a sync brought in is seeing it (APP-180).
         if (_originalId.length > 0) AppController.markTaskSeen(_originalId);
         _profileId = AppController.activeProfileId;
+        _pickedProfileId = "";
+        _titleProfileId = "";
         // New tasks: leave idField empty with a TODO hint — real id is
         // assigned on save. Edit: pre-fill with existing id (editable).
         idField.text = isNew ? "" : (draft.id || "");
@@ -298,6 +324,7 @@ Popup {
         _error = "";
         discardPrompt.close();
         _baseline = _snapshot();
+        _refreshTitleChips();
         open();
         // Keyboard-first: Ctrl+N and type. Nothing had focus, so whatever was
         // typed before reaching for the mouse went nowhere and the task was
@@ -454,6 +481,7 @@ Popup {
             return;
         }
         _deadlinePreview = AppController.parseDateTime(s, new Date()) || {ok: false};
+        root._refreshTitleChips();
     }
 
     // Forwards to heap::text::extractMeta (C++, unit-tested).
@@ -469,8 +497,10 @@ Popup {
     // description — but only when all of them can be applied: a priority picked
     // in the box that disagrees, an id typed by hand or a ticket key already
     // taken leaves the title as typed (minus the "//" tail), so no word is lost.
-    // Dates stay in the title; the editor has its own date fields.
-    function _titleTokens(meta, typedId) {
+    // Dates, a length and a repeat are read too, the way quick capture reads
+    // them (A1-4, A5-1): "Call bank tomorrow 3pm p1" was saved with the date
+    // still in the title and no date at all. `read` is _readTitle()'s answer.
+    function _titleTokens(meta, typedId, read) {
         const raw = titleField.text || "";
         if (!root.isNew)
             return { title: raw.trim(), priority: "", labels: [], id: "" };
@@ -489,7 +519,74 @@ Popup {
         // Nothing but tokens ("p0 #ops") is not a title.
         if (String(meta.title || "").trim().length === 0)
             return asTyped;
-        return { title: meta.title, priority: meta.priority || "", labels: meta.labels || [], id: id };
+        const out = { title: meta.title, priority: meta.priority || "", labels: meta.labels || [], id: id };
+        // A date alone ("tomorrow 3pm") is not a title either: then it stays.
+        const r = read || ({});
+        if (String(r.title || "").trim().length > 0) {
+            const valid = (d) => !!(d && d.getTime && !isNaN(d.getTime()));
+            out.title = r.title;
+            if (valid(r.when)) { out.when = r.when; out.whenHasTime = !!r.whenHasTime; }
+            if (valid(r.due)) { out.due = r.due; out.dueHasTime = !!r.dueHasTime; }
+            if (r.estimateMinutes > 0) out.estimate = r.estimateMinutes;
+            if (r.recurrence) out.recurrence = r.recurrence;
+        }
+        return out;
+    }
+
+    // A new task's title read as quick capture reads it. A part whose own
+    // field is already filled in (a deadline typed below, a plan, a length, a
+    // repeat) stays words in the title: what was typed there wins.
+    function _readTitle(raw) {
+        if (!root.isNew || !raw || String(raw).trim().length === 0) return ({});
+        const now = new Date();
+        let p = AppController.captureParse(raw, now, []);
+        const schedTyped = scheduledField.text.trim().length > 0;
+        const dueTyped = deadlineField.text.trim().length > 0;
+        const estTyped = (parseInt(estimateField.text || "0") || 0) > 0;
+        const recurTyped = recurBox.currentIndex > 0;
+        const rejected = [];
+        const spans = p.spans || [];
+        for (let i = 0; i < spans.length; ++i) {
+            const k = spans[i].kind;
+            if ((k === "when" && (schedTyped || (recurTyped && p.recurrence))) || (k === "due" && dueTyped)
+                || (k === "estimate" && estTyped))
+                rejected.push(spans[i].text);
+        }
+        if (rejected.length > 0) p = AppController.captureParse(raw, now, rejected);
+        return p;
+    }
+
+    // What the title will give on save, as the chips quick capture shows.
+    property var _titleChips: []
+    function _refreshTitleChips() {
+        if (!root.isNew || titleField.text.trim().length === 0) {
+            root._titleChips = [];
+            root._titleProfileId = "";
+            return;
+        }
+        const meta = root._extractMeta(titleField.text);
+        const typedId = idField.text.trim() || root.draft.id || "";
+        const read = root._readTitle(titleField.text);
+        root._titleProfileId = String(read.profileId || "");
+        const t = root._titleTokens(meta, typedId, read);
+        const when = (d, hasTime) => I18n.fmtDate(d, "weekdayDay") + (hasTime ? " · " + I18n.fmtTime(d) : "");
+        const chips = [];
+        if (t.when) chips.push({ kind: "when", key: I18n.t("capture.when"), value: when(t.when, t.whenHasTime) });
+        if (t.due) chips.push({ kind: "due", key: I18n.t("capture.due"), value: when(t.due, t.dueHasTime) });
+        if (t.recurrence) chips.push({ kind: "repeat", key: I18n.t("capture.repeat"), value: root._recurText(t.recurrence) });
+        if (t.estimate) chips.push({ kind: "estimate", key: I18n.t("capture.estimate"), value: I18n.fmtMinutes(t.estimate) });
+        if (t.priority) chips.push({ kind: "priority", key: I18n.t("capture.priority"), value: t.priority });
+        for (const l of (t.labels || [])) chips.push({ kind: "label", key: I18n.t("capture.label"), value: "#" + l });
+        if (read.profileName) chips.push({ kind: "profile", key: I18n.t("capture.profile"), value: String(read.profileName) });
+        root._titleChips = chips;
+    }
+    function _recurText(r) {
+        const interval = TaskDates.intervalTitle(r);
+        if (interval.length > 0) return interval;
+        const m = /^every:month:(\d+)$/.exec(String(r || ""));
+        if (m) return I18n.t("editor.recur.monthlyOn").arg(m[1]);
+        const i = recurBox._base.indexOf(r);
+        return i >= 0 ? recurBox.model[i] : r;
     }
 
     function _mergeLabels(typed, fromTitle) {
@@ -567,6 +664,12 @@ Popup {
             scheduledField.forceActiveFocus();
             return false;
         }
+        // A new task goes to the profile picked for it ("+Name" in the
+        // title wins), and the "+Name" leaves the title.
+        if (root.isNew) {
+            const named = root._cutTitleProfile();
+            root._profileId = named || root._pickedProfileId || root._profileId;
+        }
         // New tasks: if user left idField blank, fall back to the
         // auto-generated id captured in the draft. Edit: take the
         // (possibly renamed) text from idField.
@@ -579,18 +682,21 @@ Popup {
         const meta = root._extractMeta(titleField.text);
         const inlineDesc = root.isNew ? meta.desc : "";
         const handleNames = root._resolvePeopleNames(meta.handles);
-        const parsed = root._titleTokens(meta, finalId);
+        const parsed = root._titleTokens(meta, finalId, root._readTitle(titleField.text));
         const cleanedTitle = parsed.title;
         if (parsed.id) finalId = parsed.id;
 
         // Due and scheduled are typed independently; a task with only
         // a due date is scheduled for that day, which is what the
-        // single deadline field always meant.
-        const dueAt = root.parseDate(deadlineField.text);
+        // single deadline field always meant. A date read from a new
+        // task's title fills a field left empty.
+        const dueTyped = root.parseDate(deadlineField.text);
         const schedTyped = root.parseDate(scheduledField.text);
-        const scheduledAt = schedTyped || dueAt;
-        const dueHasTime = !!dueAt && root.parseHasTime(deadlineField.text);
-        const scheduledHasTime = schedTyped ? root.parseHasTime(scheduledField.text) : dueHasTime;
+        const dueAt = dueTyped || parsed.due;
+        const scheduledAt = schedTyped || parsed.when || dueTyped;
+        const dueHasTime = dueTyped ? root.parseHasTime(deadlineField.text) : (parsed.due ? parsed.dueHasTime : false);
+        const scheduledHasTime = schedTyped ? root.parseHasTime(scheduledField.text)
+                                            : (parsed.when ? parsed.whenHasTime : (dueTyped ? dueHasTime : false));
 
         const d = {
             _isNew: root.isNew,
@@ -614,10 +720,10 @@ Popup {
             dueHasTime: dueHasTime,
             scheduledHasTime: scheduledHasTime,
             branch: branchField.text,
-            recurrence: recurBox.value(),
+            recurrence: recurBox.value() || parsed.recurrence || "",
             // Plain names; saveTask keeps each existing label's colour.
             labels: root._mergeLabels(root.labelsFromText(labelsField.text), parsed.labels),
-            estimateMinutes: parseInt(estimateField.text || "0") || 0,
+            estimateMinutes: parseInt(estimateField.text || "0") || parsed.estimate || 0,
             someday: somedayBox.checked
         };
         // A new task's files ride along with the draft; an existing task's
@@ -748,6 +854,67 @@ Popup {
                 font.weight: Theme.fwTitle
             }
             Item { Layout.fillWidth: true }
+            // "в Работа ▾" (A5-14): where a new task goes, as quick capture
+            // says it; another profile from the menu, or "+Name" in the title.
+            Item {
+                objectName: "te-profile"
+                visible: root.isNew
+                implicitWidth: teProfRow.implicitWidth
+                implicitHeight: teProfRow.implicitHeight
+                Layout.maximumWidth: Theme.px(220)
+                Row {
+                    id: teProfRow
+                    spacing: Theme.spXs
+                    Text {
+                        objectName: "te-profile-name"
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: I18n.t("capture.inProfile").arg(root._targetProfileName)
+                        color: teProfCA.hovered ? Theme.text : Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
+                        elide: Text.ElideRight
+                        width: Math.min(implicitWidth, Theme.px(200))
+                    }
+                    Icon {
+                        visible: (AppController.profiles || []).length > 1
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "chevron-down"
+                        size: Theme.iconSize - 4
+                        color: teProfCA.hovered ? Theme.text : Theme.textMuted
+                    }
+                }
+                ClickArea {
+                    id: teProfCA
+                    label: I18n.t("capture.inProfile").arg(root._targetProfileName)
+                    tip: I18n.t("capture.inProfileHint")
+                    enabled: (AppController.profiles || []).length > 1
+                    onActivated: teProfileMenu.popup(teProfRow, 0, teProfRow.height + Theme.spXs)
+                }
+                AppMenu {
+                    id: teProfileMenu
+                    Instantiator {
+                        model: AppController.profiles
+                        delegate: AppMenuItem {
+                            id: teProfItem
+                            required property var modelData
+                            text: teProfItem.modelData.name
+                        }
+                        // Wired here, where the editor is in scope.
+                        onObjectAdded: (idx, obj) => {
+                            teProfileMenu.insertItem(idx, obj);
+                            const item = obj as AppMenuItem;
+                            const id = String((AppController.profiles[idx] || {}).id || "");
+                            if (!item) return;
+                            item.marked = Qt.binding(() => id === root._targetProfileId);
+                            item.triggered.connect(() => {
+                                root._pickedProfileId = id;
+                                Qt.callLater(() => titleField.forceActiveFocus());
+                            });
+                        }
+                        onObjectRemoved: (idx, obj) => teProfileMenu.removeItem(obj)
+                    }
+                }
+            }
             PillButton {
                 objectName: "te-ticket-open"
                 visible: root._isTicket && String(root._ticket.url || "").length > 0
@@ -887,9 +1054,33 @@ Popup {
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
                     Keys.onPressed: (event) => {
+                        // "+Na…" offers the profiles (A5-21): arrows walk the
+                        // list, Tab takes one, Enter only once one is picked.
+                        if (titleAc.isOpen) {
+                            if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+                                titleAc.moveSelection(event.key === Qt.Key_Down ? 1 : -1);
+                                event.accepted = true;
+                                return;
+                            }
+                            if ((event.key === Qt.Key_Tab || ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                                 && titleAc.navigated)) && titleAc.accept()) {
+                                event.accepted = true;
+                                return;
+                            }
+                            if (event.key === Qt.Key_Escape) {
+                                titleAc.dismiss();
+                                event.accepted = true;
+                                return;
+                            }
+                        }
                         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                            // Ctrl+Enter is the save shortcut's.
-                            if (!(event.modifiers & Qt.ControlModifier)) event.accepted = true;
+                            // Ctrl+Enter is the save shortcut's. Plain Enter in a
+                            // new task's title creates it, as quick capture does;
+                            // it used to do nothing and say nothing (A2-11, A5-2).
+                            if (!(event.modifiers & Qt.ControlModifier)) {
+                                event.accepted = true;
+                                if (root.isNew && !(event.modifiers & Qt.ShiftModifier)) root._save();
+                            }
                             return;
                         }
                         if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) return;
@@ -898,11 +1089,48 @@ Popup {
                         if (next) next.forceActiveFocus(back ? Qt.BacktabFocusReason : Qt.TabFocusReason);
                         event.accepted = true;
                     }
+                    onCursorPositionChanged: if (root.isNew) titleAc.refresh()
                     onTextChanged: {
+                        titleReadTimer.restart();
+                        if (root.isNew) titleAc.refresh();
                         if (!/[\r\n\t]/.test(text)) return;
                         const at = cursorPosition;
                         text = text.replace(/[\r\n\t]+/g, " ");
                         cursorPosition = Math.min(at, text.length);
+                    }
+                    MentionAutocomplete {
+                        id: titleAc
+                        target: titleField
+                        enablePeople: false
+                        enableTickets: false
+                        enableProfiles: true
+                    }
+                    Timer {
+                        id: titleReadTimer
+                        interval: 80
+                        repeat: false
+                        onTriggered: root._refreshTitleChips()
+                    }
+                }
+
+                // What a new task's title will give on save (A1-4): the chips
+                // quick capture shows, so "tomorrow 3pm p1" is seen being read.
+                Flow {
+                    objectName: "te-title-read"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    visible: root.isNew && root._titleChips.length > 0
+                    spacing: Theme.spSm
+                    Repeater {
+                        model: root._titleChips
+                        delegate: PropertyChip {
+                            required property var modelData
+                            objectName: "te-read-" + modelData.kind
+                            outlined: true
+                            small: true
+                            key: modelData.key
+                            value: modelData.value
+                        }
                     }
                 }
 
@@ -956,6 +1184,7 @@ Popup {
                         spacing: Theme.spSm
                         TextField {
                             id: deadlineField
+                            objectName: "te-deadline"
                             ContextMenu.menu: TextEditMenu { editor: deadlineField }
                             Layout.fillWidth: true
                             placeholderText: I18n.t("editor.ph.deadline")
@@ -1031,6 +1260,7 @@ Popup {
                     // What the deadline field was read as.
                     Text {
                         id: chipLabel
+                        objectName: "te-deadline-read"
                         visible: text.length > 0
                         Layout.fillWidth: true
                         font.family: Theme.fontUi
@@ -1041,8 +1271,13 @@ Popup {
                             if (!root._deadlinePreview || !root._deadlinePreview.ok ||
                                 !root._deadlinePreview.start) return "";
                             const d = root._deadlinePreview.start;
-                            return "↑ " + (root._deadlinePreview.hasTime ? I18n.fmtDateTime(d, "weekdayDayYear")
-                                                                          : I18n.fmtDate(d, "weekdayDayYear"));
+                            const when = "↑ " + (root._deadlinePreview.hasTime ? I18n.fmtDateTime(d, "weekdayDayYear")
+                                                                                : I18n.fmtDate(d, "weekdayDayYear"));
+                            // With no plan of its own, the task is planned at its
+                            // deadline too; say so, the plan field is folded away (A5-23).
+                            const planned = scheduledField.text.trim().length > 0
+                                            || root._titleChips.some(c => c.kind === "when");
+                            return planned ? when : when + " · " + I18n.t("editor.deadline.alsoPlanned");
                         }
                     }
                 }
@@ -1354,6 +1589,7 @@ Popup {
                     FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.recurrence") }
                     TextField {
                         id: scheduledField
+                        onTextChanged: titleReadTimer.restart()
                         ContextMenu.menu: TextEditMenu { editor: scheduledField }
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
@@ -1371,28 +1607,87 @@ Popup {
                         Layout.preferredWidth: 1
                         readonly property var _base: ["", "every:day", "every:week", "every:weekday",
                                                       "every:mon", "every:tue", "every:wed", "every:thu", "every:fri",
-                                                      "every:sat", "every:sun", "every:month"]
+                                                      "every:sat", "every:sun", "every:month", "every:2:week"]
                         // A rule the list does not name ("every:month:15", from
                         // capture) is shown as itself, so saving the editor
                         // does not quietly turn it into "none".
                         property string _extra: ""
-                        readonly property var _vals: _extra.length > 0 ? _base.concat([_extra]) : _base
+                        // The last row, "Custom interval…" (B7), is not a rule:
+                        // it opens a field over the box where the interval is
+                        // typed ("every 3 weeks", "пн, ср").
+                        readonly property var _vals: (_extra.length > 0 ? _base.concat([_extra]) : _base).concat(["custom"])
+                        property int _prevIndex: 0
+                        property bool _customOpen: false
+                        property bool _customBad: false
                         function setRecurrence(r) {
                             _extra = (r.length > 0 && _base.indexOf(r) < 0) ? r : "";
                             currentIndex = Math.max(0, _vals.indexOf(r));
+                            _customOpen = false;
                         }
-                        function value() { return _vals[currentIndex] || ""; }
+                        function value() {
+                            const v = _vals[currentIndex] || "";
+                            return v === "custom" ? "" : v;
+                        }
                         function _label(r) {
+                            const interval = TaskDates.intervalTitle(r);
+                            if (interval.length > 0) return interval;
                             const m = /^every:month:(\d+)$/.exec(r);
                             return m ? I18n.t("editor.recur.monthlyOn").arg(m[1]) : r;
+                        }
+                        function openCustom() {
+                            recurBox.currentIndex = recurBox._prevIndex;
+                            recurBox._customBad = false;
+                            recurBox._customOpen = true;
+                            recurCustomField.text = "";
+                            Qt.callLater(recurCustomField.forceActiveFocus);
+                        }
+                        function applyCustom(text) {
+                            const rule = AppController.recurrenceFromText(text);
+                            if (rule.length === 0) { recurBox._customBad = true; return false; }
+                            recurBox.setRecurrence(rule);
+                            recurBox.forceActiveFocus();
+                            return true;
+                        }
+                        onCurrentIndexChanged: { titleReadTimer.restart(); if (_vals[currentIndex] !== "custom") _prevIndex = currentIndex; }
+                        onActivated: (i) => { if (recurBox._vals[i] === "custom") recurBox.openCustom(); }
+                        // Down on the closed box steps the rules; it stops at
+                        // the last one rather than opening the custom field.
+                        Keys.onDownPressed: (e) => {
+                            e.accepted = !recurBox.popup.visible && recurBox._vals[recurBox.currentIndex + 1] === "custom";
                         }
                         model: [I18n.t("editor.recur.none"), I18n.t("editor.recur.daily"),
                                 I18n.t("editor.recur.weekly"), I18n.t("editor.recur.weekdays"),
                                 I18n.t("editor.recur.everyMon"), I18n.t("editor.recur.everyTue"),
                                 I18n.t("editor.recur.everyWed"), I18n.t("editor.recur.everyThu"),
                                 I18n.t("editor.recur.everyFri"), I18n.t("editor.recur.everySat"),
-                                I18n.t("editor.recur.everySun"), I18n.t("editor.recur.monthly")]
+                                I18n.t("editor.recur.everySun"), I18n.t("editor.recur.monthly"),
+                                I18n.t("recur.biweekly")]
                                .concat(_extra.length > 0 ? [_label(_extra)] : [])
+                               .concat([I18n.t("recur.custom")])
+                        // Over the box while it is open: Enter sets the rule,
+                        // Esc leaves the one there was.
+                        TextField {
+                            id: recurCustomField
+                            objectName: "te-recurrence-custom"
+                            visible: recurBox._customOpen
+                            anchors.fill: parent
+                            z: 2   // over the box's caret too
+                            font.family: Theme.fontUi
+                            color: Theme.text
+                            placeholderText: I18n.t("recur.custom.ph")
+                            placeholderTextColor: Theme.textDim
+                            background: FieldBg {
+                                border.color: recurBox._customBad ? Theme.danger : focused ? Theme.focusRing : Theme.fieldBorder
+                            }
+                            onTextChanged: recurBox._customBad = false
+                            onAccepted: recurBox.applyCustom(recurCustomField.text)
+                            onActiveFocusChanged: if (!activeFocus) recurBox._customOpen = false
+                            Keys.onEscapePressed: (e) => { recurBox._customOpen = false; recurBox.forceActiveFocus(); e.accepted = true; }
+                            Keys.onReturnPressed: (e) => { recurCustomField.accepted(); e.accepted = true; }
+                            Keys.onEnterPressed: (e) => { recurCustomField.accepted(); e.accepted = true; }
+                            ToolTip.visible: recurCustomField.visible && recurCustomField.activeFocus
+                            ToolTip.text: recurBox._customBad ? I18n.t("recur.custom.err") : I18n.t("recur.custom.hint")
+                        }
                     }
 
                     FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.labels") }
@@ -1413,6 +1708,7 @@ Popup {
                         spacing: Theme.spMd
                         TextField {
                             id: estimateField
+                        onTextChanged: titleReadTimer.restart()
                             ContextMenu.menu: TextEditMenu { editor: estimateField }
                             Layout.fillWidth: true
                             placeholderText: "45"

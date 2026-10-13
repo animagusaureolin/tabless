@@ -251,6 +251,7 @@ qt_add_library(heap_core STATIC
     # ── audit-tasks: begin ──
     src/AppControllerTaskEdits.cpp
     src/AppControllerLocal.cpp
+    src/AppControllerProfiles.cpp
     src/AppControllerSavedViews.cpp
     src/AppControllerSafety.cpp
     src/safety/SafetyText.cpp
@@ -275,6 +276,8 @@ qt_add_library(heap_core STATIC
     src/integrations/Sprints.cpp
     src/integrations/SyncHealth.cpp
     src/history/TaskHistory.cpp
+    # Moving tasks between profiles (A5-14).
+    src/profile/ProfileMove.cpp
     src/integrations/AutoSync.h
     src/integrations/IntegrationI18n.cpp
     src/diag/IssueReport.cpp
@@ -369,6 +372,7 @@ qt_add_qml_module(heap_core
         qml/SavedViewsHost.qml
         qml/SavedViewNameDialog.qml
         qml/SchedulePopup.qml
+        qml/ZonePicker.qml
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
@@ -453,6 +457,7 @@ qt_add_qml_module(heap_core
         qml/PeopleDialog.qml
         qml/PersonMenu.qml
         qml/ProfileDeleteDialog.qml
+        qml/ProfileMoveDialog.qml
         qml/DoneColumnDialog.qml
         qml/TrackerMark.qml
         qml/Toast.qml

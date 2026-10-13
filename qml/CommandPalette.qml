@@ -12,6 +12,7 @@ import QtQuick.Controls
 import TodoCpp
 import "PaletteMatch.js" as Match
 import "KeyRules.js" as KeyRules
+import "SettingsIndex.js" as SettingsIdx
 
 Popup {
     PopupArrival { popup: root }
@@ -51,6 +52,8 @@ Popup {
     // the reader where the words were rather than at the top of the note.
     signal navigateToNoteLine(int line)
     signal navigateToDocPage(string pageId)
+    // Words met only in notes' bodies: the notes list, filtered by them (A4-8).
+    signal searchNotes(string text)
 
     // A command the palette cannot run itself (it needs a popup Main owns):
     // Main.runCommand(id) handles it. Ids are the shortcut catalog's
@@ -62,6 +65,8 @@ Popup {
     signal queryRequested(string query, string mode)
     // "Nothing found · create «…»": the task input with the words in it.
     signal createRequested(string text)
+    // "Перенести в профиль…" for the task(s) the line opened on (A5-14).
+    signal moveToProfileRequested(var ids)
 
     // function () → the ids of the task(s) the cursor or selection was on
     // when the line opened (Main's _keyTaskIds): the "For the selected task"
@@ -104,13 +109,21 @@ Popup {
             || id.indexOf("cal.") === 0 || id.indexOf("selection.") === 0 || id.indexOf("cursor.") === 0
             || id.indexOf("nav.") === 0 || /\.alt\d*$/.test(id)
             || (id.indexOf("task.") === 0 && id !== "task.new")
-            // Docs and Notes are one place now: "Перейти в «Знания»" is the
-            // one way there (sheet H2-Command, R4-077); their old ids only
-            // keep a key someone bound.
-            || id === "view.docs" || id === "view.notes";
+            // Notes are reached by "Перейти в «Заметки»" (section.knowledge);
+            // Docs, the other sidebar row, by "Перейти в «Доки»" (A6-27).
+            || id === "view.notes";
     }
 
     // Catalog actions whose palette name says more than their hotkey label.
+    // Words a command is looked for by that are not in its name (A5-5): a
+    // panicked "восстановить" / "backup" found nothing but "create a task".
+    readonly property var _paletteKeywords: ({
+        "timeMachine.open": "palette.kw.timeMachine"
+    })
+    function _keywordsFor(id) {
+        return _paletteKeywords[id] ? I18n.t(_paletteKeywords[id]) : (id === "settings:data" ? I18n.t("palette.kw.data") : "");
+    }
+
     readonly property var _paletteLabels: ({
         "timeMachine.open": "palette.cmd.timeMachine",
         "standup.draft":    "palette.cmd.standupDraft",
@@ -119,8 +132,16 @@ Popup {
         "welcome.replay":   "palette.cmd.replayTour"
     })
 
-    readonly property var _settingsSections: ["profile", "appearance", "language", "notifications", "safety",
-                                              "calendar", "tasks", "shortcuts", "integrations", "git", "data", "help", "about"]
+    // The sections Settings has, from its own catalogue: a hand-kept list
+    // still offered "Profile · Name, role, team", gone since DG-101 (F3-EYES-2).
+    readonly property var _settingsSections: SettingsIdx.SECTIONS.map(s => s.id)
+    // The English name of a command beside the Russian one: engineers type
+    // "sett", "backup" whatever the UI language (F3-EYES-7).
+    function _withEnglish(words, enLabel) {
+        if (I18n.lang === "en" || !enLabel) return words || "";
+        return ((words || "") + " " + enLabel).trim();
+    }
+    function _enOf(key) { return root._withEnglish("", I18n.dict.en[key] || ""); }
 
     // Commands: every app-wide action in the shortcut catalog (so the palette
     // and the keys never disagree on what exists or what it is called), each
@@ -144,11 +165,13 @@ Popup {
             // The 0.6 tools read clearer in the palette with what they do.
             const label = _paletteLabels[c.id] ? I18n.t(_paletteLabels[c.id]) : c.label;
             out.push({ kind: "command", commandId: c.id, label: label, sub: AppController.keyText(c.sequence || ""),
-                       body: c.description || "" });
+                       body: c.description || "",
+                       keywords: root._withEnglish(root._keywordsFor(c.id),
+                                                   _paletteLabels[c.id] ? I18n.dict.en[_paletteLabels[c.id]] : c.labelEn) });
         }
         // A new event at 9:00 of the selected day; the catalog's key for a
         // new event (at the next free slot) is the nearest thing to a hint.
-        out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"),
+        out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"), keywords: root._enOf("palette.cmd.newEvent"),
                    sub: AppController.shortcutText("cal.newEvent") });
         // Saved views: one command per view, by name, plus saving the current
         // filters as one.
@@ -159,26 +182,39 @@ Popup {
                        sub: v < 9 ? AppController.shortcutText("savedView." + (v + 1)) : "",
                        body: views[v].query });
         }
-        out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "" });
+        out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "",
+                   keywords: root._enOf("palette.cmd.saveView") });
         // What left the selection bar, the profile menu and the column menu
         // for the sheets (DG-025, DG-026, DG-151): still one command away.
+        // "когда-нибудь" / "someday" / "отложить" find parking the task in
+        // front of the user (A1-15); Main says when there is none.
+        out.push({ kind: "command", commandId: "task.someday", label: I18n.t("palette.cmd.someday"), sub: "",
+                   body: I18n.t("palette.cmd.someday.words"), aliases: I18n.t("palette.cmd.someday.words") });
         if (AppController.selectionCount > 0) {
             out.push({ kind: "command", commandId: "selection.label", label: I18n.t("palette.cmd.selLabel"), sub: "" });
             out.push({ kind: "command", commandId: "selection.carry", label: I18n.t("palette.cmd.selCarry"), sub: "" });
         }
         for (const pc of ["profile.duplicate", "ics.import", "ics.export", "vault.import", "vault.export"])
-            out.push({ kind: "command", commandId: pc, label: I18n.t("palette.cmd." + pc), sub: "" });
+            out.push({ kind: "command", commandId: pc, label: I18n.t("palette.cmd." + pc), sub: "",
+                       keywords: root._enOf("palette.cmd." + pc) });
         if (AppController.currentView === "board")
             for (const cc of ["color", "archive", "doing"])
-                out.push({ kind: "command", commandId: "column:" + cc, label: I18n.t("palette.cmd.column." + cc), sub: "" });
+                out.push({ kind: "command", commandId: "column:" + cc, label: I18n.t("palette.cmd.column." + cc), sub: "",
+                           keywords: root._enOf("palette.cmd.column." + cc) });
         // Integrations health (APP-164) lives at the top of that section.
         out.push({ kind: "setting", commandId: "settings:integrations", label: I18n.t("palette.cmd.integrationsHealth"),
-                   sub: I18n.t("health.hint") });
+                   sub: I18n.t("health.hint"), keywords: root._enOf("palette.cmd.integrationsHealth") });
         for (let j = 0; j < _settingsSections.length; j++) {
             const id = _settingsSections[j];
+            // "Tabless %1 · stable": the version in, as the page's header has
+            // it (F3-EYES-3).
+            const sub = I18n.t("settings.section." + id + ".sub");
+            const enTitle = I18n.dict.en["settings.section." + id + ".title"] || "";
             out.push({ kind: "setting", commandId: "settings:" + id,
                        label: I18n.t("palette.cmd.settings").arg(I18n.t("settings.section." + id + ".title")),
-                       sub: I18n.t("settings.section." + id + ".sub") });
+                       sub: id === "about" ? sub.replace("%1", AppController.appVersion) : sub,
+                       keywords: root._withEnglish(root._keywordsFor("settings:" + id),
+                                                   enTitle ? I18n.dict.en["palette.cmd.settings"].arg(enTitle) : "") });
         }
         return out;
     }
@@ -253,12 +289,12 @@ Popup {
     // occurrence of `q` in `body`, with the match emphasised. "" if not present.
     function _snippetFor(body, q) {
         if (!body || q.length < 2) return "";
-        const idx = body.toLowerCase().indexOf(q.toLowerCase());
+        const idx = Match.fold(body).indexOf(Match.fold(q));
         if (idx < 0) return "";
         const start = Math.max(0, idx - 30);
         const end = Math.min(body.length, idx + q.length + 40);
         const frag = body.substring(start, end).replace(/\s+/g, " ").trim();
-        const mi = frag.toLowerCase().indexOf(q.toLowerCase());
+        const mi = Match.fold(frag).indexOf(Match.fold(q));
         const lead = start > 0 ? "…" : "";
         const tail = end < body.length ? "…" : "";
         if (mi < 0) return lead + _escapeHtml(frag) + tail;
@@ -288,6 +324,8 @@ Popup {
         for (let i = 0; i < _entries.length; i++) {
             const e = _entries[i];
             let score = _fuzzyScore(trimmed, e.label + " " + (e.sub || ""));
+            // A command's other names: whole words only, no typo tolerance.
+            if (e.keywords && Match.bodyHit(trimmed, e.keywords)) score = Math.max(score, 60);
             // The words themselves in the label beat a scattered subsequence:
             // "windows" should rank "Release › Windows" above "Release".
             if (ql.length >= 2 && score >= 0 && e.label.toLowerCase().indexOf(ql) >= 0) score += 20;
@@ -451,12 +489,16 @@ Popup {
     // (DG-081): the typo-tolerant match stays for "> commands" and for the
     // empty line, where it cannot bury the tasks found.
     function _nameHit(words, e) {
-        const label = String(e.label || "").toLowerCase();
-        const ws = String(words || "").toLowerCase().split(/\s+/).filter(w => w.length > 0);
+        const label = Match.fold(e.label || "");
+        const ws = Match.fold(words).split(/\s+/).filter(w => w.length > 0);
         if (ws.length === 0) return false;
         if ((e.kind === "person" || e.kind === "contact")
             && AppController.personMatchRank(String(words), e.label, e.personId || "") > 0) return true;
-        return ws.every(w => label.indexOf(w) >= 0);
+        if (e.keywords && Match.bodyHit(String(words), e.keywords)) return true;
+        // A command may carry other names for itself ("потом", "park" for
+        // → Someday): those count as its name, not as a body hit (A1-15).
+        const aka = String(e.aliases || "").toLowerCase();
+        return ws.every(w => label.indexOf(w) >= 0 || aka.indexOf(w) >= 0);
     }
     property string _initial: ""
 
@@ -532,6 +574,8 @@ Popup {
             root._taskAction("archive", ids, t.archived ? "taskcard.unarchive" : "taskcard.archive", "board.archive")
         ];
         if (url.length > 0) out.splice(5, 0, root._taskAction("external", ids, "cmd.openInTracker", "task.openExternal"));
+        if ((AppController.profiles || []).length > 1)
+            out.push(root._taskAction("moveProfile", ids, "taskmenu.moveProfile", "task.moveProfile"));
         const q = String(filter || "").trim();
         return q.length === 0 ? out : out.filter(a => Match.score(q, a.label) >= 0);
     }
@@ -595,12 +639,25 @@ Popup {
             root._parse = p;
             const words = p.text;
             const scored = words.length > 0 ? root._filterAndScore(words) : [];
-            const cmds = scored.filter(e => (e.kind === "command" || e.kind === "setting") && root._nameHit(words, e)).slice(0, 8);
+            const isCmd = e => e.kind === "command" || e.kind === "setting";
+            let cmds = scored.filter(e => isCmd(e) && root._nameHit(words, e)).slice(0, 8);
+            // A command named by the whole line, even when its words also read
+            // as a filter: "end of day" is a command, not "due today" (A2-32).
+            const lineText = root.chips.map(c => String(c.words || "")).concat([free]).join(" ").trim();
+            if (lineText !== words && lineText.length >= 2) {
+                const byLine = root._filterAndScore(lineText).filter(e => isCmd(e) && root._nameHit(lineText, e));
+                const have = {};
+                for (const e of cmds) have[e.commandId] = true;
+                cmds = byLine.filter(e => !have[e.commandId]).concat(cmds).slice(0, 8);
+            }
             // A command whose name starts with what was typed is what was
             // asked for: "save" opened a task that mentions saving, the
             // command "Save current view" third (PERSONA-24).
-            const lw = String(words).trim().toLowerCase();
-            const leadCmds = lw.length >= 2 ? cmds.filter(e => String(e.label).toLowerCase().indexOf(lw) === 0) : [];
+            const lw = Match.fold(words).trim();
+            const lf = Match.fold(lineText);
+            const leadCmds = cmds.filter(e => (lw.length >= 2 && Match.fold(e.label).indexOf(lw) === 0)
+                                           || (lf.length >= 2 && Match.fold(e.label).indexOf(lf) === 0)
+                                           || (e.keywords && Match.bodyHit(lineText, e.keywords)));
             if (leadCmds.length > 0) {
                 header(I18n.t("cmd.group.commands"));
                 for (const e of leadCmds) rows.push(root._cmdRow(e));
@@ -611,7 +668,7 @@ Popup {
                 // The row ends with when it is due or planned (H2-Command).
                 const full = AppController.taskById(t.id);
                 const when = full && full.id ? root._dayWord(full.dueAt || full.scheduledAt) : "";
-                found.push({ kind: "task", taskId: t.id, label: t.id + " · " + t.title,
+                found.push({ kind: "task", taskId: t.id, label: (t.key || t.id) + " · " + t.title,
                              sub: root._quiet ? "" : (t.archived ? I18n.t("cmd.archived") : when),
                              archived: t.archived, category: t.category, keys: "" });
             }
@@ -678,11 +735,51 @@ Popup {
                                              && !(e.kind === "task" && (shownTasks[e.taskId]
                                                                         || e.profileId === AppController.activeProfileId)))
                 .slice(0, 20);
-            if (other.length > 0) header(I18n.t("cmd.group.other"));
-            for (const e of other) rows.push(Object.assign({}, e, { keys: "" }));
+            // Another profile's tasks under a header that says so, not under
+            // "Notes, docs, people" (A1-16).
+            const elsewhere = other.filter(e => e.kind === "task");
+            const rest = other.filter(e => e.kind !== "task");
+            // Words met only inside notes: the full text is one Enter away in
+            // the notes list (DG-081), not a junk task (A4-8). It sits in the
+            // same group as a note found by name: one header, not two.
+            const inBodies = scored.filter(e => e._bodyOnly && (e.kind === "note" || e.kind === "docPage")).length;
+            const typed = raw.trim();
+            const offerNotes = inBodies > 0 && words.length > 0 && found.length === 0;
+            if (rest.length > 0 || offerNotes) header(I18n.t("cmd.group.other"));
+            for (const e of rest) rows.push(Object.assign({}, e, { keys: "" }));
+            if (offerNotes) {
+                rows.push({ kind: "action", action: "searchNotes", text: words, keys: "", sub: "",
+                            label: I18n.t("cmd.searchNotes").arg(words).arg(inBodies) });
+                rows.push({ kind: "action", action: "create", text: typed, keys: "", sub: "",
+                            label: I18n.t("cmd.createRow").arg(typed) });
+            }
+            if (elsewhere.length > 0) header(I18n.t("cmd.group.otherProfiles"));
+            for (const e of elsewhere) rows.push(Object.assign({}, e, { keys: "" }));
+            // Nothing found: the same keys in the other keyboard layout
+            // ("gjxbybnm" is "починить") before offering a task (A4-20).
+            if (rows.length === 0 && root.chips.length === 0) {
+                const swapped = Match.swapLayout(typed);
+                if (swapped.length > 0) {
+                    const p2 = AppController.commandLine(swapped, 20);
+                    const alt = [];
+                    for (const t of p2.tasks)
+                        alt.push({ kind: "task", taskId: t.id, label: (t.key || t.id) + " · " + t.title, sub: "",
+                                   archived: t.archived, category: t.category, keys: "" });
+                    const altWords = p2.text || "";
+                    if (altWords.length > 0)
+                        for (const e of root._filterAndScore(altWords))
+                            if (!e._bodyOnly && root._nameHit(altWords, e) && !(e.kind === "task")) alt.push(Object.assign({}, e, { keys: "" }));
+                    if (alt.length > 0) {
+                        header(I18n.t("cmd.group.otherLayout").arg(swapped));
+                        for (const e of alt.slice(0, 20)) rows.push(e);
+                        rows.push({ kind: "action", action: "create", text: typed, keys: "", sub: "",
+                                    label: I18n.t("cmd.createRow").arg(typed) });
+                    }
+                }
+            }
             // Nothing at all: make it a task.
             if (rows.length === 0)
-                rows.push({ kind: "create", label: I18n.t("cmd.create").arg(raw.trim()), text: raw.trim(),
+                rows.push({ kind: "create", label: I18n.t("cmd.create").arg(typed), text: typed,
                             keys: AppController.keyText("Return"), sub: "" });
         }
         const matches = [];
@@ -736,6 +833,12 @@ Popup {
         case "saveView": root.queryRequested(e.query, "save"); break;
         case "openBoard": root.queryRequested(e.query, "board"); break;
         case "openList": root.queryRequested(e.query, "list"); break;
+        case "searchNotes":
+            AppController.currentView = "notes";
+            root.searchNotes(e.text);
+            break;
+        case "create": root.createRequested(e.text); break;
+        case "moveProfile": root.moveToProfileRequested(ids); break;
         }
     }
 

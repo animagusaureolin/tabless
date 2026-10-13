@@ -112,7 +112,8 @@ QString sequenceOf(AppController* app, const QString& id) {
 
 // heap 2 (APP-258): Ctrl+1..3 are the sidebar's sections, Ctrl+, Settings;
 // the lenses have the keymap's g b / g l, the calendar zoom z w / z m
-// (APP-272); the other views have no key of their own (still bindable).
+// (APP-272); Docs is g d like its sidebar neighbours (A7-10); the other
+// views have no key of their own (still bindable).
 TEST_F(ViewFocusTest, SectionShortcutsFollowTheSidebar) {
   EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("section.today")), QStringLiteral("Ctrl+1"));
   EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("section.tasks")), QStringLiteral("Ctrl+2"));
@@ -122,7 +123,8 @@ TEST_F(ViewFocusTest, SectionShortcutsFollowTheSidebar) {
   EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.timeline")), QStringLiteral("G, L"));
   EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.week")), QStringLiteral("Z, W"));
   EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.month")), QStringLiteral("Z, M"));
-  for(const char* v : {"view.archive", "view.docs", "view.notes"}) {
+  EXPECT_EQ(sequenceOf(app_.get(), QStringLiteral("view.docs")), QStringLiteral("G, D"));
+  for(const char* v : {"view.archive", "view.notes"}) {
     EXPECT_TRUE(sequenceOf(app_.get(), QString::fromLatin1(v)).isEmpty()) << v;
   }
   EXPECT_TRUE(sequenceOf(app_.get(), QStringLiteral("tweaks.open")).isEmpty()) << "Ctrl+, is Settings now";
@@ -241,7 +243,7 @@ TEST(ShortcutMigration, ALegacyFilesStoredDefaultsDoNotPinTheOldLayout) {
   });
 
   AppController app;
-  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.docs")).isEmpty());
+  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.docs")), QStringLiteral("G, D")) << "today's default, not the old Ctrl+4";
   EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.notes")).isEmpty());
   EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.archive")).isEmpty()) << "Ctrl+7 was its old default, not a choice";
 }
@@ -254,7 +256,7 @@ TEST(ShortcutMigration, ALegacyFilesRealRebindSurvives) {
 
   AppController app;
   EXPECT_EQ(sequenceIn(app, QStringLiteral("task.new")), QStringLiteral("Ctrl+Shift+J"));
-  EXPECT_TRUE(sequenceIn(app, QStringLiteral("view.docs")).isEmpty());
+  EXPECT_EQ(sequenceIn(app, QStringLiteral("view.docs")), QStringLiteral("G, D"));
 }
 
 // A cleared binding is a choice too, and "" never matched a default.

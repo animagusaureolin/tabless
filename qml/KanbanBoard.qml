@@ -137,7 +137,76 @@ Item {
         let c = pos ? pos.col : root._foldedColumnOf(root.cursorTaskId);
         if (c < 0 && colRepeater.count > 0) c = 0;
         const col = c >= 0 ? colRepeater.itemAt(c) : null;
-        if (col) root.toggleCollapsed(col.statusId);
+        if (!col) return;
+        root.toggleCollapsed(String(col["statusId"]));
+        // The column that just opened (Done, off at the right edge) comes
+        // into view; z a used to change nothing on screen (A2-5).
+        root._revealColumnSoon(c);
+    }
+    // Scrolls the board sideways so column `c` is in view, once the fold has
+    // been laid out.
+    function _revealColumnSoon(c) {
+        revealColumnTimer.column = c;
+        revealColumnTimer.restart();
+    }
+    function _revealColumn(c) {
+        const col = colRepeater.itemAt(c);
+        if (!col) return;
+        const maxX = Math.max(0, hscroll.contentWidth - hscroll.width);
+        let x = hscroll.contentX;
+        if (col.x < x) x = col.x;
+        else if (col.x + col.width > x + hscroll.width) x = col.x + col.width - hscroll.width;
+        x = Math.max(0, Math.min(maxX, x));
+        if (x !== hscroll.contentX) {
+            outerAnim.stop();
+            colScrollAnim.stop();
+            hscroll.contentX = x;
+        }
+    }
+    Timer {
+        id: revealColumnTimer
+        property int column: -1
+        interval: 30
+        onTriggered: root._revealColumn(revealColumnTimer.column)
+    }
+    // The board follows a card the keyboard moved to another column: the id
+    // under the cursor does not change, so nothing else scrolled to it, and
+    // the card and the cursor went off screen (A2-1).
+    function _revealCursorSoon() {
+        revealCursorTimer.restart();
+    }
+    Timer {
+        id: revealCursorTimer
+        interval: 30
+        onTriggered: root.revealCursor()
+    }
+    // d on the card under the cursor (Main.markDone): the cursor steps to its
+    // neighbour in the column first, as e does, so d j d … works down a
+    // column and the cursor never follows the card into a folded Done
+    // (A2-4, A4-16).
+    function stepCursorOff(id) {
+        if (!id || id !== root.cursorTaskId) return;
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) return;
+        root.cursorTaskId = root._neighbourOf(cols, Number(pos["col"]), Number(pos["row"]));
+    }
+    // The card the cursor takes when the one at `pos` leaves: the next one
+    // in its column, else the one above; a lone card hands the cursor to the
+    // nearest column with cards (right first), at the same row or its last.
+    // "" when the board has no other card, so j starts afresh instead of
+    // the cursor sitting in a folded Done where j/k/l do nothing.
+    function _neighbourOf(cols, col: int, row: int): string {
+        const ids = cols[col].ids;
+        if (row + 1 < ids.length) return ids[row + 1];
+        if (row > 0) return ids[row - 1];
+        for (let d = 1; d < cols.length; d++) {
+            for (const c of [col + d, col - d]) {
+                if (c < 0 || c >= cols.length || cols[c].ids.length === 0) continue;
+                return cols[c].ids[Math.min(row, cols[c].ids.length - 1)];
+            }
+        }
+        return "";
     }
 
     // True while any card's menu is up; Main.qml holds the board keys back.
@@ -423,6 +492,7 @@ Item {
         const c = from.col + dx;
         if (c < 0 || c >= cols.length || !cols[c].statusId) return;
         AppController.moveSelectedTasksToStatus(cols[c].statusId);
+        root._revealCursorSoon();
     }
 
     function moveCursor(dx, dy) {
@@ -559,6 +629,7 @@ Item {
         const beforeId = manual && pos.row < destIds.length ? destIds[pos.row] : "";
         root.stackOnClose(id, cols[pos.col].statusId, cols[c].statusId, 1);
         AppController.moveTaskTo(id, cols[c].statusId, beforeId);
+        root._revealCursorSoon();
     }
 
     // Flat ordered list of visible task ids across the entire board, column
@@ -749,7 +820,9 @@ Item {
 
         Row {
             id: rowL
-            height: hscroll.height
+            // A strip under the columns for the scrollbar: it was drawn over
+            // the last card of every column (EYES-6).
+            height: hscroll.height - (hscroll.contentWidth > hscroll.width ? Theme.spMd : 0)
             spacing: root.columnGap
 
             Repeater {
@@ -970,7 +1043,8 @@ Item {
                             Text {
                                 objectName: "column-done-show"
                                 // Quiet: the header itself opens it (Q-Board).
-                                visible: Style.chipFill || col.dragOver
+                                // Nothing done, nothing to show (F3-EYES-18).
+                                visible: (Style.chipFill && col.shownCount > 0) || col.dragOver
                                 text: col.dragOver ? I18n.t("kanban.done.drop") : I18n.t("kanban.done.show")
                                 color: col.dragOver ? Theme.text : Theme.textMuted
                                 font.family: Theme.fontUi
@@ -1103,6 +1177,7 @@ Item {
                                     category: col.category
                                 }
                                 Item {
+                                    id: nameBox
                                     // As wide as the name, shrinking only when
                                     // the column has no room for it (then the
                                     // count still follows it).
@@ -1223,20 +1298,35 @@ Item {
                                 // The column's estimates added up (APP-246): a
                                 // fact beside the count, tasks without one
                                 // counted apart. Quiet shows it on hover only.
+                                // Cut mid-word at the column's edge ("~105 h :",
+                                // "~3 h 45 mir", A2-7, A4-24): it shows whole,
+                                // in whole hours, or not at all; the tooltip and
+                                // the screen reader keep the exact sum.
+                                TextMetrics { id: estFull; font: colEst.font; text: colEst.fullText }
+                                TextMetrics { id: estShort; font: colEst.font; text: colEst.shortText }
                                 Text {
                                     id: colEst
                                     objectName: "column-estimate"
-                                    visible: col.estimate.minutes > 0 && (!Style.quiet || col.headerRevealed)
-                                    text: "~" + I18n.fmtMinutes(col.estimate.minutes)
+                                    readonly property string fullText: "~" + I18n.fmtMinutes(col.estimate.minutes)
+                                    readonly property string shortText: col.estimate.minutes >= 60
+                                        ? "~" + I18n.fmtMinutes(Math.round(col.estimate.minutes / 60) * 60) : colEst.fullText
+                                    readonly property real room: headRow.width - colorSwatch.width - nameBox.width
+                                                                 - cntPill.implicitWidth - 4 * headRow.spacing
+                                    visible: col.estimate.minutes > 0 && (!Style.quiet || col.headerRevealed) && colEst.text.length > 0
+                                    Layout.preferredWidth: Math.max(0, Math.min(colEst.implicitWidth, colEst.room))
+                                    elide: Text.ElideRight
+                                    text: colEst.room >= estFull.advanceWidth + 1 ? colEst.fullText
+                                        : colEst.room >= estShort.advanceWidth + 1 ? colEst.shortText : ""
                                     color: Theme.textDim
                                     font.family: Theme.fontUi
                                     font.features: Theme.tabularNums
                                     font.pixelSize: Theme.fsSm
                                     Accessible.role: Accessible.StaticText
-                                    Accessible.name: colEst.text
+                                    Accessible.name: colEst.fullText
                                         + (col.estimate.without > 0 ? " · " + I18n.count(col.estimate.without, "estimate.without") : "")
-                                    QQC.ToolTip.visible: col.estimate.without > 0 && estHover.hovered
-                                    QQC.ToolTip.text: I18n.count(col.estimate.without, "estimate.without")
+                                    QQC.ToolTip.visible: (col.estimate.without > 0 || colEst.text !== colEst.fullText) && estHover.hovered
+                                    QQC.ToolTip.text: colEst.fullText
+                                        + (col.estimate.without > 0 ? " · " + I18n.count(col.estimate.without, "estimate.without") : "")
                                     HoverHandler { id: estHover }
                                 }
                                 Item { Layout.fillWidth: true }
@@ -1623,7 +1713,9 @@ Item {
                                         compact: true
                                         glyph: "columns"
                                         title: col.filtering ? I18n.t("view.empty.noMatch.title") : I18n.t("kanban.empty")
-                                        line: col.filtering ? ""
+                                        // Quiet keeps an empty column to its
+                                        // header and two words (EYES-7).
+                                        line: col.filtering || Style.quiet ? ""
                                             : (AppController.statusCounts[col.statusId] || 0) > 0 ? I18n.t("kanban.empty.noMatch") : I18n.t("kanban.empty.hint")
                                     }
                                 }
@@ -1973,6 +2065,29 @@ Item {
             GradientStop { position: 1; color: Theme.bg }
         }
     }
+    // Under the chip, the cut column's header (its ring, its "show") read
+    // as one jumble with it (A4-24): the header line there is plain.
+    Rectangle {
+        id: hiddenBand
+        objectName: "board-hidden-columns-band"
+        visible: root.hiddenColumnsRight > 0
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.sp2xl
+        anchors.top: hscroll.top
+        // Solid under the chip, fading in on the left: a hard edge cut the
+        // cut column's name and count in half ("Triage (", "Blocked 3").
+        readonly property real solidWidth: Math.max(Theme.sp3xl * 2, hiddenCols.width + Theme.spXl * 2) + Theme.spXl
+        width: solidWidth + Theme.sp3xl
+        // The header line and the folded column's "show" under it.
+        height: Theme.px(52)
+        z: 899
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: Theme.withAlpha(Theme.bg, 0) }
+            GradientStop { position: Theme.sp3xl / Math.max(1, hiddenBand.width); color: Theme.bg }
+            GradientStop { position: 1; color: Theme.bg }
+        }
+    }
     Rectangle {
         id: hiddenCols
         objectName: "board-hidden-columns"
@@ -2101,6 +2216,8 @@ Item {
         visible: root._boardTotal === 0 || root._nothingFound
         title: root._nothingFound ? I18n.t("view.empty.noMatchFor").arg(root.filterLabel)
              : root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
+        // Where the filter would find something (A3-13).
+        hint: root._nothingFound ? AppController.matchesElsewhere(root.searchText) : ""
         // The keys as bound now, not as they shipped (design audit DES-15).
         lineLink: root._nothingFound
         onLineActivated: root.resetFilterRequested()

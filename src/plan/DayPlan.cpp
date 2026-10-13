@@ -89,6 +89,17 @@ Day buildDay(const QDate& date,
     b.eventType = e.type;
     b.attendees = e.attendees;
     b.occurrence = e.occurrence;
+    b.srcTz = e.srcTz;
+    b.srcStart = e.srcStart;
+    b.realStart = e.start;
+    b.realEnd = e.end;
+    b.totalMinutes = minutes((static_cast<double>(e.date.daysTo(last)) * 24.0) + e.end - e.start);
+    if(last > e.date) {
+      b.firstDay = e.date;
+      b.lastDay = last;
+      b.dayNo = static_cast<int>(e.date.daysTo(date)) + 1;
+      b.dayCount = static_cast<int>(e.date.daysTo(last)) + 1;
+    }
     if(e.allDay || (last > e.date && date > e.date && date < last)) {
       d.allDay.append(b);
       continue;
@@ -126,6 +137,7 @@ Day buildDay(const QDate& date,
     b.status = t.status;
     b.category = t.category;
     b.profileName = t.profileName;
+    b.profileId = t.profileId;
     b.start = t.scheduledAt.time().hour() + (t.scheduledAt.time().minute() / 60.0);
     b.end = b.start + (std::max(15, t.minutes) / 60.0);
     b.past = b.end <= nowHour;

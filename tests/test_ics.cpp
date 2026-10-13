@@ -443,6 +443,23 @@ TEST(Ics, ARecurringEventSurvivesARoundTrip) {
   EXPECT_EQ(back.exdates.at(0), QDate(2026, 10, 5));
 }
 
+// B7: the interval repeats a meeting is made from ("every 3 weeks", "every
+// mon, wed", "every other week on mon, thu") go out and come back as said.
+TEST(Ics, IntervalAndDayListRulesSurviveARoundTrip) {
+  for(const char* rule : {"FREQ=DAILY;INTERVAL=2",
+                          "FREQ=WEEKLY;INTERVAL=3",
+                          "FREQ=WEEKLY;BYDAY=MO,WE",
+                          "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH",
+                          "FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15"}) {
+    CalEvent e = timed();
+    e.rrule = QString::fromLatin1(rule);
+    const IcsImport in = parseIcs(toIcs({e}));
+    ASSERT_EQ(in.events.size(), 1) << rule;
+    EXPECT_EQ(in.events.at(0).rrule, e.rrule) << rule;
+    EXPECT_TRUE(in.warnings.isEmpty()) << rule;
+  }
+}
+
 // A title with the characters the format uses for its own punctuation.
 TEST(Ics, APunctuatedTitleSurvivesARoundTrip) {
   CalEvent e = timed();
@@ -500,8 +517,23 @@ TEST(IcsZones, AWindowsZoneNameIsResolved) {
                                                     "DTEND;TZID=Eastern Standard Time:20261005T110000\r\nSUMMARY:x")),
                                 kMsk);
   ASSERT_EQ(in.events.size(), 1);
-  EXPECT_NEAR(in.events.first().start, 17.0, 0.001) << "10:00 EDT is 17:00 in Moscow";
-  EXPECT_TRUE(in.events.first().tz.isEmpty()) << "a single event is converted once";
+  // A single meeting in another zone stays in it (F1-new-15): 10:00 New York,
+  // which the calendar shows at 17:00 Moscow.
+  EXPECT_EQ(in.events.first().tz, QStringLiteral("America/New_York"));
+  EXPECT_NEAR(in.events.first().start, 10.0, 0.001);
+  const auto occ = heap::cal::expandEvents(in.events, QDate(2026, 10, 5), QDate(2026, 10, 5), nullptr, kMsk);
+  ASSERT_EQ(occ.size(), 1);
+  EXPECT_NEAR(hourAt(occ.first()), 17.0, 0.001) << "10:00 EDT is 17:00 in Moscow";
+}
+
+// A single meeting written in the viewer's own zone is just converted.
+TEST(IcsZones, ASingleEventInTheViewersZoneIsNotPinned) {
+  const IcsImport in = parseIcs(wrap(QStringLiteral("UID:a\r\nDTSTART;TZID=Europe/Moscow:20261005T100000\r\n"
+                                                    "DTEND;TZID=Europe/Moscow:20261005T110000\r\nSUMMARY:x")),
+                                kMsk);
+  ASSERT_EQ(in.events.size(), 1);
+  EXPECT_TRUE(in.events.first().tz.isEmpty());
+  EXPECT_NEAR(in.events.first().start, 10.0, 0.001);
 }
 
 TEST(IcsZones, AnUnknownNameIsReadThroughItsVtimezone) {
@@ -510,7 +542,9 @@ TEST(IcsZones, AnUnknownNameIsReadThroughItsVtimezone) {
                                                         "DTEND;TZID=Customized Time Zone:20261215T110000\r\nSUMMARY:x\r\nEND:VEVENT\r\n")),
                                 kMsk);
   ASSERT_EQ(in.events.size(), 1);
-  EXPECT_NEAR(in.events.first().start, 18.0, 0.001) << "10:00 EST is 18:00 in Moscow";
+  const auto occ = heap::cal::expandEvents(in.events, QDate(2026, 12, 15), QDate(2026, 12, 15), nullptr, kMsk);
+  ASSERT_EQ(occ.size(), 1);
+  EXPECT_NEAR(hourAt(occ.first()), 18.0, 0.001) << "10:00 EST is 18:00 in Moscow";
 }
 
 // A New York series follows New York's DST: 17:00 Moscow in October, 18:00
@@ -645,6 +679,72 @@ TEST(Ics, ExportWritesASeriesInANamedZone) {
   EXPECT_TRUE(doc.contains(QStringLiteral("BEGIN:VTIMEZONE")));
   EXPECT_TRUE(doc.contains(QStringLiteral("TZID:America/New_York")));
   EXPECT_EQ(parseIcs(doc, kMsk).events.value(0).tz, QStringLiteral("America/New_York"));
+}
+
+// F1-new-1: a fixed-offset zone's id has a colon. Unquoted, it ended the
+// parameter list and the meeting was skipped on import.
+TEST(Ics, AFixedOffsetZoneIsQuotedAndComesBack) {
+  CalEvent e = timed();
+  e.title = QStringLiteral("Team sync");
+  e.rrule = QStringLiteral("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO");
+  e.tz = QStringLiteral("UTC-05:00");
+  e.exdates = {QDate(2026, 10, 5)};
+  CalEvent single = timed();
+  single.id = QStringLiteral("ev-2");
+  single.tz = QStringLiteral("UTC+05:00");
+  const QString doc = toIcs({e, single}, kMsk);
+  EXPECT_TRUE(doc.contains(QStringLiteral("DTSTART;TZID=\"UTC-05:00\":20260921T140000"))) << doc.toStdString();
+  EXPECT_TRUE(doc.contains(QStringLiteral("EXDATE;TZID=\"UTC-05:00\":20261005T140000"))) << doc.toStdString();
+  EXPECT_FALSE(doc.contains(QStringLiteral("TZID=UTC-05:00:"))) << doc.toStdString();
+
+  const IcsImport back = parseIcs(doc, kMsk);
+  ASSERT_EQ(back.events.size(), 2) << "nothing skipped";
+  const QDateTime at(QDate(2026, 9, 21), QTime(0, 0), QTimeZone::utc());
+  const CalEvent& s = back.events.at(0);
+  EXPECT_EQ(s.title, QStringLiteral("Team sync"));
+  EXPECT_EQ(s.rrule, e.rrule);
+  EXPECT_EQ(QTimeZone(s.tz.toUtf8()).offsetFromUtc(at), -5 * 3600);
+  EXPECT_NEAR(s.start, 14.0, 0.001);
+  EXPECT_EQ(s.exdates, QList<QDate>{QDate(2026, 10, 5)});
+  EXPECT_EQ(QTimeZone(back.events.at(1).tz.toUtf8()).offsetFromUtc(at), 5 * 3600);
+  EXPECT_NEAR(back.events.at(1).start, 14.0, 0.001);
+}
+
+// F1-new-15: a floating series stays floating through a round trip instead of
+// coming back pinned to the exporting machine's zone.
+TEST(Ics, AFloatingSeriesGoesOutAndComesBackFloating) {
+  CalEvent e = timed();
+  e.rrule = QStringLiteral("FREQ=WEEKLY;INTERVAL=2");
+  e.exdates = {QDate(2026, 10, 5)};
+  CalEvent ov = timed();
+  ov.id = QStringLiteral("ov-1");
+  ov.masterId = e.id;
+  ov.originalDate = QDate(2026, 10, 19);
+  ov.date = QDate(2026, 10, 19);
+  ov.start = 16.0;
+  ov.end = 17.0;
+  const QString doc = toIcs({e, ov}, kMsk);
+  EXPECT_TRUE(doc.contains(QStringLiteral("DTSTART:20260921T140000\r\n"))) << doc.toStdString();
+  EXPECT_TRUE(doc.contains(QStringLiteral("EXDATE:20261005T140000\r\n"))) << doc.toStdString();
+  EXPECT_TRUE(doc.contains(QStringLiteral("RECURRENCE-ID:20261019T140000\r\n"))) << doc.toStdString();
+  EXPECT_FALSE(doc.contains(QStringLiteral("VTIMEZONE")));
+
+  const IcsImport back = parseIcs(doc, kNy);
+  ASSERT_EQ(back.events.size(), 2);
+  EXPECT_TRUE(back.events.at(0).tz.isEmpty());
+  EXPECT_NEAR(back.events.at(0).start, 14.0, 0.001) << "the same wall time anywhere";
+  EXPECT_EQ(back.events.at(0).exdates, QList<QDate>{QDate(2026, 10, 5)});
+  EXPECT_EQ(back.events.at(1).originalDate, QDate(2026, 10, 19));
+}
+
+// F1-new-15: a single New York meeting comes back a New York meeting.
+TEST(Ics, ASingleMeetingKeepsItsZoneThroughARoundTrip) {
+  CalEvent e = timed();
+  e.tz = QStringLiteral("America/New_York");
+  const IcsImport back = parseIcs(toIcs({e}, kMsk), kMsk);
+  ASSERT_EQ(back.events.size(), 1);
+  EXPECT_EQ(back.events.first().tz, QStringLiteral("America/New_York"));
+  EXPECT_NEAR(back.events.first().start, 14.0, 0.001);
 }
 
 TEST(Ics, AMovedOccurrenceIsNamedByItsOriginalStart) {

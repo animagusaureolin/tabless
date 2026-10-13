@@ -267,6 +267,8 @@ FocusScope {
         }
         Item {
             objectName: "immersion-done"
+            // No task: nothing to mark done, so no "Готово D" (A1-24).
+            visible: root.taskId.length > 0
             implicitWidth: doneBtn.implicitWidth
             implicitHeight: doneBtn.implicitHeight
         Row {

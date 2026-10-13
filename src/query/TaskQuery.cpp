@@ -27,6 +27,7 @@ const QSet<QString>& knownFields() {
                                   QStringLiteral("branch"),
                                   QStringLiteral("has"),
                                   QStringLiteral("sprint"),
+                                  QStringLiteral("source"),
                                   QStringLiteral("sort"),
                                   QStringLiteral("limit")};
   return f;
@@ -222,10 +223,64 @@ QString haystackOf(const Task& t) {
     parts << l.id;
   }
   parts << t.local.notes << t.local.commentDraft;
-  return parts.join(QChar(' ')).toLower();
+  return foldSearch(parts.join(QChar(' ')));
 }
 
 }  // namespace
+
+QString foldSearch(const QString& text) {
+  QString out = text.toLower();
+  out.replace(QChar(0x0451), QChar(0x0435));  // ё → е
+  return out;
+}
+
+bool textMatches(const QString& haystack, const QString& freeText) {
+  if(freeText.isEmpty()) {
+    return true;
+  }
+  qsizetype at = haystack.indexOf(freeText);
+  if(at < 0) {
+    return false;
+  }
+  static const QRegularExpression kKey(QStringLiteral("^[a-z][a-z0-9]*-\\d+$"));
+  if(!kKey.match(freeText).hasMatch()) {
+    return true;
+  }
+  while(at >= 0) {
+    const qsizetype end = at + freeText.size();
+    if(end >= haystack.size() || !haystack.at(end).isDigit()) {
+      return true;
+    }
+    at = haystack.indexOf(freeText, at + 1);
+  }
+  return false;
+}
+
+// Two clauses on a field a task holds one value of ("p0 p1", "status:todo
+// status:prog") can never both match: in one group they read as either
+// (A1-25). Returns whether `cl` was folded into an earlier clause.
+bool TaskQuery::mergeSingleValued(QVector<Clause>& group, const Clause& cl) {
+  if(cl.negate || (cl.op != Op::Eq && cl.op != Op::In) || !cl.special.isEmpty()) {
+    return false;
+  }
+  if(cl.field != QLatin1String("priority") && cl.field != QLatin1String("status") && cl.field != QLatin1String("source")) {
+    return false;
+  }
+  for(Clause& prev : group) {
+    if(prev.field != cl.field || prev.negate || (prev.op != Op::Eq && prev.op != Op::In) || !prev.special.isEmpty()) {
+      continue;
+    }
+    for(const QString& v : cl.values) {
+      if(!prev.values.contains(v)) {
+        prev.values << v;
+      }
+    }
+    prev.statusIds.unite(cl.statusIds);
+    prev.op = prev.values.size() > 1 ? Op::In : Op::Eq;
+    return true;
+  }
+  return false;
+}
 
 QStringList queryFields() {
   QStringList out(knownFields().cbegin(), knownFields().cend());
@@ -258,7 +313,7 @@ TaskQuery TaskQuery::compile(
   // rather than the phrase "a b" (TASKS-4).
   QVector<QStringList> groupWords(1);
   const auto addWord = [&groupWords](const QString& w) {
-    groupWords.last() << w;
+    groupWords.last() << foldSearch(w);
   };
 
   for(QString token : tokenize(text)) {
@@ -279,13 +334,15 @@ TaskQuery TaskQuery::compile(
     QString spec;
     // The shorthands the filter's placeholder offers, as quick capture reads
     // them (PERSONA-14): "p1" is a priority, "@week" / "@неделя" a plan.
-    static const QRegularExpression kPriority(QStringLiteral("^[pP][0-3]$"));
+    // "p0,p1" is a list of priorities (A1-25); "з1" is "p1" typed in the
+    // Russian layout (A4-21).
+    static const QRegularExpression kPriority(QString::fromUtf8("^[pPзЗ][0-3](,[pPзЗ]?[0-3])*$"));
     const QString when = shorthandWhen(token);
     // "#infra" is a label; "#42" is an issue number, searched for as text.
     static const QRegularExpression kIssueNo(QStringLiteral("^#\\d+$"));
     if(kPriority.match(token).hasMatch()) {
       field = QStringLiteral("priority");
-      spec = token.toLower();
+      spec = token.toLower().replace(QString::fromUtf8("з"), QStringLiteral("p"));
     } else if(!when.isEmpty()) {
       field = QStringLiteral("scheduled");
       spec = when;
@@ -294,7 +351,7 @@ TaskQuery TaskQuery::compile(
       spec = token.mid(1);
     } else if(!looksLikeFieldToken(token, &field, &spec)) {
       if(negate) {
-        q.m_negatedWords << token.toLower();
+        q.m_negatedWords << foldSearch(token);
         q.m_isQuery = true;
       } else {
         addWord(token.toLower());
@@ -312,7 +369,12 @@ TaskQuery TaskQuery::compile(
     q.m_isQuery = true;
     if(field == QLatin1String("sort") || field == QLatin1String("limit") || field == QLatin1String("profile")) {
       // A saved view's business, or meaningful only across profiles: parsed so
-      // it is not substring-matched, and steers nothing on one board.
+      // it is not substring-matched, and steers nothing on one board. A
+      // profile cannot narrow one profile's board: said so rather than taken
+      // in silence (A3-13).
+      if(field == QLatin1String("profile")) {
+        q.m_unknown << typed;
+      }
       continue;
     }
 
@@ -360,7 +422,11 @@ TaskQuery TaskQuery::compile(
       ok = ok && !cl.statusIds.isEmpty();
     } else if(cl.field == QLatin1String("priority")) {
       QStringList norm;
-      for(const QString& v : cl.values) {
+      if(cl.values.size() == 1 && cl.values.first() == QLatin1String("none")) {
+        cl.special = QStringLiteral("none");  // no priority (A1-26)
+        norm << cl.values.first();
+      }
+      for(const QString& v : cl.special.isEmpty() ? cl.values : QStringList()) {
         const QString p = v.startsWith(QLatin1Char('p')) ? v : QStringLiteral("p") + v;
         static const QRegularExpression kPri(QStringLiteral("^p[0-3]$"));
         if(!kPri.match(p).hasMatch()) {
@@ -382,15 +448,24 @@ TaskQuery TaskQuery::compile(
                                         QStringLiteral("new"),
                                         QStringLiteral("someday"),
                                         QStringLiteral("unscheduled"),
-                                        QStringLiteral("blocked")};
+                                        QStringLiteral("blocked"),
+                                        QStringLiteral("tracker"),
+                                        QStringLiteral("local")};
       for(const QString& v : cl.values) {
         ok = ok && kIs.contains(v);
         q.m_usesBlocked = q.m_usesBlocked || v == QLatin1String("blocked");
         q.m_asksArchived = q.m_asksArchived || (v == QLatin1String("archived") && !cl.negate);
       }
     } else if(cl.field == QLatin1String("has")) {
-      static const QSet<QString> kHas = {
-          QStringLiteral("notes"), QStringLiteral("draft"), QStringLiteral("checklist"), QStringLiteral("links"), QStringLiteral("tags")};
+      static const QSet<QString> kHas = {QStringLiteral("notes"),
+                                         QStringLiteral("draft"),
+                                         QStringLiteral("checklist"),
+                                         QStringLiteral("links"),
+                                         QStringLiteral("tags"),
+                                         QStringLiteral("priority"),
+                                         QStringLiteral("estimate"),
+                                         QStringLiteral("deadline"),
+                                         QStringLiteral("due")};
       for(const QString& v : cl.values) {
         ok = ok && kHas.contains(v);
       }
@@ -429,7 +504,9 @@ TaskQuery TaskQuery::compile(
         continue;
       }
     }
-    q.m_groups.last().append(cl);
+    if(!mergeSingleValued(q.m_groups.last(), cl)) {
+      q.m_groups.last().append(cl);
+    }
   }
   if(q.m_groups.size() > 1 && q.m_groups.constLast().isEmpty() && groupWords.constLast().isEmpty()) {
     q.m_groups.removeLast();  // a trailing OR
@@ -472,13 +549,26 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
     return false;
   }
   if(c.field == QLatin1String("text")) {
-    return haystack.contains(c.values.constFirst());
+    return textMatches(haystack, c.values.constFirst());
   }
   if(c.field == QLatin1String("status")) {
     return c.statusIds.contains(t.status) || c.statusIds.contains(t.status.toLower());
   }
   if(c.field == QLatin1String("priority")) {
+    if(c.special == QLatin1String("none")) {
+      return heap::local::effectivePriority(t).isEmpty();
+    }
     return c.values.contains(heap::local::effectivePriority(t).toLower());
+  }
+  if(c.field == QLatin1String("source")) {
+    // The tracker a card came from (A1-26); "local" is a task of my own.
+    const QString provider = t.externalId.isEmpty() ? QString() : t.externalProvider.toLower();
+    for(const QString& v : c.values) {
+      if(v == QLatin1String("local") || v == QLatin1String("none") ? provider.isEmpty() : provider == v) {
+        return true;
+      }
+    }
+    return false;
   }
   if(c.field == QLatin1String("tag")) {
     for(const Label& l : t.labels) {
@@ -516,6 +606,12 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
         hit = !t.local.related.isEmpty() || !t.links.isEmpty();
       } else if(v == QLatin1String("tags")) {
         hit = !t.local.tags.isEmpty();
+      } else if(v == QLatin1String("priority")) {
+        hit = !heap::local::effectivePriority(t).isEmpty();
+      } else if(v == QLatin1String("estimate")) {
+        hit = t.estimateMinutes > 0;
+      } else if(v == QLatin1String("deadline") || v == QLatin1String("due")) {
+        hit = heap::local::effectiveDueAt(t).isValid();
       }
       if(hit) {
         return true;
@@ -565,6 +661,10 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
         hit = !done && !t.archived && !t.someday && !t.scheduledAt.isValid();
       } else if(v == QLatin1String("blocked")) {
         hit = !done && m_blocked.contains(t.id);
+      } else if(v == QLatin1String("tracker")) {
+        hit = !t.externalId.isEmpty();
+      } else if(v == QLatin1String("local")) {
+        hit = t.externalId.isEmpty();
       }
       if(hit) {
         return true;

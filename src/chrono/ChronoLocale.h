@@ -69,6 +69,13 @@ struct ChronoLocale {
 
   QString amSuffix;  // "am"
   QString pmSuffix;  // "pm"
+  // Words after an hour that say which half of the day it is: "в 9 утра",
+  // "в 11 вечера", "в 3 ночи", "в 2 часа дня". `weakMeridiemWords` are also
+  // ordinary words ("3 ночи в отеле", "отпуск 3 дня"), so they count only
+  // after a connector ("в 3 ночи") or an hour word ("3 часа ночи").
+  QStringList amWords;
+  QStringList pmWords;
+  QStringList weakMeridiemWords;
 
   QRegularExpression timeRe;         // HH:MM
   QRegularExpression numericDateRe;  // YYYY-MM-DD / DD.MM[.YYYY] / D/M/[Y]

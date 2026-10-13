@@ -43,6 +43,12 @@ class KeyRouter : public QObject, public QQmlParserStatus {
   // letting it go on to type-to-search (IDIOT-TASKS-4). Main binds it to
   // whether type-to-search is on.
   Q_PROPERTY(bool holdUnlive READ holdUnlive WRITE setHoldUnlive NOTIFY holdUnliveChanged)
+  // While holdUnlive is on (type-to-search is live), a bare letter or digit
+  // that acts on a card waits this long before it runs: a second letter
+  // inside the wait means the person is typing a word, so both go to the
+  // search and the command never runs (A4-3: "deploy" marked the card under
+  // the cursor done). Cursor moves run at once. 0 turns the wait off.
+  Q_PROPERTY(int typingHoldMs READ typingHoldMs WRITE setTypingHoldMs NOTIFY typingHoldMsChanged)
   // The first key of a two-key sequence, waiting for the second
   // (PortableText, "G"); empty when nothing waits.
   Q_PROPERTY(QString pending READ pending NOTIFY pendingChanged)
@@ -95,6 +101,12 @@ class KeyRouter : public QObject, public QQmlParserStatus {
 
   void setHoldUnlive(bool on);
 
+  int typingHoldMs() const {
+    return m_holdTimer.interval();
+  }
+
+  void setTypingHoldMs(int ms);
+
   QString pending() const {
     return m_pending;
   }
@@ -123,6 +135,10 @@ class KeyRouter : public QObject, public QQmlParserStatus {
   void handlerChanged();
   void qtOwnedChanged();
   void holdUnliveChanged();
+  void typingHoldMsChanged();
+  // Letters that were typed, not commands: the held command key and the
+  // ones after it, for type-to-search to start with.
+  void typedText(const QString& text);
   void pendingChanged();
   void timeoutMsChanged();
   void layoutChanged();
@@ -148,6 +164,12 @@ class KeyRouter : public QObject, public QQmlParserStatus {
   static bool typesText(const QKeyEvent* ke);
   QString callHandler(const QStringList& ids, bool dry);
   void setPending(const QString& chord);
+  // Runs the held command now (its wait is over, or another key came).
+  void flushHeld();
+  // Holds a key (with the command it would run, or none) for typingHoldMs.
+  void holdKey(const QStringList& ids, const QString& chord, const QString& text);
+  // A held key that a typed letter turned into text: drops the command.
+  QString takeHeldText();
 
   bool m_enabled = true;
   bool m_holdUnlive = false;
@@ -159,6 +181,13 @@ class KeyRouter : public QObject, public QQmlParserStatus {
   QString m_pending;
   QString m_layout;
   QTimer m_timeout;
+  QTimer m_holdTimer;
+  QStringList m_heldIds;
+  // Non-empty while a key is held, even one with no command to run.
+  QString m_heldChord;
+  QString m_heldText;
+  // The text the waiting prefix typed ("g"), for "github" typed on the board.
+  QString m_pendingText;
   // The press whose ShortcutOverride was taken: its KeyPress is swallowed.
   int m_takenKey = 0;
   // The press whose ShortcutOverride was seen and left alone.

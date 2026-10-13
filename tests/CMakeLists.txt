@@ -66,6 +66,7 @@ add_test(NAME heap_local_rules_tests COMMAND heap_local_rules_tests)
 add_executable(heap_chrono_tests
     test_chrono_parser.cpp
     test_capture_parse.cpp
+    test_zone_names.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/capture/CaptureParse.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
@@ -411,6 +412,9 @@ heap_add_appcontroller_test(heap_presence_tests test_presence.cpp)
 # ─── Editing and deleting a repeating event ───
 heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
 
+# ─── A meeting kept in a time zone (A6-7) ───
+heap_add_appcontroller_test(heap_event_zones_tests test_event_zones.cpp)
+
 # ─── Docs as a tree of pages ───
 heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 
@@ -418,6 +422,8 @@ heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 # Storage safety (locked/damaged/newer state.json, failed saves, restore),
 # profile-scoped undo and task ids, automation across profiles, worktrees.
 heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
+# Moving tasks between profiles and its undo across both (A5-14).
+heap_add_appcontroller_test(heap_profile_move_tests test_profile_move.cpp)
 # Time machine (APP-162): history/ retention, snapshot format, restores.
 heap_add_appcontroller_test(heap_time_machine_tests test_time_machine.cpp)
 # ── audit-plat: end ──

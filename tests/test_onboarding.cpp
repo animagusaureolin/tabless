@@ -321,7 +321,25 @@ TEST_F(OnboardingTest, ResetToFirstRunRebuildsFreshInstall) {
       cr.write("{}");
     }
 
+    // A time-machine snapshot and an attachment: the same data, kept
+    // elsewhere — the dialog promises they go too (A5-6).
+    const QString snap = a.takeSnapshotNow(QStringLiteral("pre"));
+    ASSERT_FALSE(snap.isEmpty());
+    ASSERT_TRUE(QFile::exists(a.historyDirPath() + QLatin1Char('/') + snap));
+    QDir().mkpath(base + QStringLiteral("/attachments"));
+    {
+      QFile at(base + QStringLiteral("/attachments/a1.png"));
+      ASSERT_TRUE(at.open(QIODevice::WriteOnly));
+      at.write("png");
+    }
+
     a.resetToFirstRun();
+
+    EXPECT_FALSE(QFile::exists(a.historyDirPath() + QLatin1Char('/') + snap));
+    for(const QVariant& v : a.listSnapshots()) {
+      EXPECT_NE(v.toMap().value(QStringLiteral("name")).toString(), snap);
+    }
+    EXPECT_FALSE(QFile::exists(base + QStringLiteral("/attachments/a1.png")));
 
     // In memory: exactly a fresh install — one empty profile (APP-271).
     EXPECT_FALSE(a.welcomeSeen());

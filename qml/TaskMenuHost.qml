@@ -19,6 +19,28 @@ Item {
     property bool boardKeys: false
 
     signal openRequested()
+    // "Перенести в профиль…": the window's picker, for this task (A5-14),
+    // the same one Shift M and Ctrl K open. The menu closes first.
+    function moveToProfile() {
+        const id = host._t ? host._t.id : host.taskId;
+        if (id) Qt.callLater(() => AppController.requestMoveToProfile([id]));
+    }
+    // "Решить конфликт…": the here-vs-tracker dialog, from the keyboard too;
+    // the mark's "решить" link was the only way in (A3-9). Made on first use.
+    Loader {
+        id: conflictLoader
+        active: false
+        sourceComponent: SyncConflictDialog {
+            onClosed: Qt.callLater(() => { conflictLoader.active = false; })
+        }
+    }
+    function openConflict() {
+        const t = host.taskId ? AppController.taskById(host.taskId) : host._t;
+        if (!t || !t.id) return;
+        conflictLoader.active = true;
+        const dlg = conflictLoader.item as SyncConflictDialog;
+        if (dlg) dlg.showFor(t);
+    }
     signal statusPicked(string statusId)
 
     readonly property var _t: host.task ? host.task : (host.taskId ? AppController.taskById(host.taskId) : null)
@@ -271,6 +293,13 @@ Item {
             text: I18n.t("taskmenu.refreshFrom").arg(host._badge.name || host._ticket.provider || "")
             onTriggered: AppController.syncProvider(String(host._ticket.provider || ""))
         }
+        AppMenuItem {
+            objectName: "tc-menu-resolve"
+            visible: host._isTicket && !!host._ticket.conflict
+            height: visible ? implicitHeight : 0
+            text: I18n.t("taskmenu.resolveConflict")
+            onTriggered: host.openConflict()
+        }
         // A move that never reached the tracker: send it (after Tabless checks
         // the issue) or drop it and keep the column here only (APP-243).
         AppMenuItem {
@@ -316,6 +345,20 @@ Item {
             onTriggered: if (_has) AppController.copyToClipboard(host._t.branch)
         }
         AppMenuSeparator {}
+        // To another profile (A5-14). A tracker card stays in the profile
+        // whose integration pulled it: its sheet has no such row, and Shift M
+        // on one says why.
+        AppMenuItem {
+            objectName: "tc-menu-move-profile"
+            readonly property bool _one: (AppController.profiles || []).length < 2
+            visible: !host._isTicket
+            height: visible ? implicitHeight : 0
+            text: I18n.t("taskmenu.moveProfile")
+            shortcutId: "task.moveProfile"
+            enabled: !_one
+            note: _one ? I18n.t("moveProfile.why.one") : ""
+            onTriggered: host.moveToProfile()
+        }
         AppMenuItem {
             objectName: "tc-menu-archive"
             visible: !host._isTicket

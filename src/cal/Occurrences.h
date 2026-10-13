@@ -40,7 +40,30 @@ struct Occurrence {
   QDate occurrenceDate;
   // True when this came out of a rule rather than being stored as itself.
   bool generated = false;
+  // An event kept in another zone (A6-4): the zone and the start on its own
+  // clock there, so a view can say "19:00 New York" beside the local hour.
+  // Empty for a floating event.
+  QString srcTz;
+  double srcStart = 0;
+  // The zone the event is kept in, said even when it is the viewer's own:
+  // an edit handed back must keep it (A6-7). Empty for a floating event.
+  QString zone;
 };
+
+// An occurrence with where it came from: `src` is the event before it was
+// put on the viewer's clock.
+inline Occurrence occurrenceOf(const CalEvent& src, const CalEvent& shown, const QDate& day, bool generated, const QTimeZone& display) {
+  Occurrence o{shown, day, generated};
+  const QTimeZone zone = zoneOf(src);
+  if(!src.allDay && zone.isValid()) {
+    o.zone = src.tz;
+  }
+  if(!src.allDay && shown.tz.isEmpty() && zone.isValid() && zone.id() != display.id()) {
+    o.srcTz = src.tz;
+    o.srcStart = src.start;
+  }
+  return o;
+}
 
 // A range wider than this is a caller's bug — a month view asks for six weeks.
 // Expanding a daily rule over a decade would build 3650 delegates.
@@ -136,7 +159,7 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
       }
       const CalEvent shown = zone.isValid() ? localized(e, display) : e;
       if(overlaps(shown, shown.date)) {
-        out.append({shown, shown.date, false});
+        out.append(occurrenceOf(e, shown, shown.date, false, display));
       }
       continue;
     }
@@ -163,7 +186,7 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
         handled.insert(&ov);
         const CalEvent shownOv = zoneOf(ov).isValid() ? localized(ov, display) : ov;
         if(shownOv.date.isValid() && overlaps(shownOv, shownOv.date)) {
-          out.append({shownOv, day, false});
+          out.append(occurrenceOf(ov, shownOv, day, false, display));
         }
         continue;
       }
@@ -177,11 +200,12 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
       inst.exdates.clear();
       inst.masterId = e.id;
       inst.originalDate = day;
+      const CalEvent source = inst;
       if(zone.isValid()) {
         inst = localized(inst, display);
       }
       if(overlaps(inst, inst.date)) {
-        out.append({inst, day, true});
+        out.append(occurrenceOf(source, inst, day, true, display));
       }
     }
   }
@@ -213,7 +237,7 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
     if(!rule.isValid() || !expand(rule, master->date, day, day).contains(day) || !live(*master, rule, zoneOf(*master), day)) {
       continue;
     }
-    out.append({shownOv, day, false});
+    out.append(occurrenceOf(*ov, shownOv, day, false, display));
   }
   return out;
 }

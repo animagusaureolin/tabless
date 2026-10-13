@@ -110,7 +110,7 @@ Item {
             weekStart: "mon", timeFormat: "24h",
             snapMinutes: 15, showWeekends: true,
             autoFocusBlock: true, focusBlockDuration: 90,
-            standupTime: "10:00"
+            standupTime: "10:00", todayScope: "profile"
         },
         tasks: {
             idPrefix: "TASK", defaultPriority: "P2", defaultStatus: "todo",
@@ -144,6 +144,11 @@ Item {
     // the old shape and turned a stored 0 into the default.
     function _num(v, fallback) {
         return (v === undefined || v === null || v === false) ? fallback : v;
+    }
+    // The line under Updates: what is happening now, else when it checks.
+    function updatesHint(status, autoCheck) {
+        if (status !== "") return status;
+        return I18n.t(autoCheck ? "settings.about.updates.hint" : "settings.about.updates.hint.manual");
     }
     function _get(group, key, fallback) {
         const g = root.settings[group];
@@ -1227,6 +1232,37 @@ Item {
                                ({ value: "spacious", label: I18n.t("common.density.spacious") }) ]
                     onSelected: (value) => AppController.density = value
                 }
+                // Scale and contrast are what a low-vision user looks for
+                // first: on the sheet, not under "more" (A6-16).
+                SegRow {
+                    objectName: "settings-ui-scale"
+                    label: I18n.t("settings.appearance.scale")
+                    // Unset, the scale is the system's text size (APP-183).
+                    hint: (Theme._appearance.uiScale === undefined && Theme.systemScale() > Theme.defaultScale
+                          ? I18n.t("settings.appearance.scale.system")
+                          : I18n.t("settings.appearance.scale.hint"))
+                          + " " + I18n.t("settings.appearance.scale.keys")
+                              .arg(AppController.keyText(AppController.shortcutFor("zoom.in")))
+                              .arg(AppController.keyText(AppController.shortcutFor("zoom.out")))
+                    value: String(Math.round(Theme.scale * 100))
+                    options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
+                    onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
+                }
+                SegRow {
+                    objectName: "settings-contrast"
+                    label: I18n.t("settings.appearance.contrast")
+                    hint: I18n.t("settings.appearance.contrast.hint")
+                    value: Theme.contrast
+                    options: [
+                        ({ value: "soft",   label: I18n.t("settings.appearance.contrast.soft") }),
+                        ({ value: "normal", label: I18n.t("settings.appearance.contrast.normal") }),
+                        ({ value: "high",   label: I18n.t("settings.appearance.contrast.high") })
+                    ]
+                    onSelected: (value) => {
+                        root.set("appearance", "contrast", value);
+                        root.set("appearance", "highContrast", value === "high");
+                    }
+                }
                 SegRow {
                     objectName: "settings-motion"
                     label: I18n.t("settings.appearance.reducedMotion")
@@ -1327,55 +1363,13 @@ Item {
                     }
                 }
             }
-            MoreBlock {
-                // The finer knobs: scale, contrast, a cursor colour of its own.
-                SegRow {
-                    objectName: "settings-ui-scale"
-                    label: I18n.t("settings.appearance.scale")
-                    // Unset, the scale is the system's text size (APP-183).
-                    hint: Theme._appearance.uiScale === undefined && Theme.systemScale() > Theme.defaultScale
-                          ? I18n.t("settings.appearance.scale.system")
-                          : I18n.t("settings.appearance.scale.hint")
-                    value: String(Math.round(Theme.scale * 100))
-                    options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
-                    onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
-                }
-                SegRow {
-                    objectName: "settings-contrast"
-                    label: I18n.t("settings.appearance.contrast")
-                    hint: I18n.t("settings.appearance.contrast.hint")
-                    value: Theme.contrast
-                    options: [
-                        ({ value: "soft",   label: I18n.t("settings.appearance.contrast.soft") }),
-                        ({ value: "normal", label: I18n.t("settings.appearance.contrast.normal") }),
-                        ({ value: "high",   label: I18n.t("settings.appearance.contrast.high") })
-                    ]
-                    onSelected: (value) => {
-                        root.set("appearance", "contrast", value);
-                        root.set("appearance", "highContrast", value === "high");
-                    }
-                }
-                // "Your own" accent (APP-174): the cursor colour from the swatches.
-                CursorColorRow {
-                    objectName: "settings-cursor-color"
-                    label: I18n.t("settings.appearance.cursorColor")
-                    hint: I18n.t("settings.appearance.cursorColor.hint")
-                    value: Theme.accentTone === "custom" ? Theme.cursorColorPick : ""
-                    onSelected: (color) => root.set("appearance", "cursorColor", color)
-                }
-                SettingsGroup {
-                    objectName: "settings-theme-card"
-                    Layout.topMargin: Theme.spLg
-                    title: I18n.t("settings.appearance.group.themes")
-                    SettingsRow {
-                        separator: false
-                        ThemeSettings {
-                            Layout.fillWidth: true
-                            appearance: root.settings.appearance || ({})
-                            onSetKey: (key, value) => root.set("appearance", key, value)
-                        }
-                    }
-                }
+            // The window and starting with the system (A7-11): their own
+            // group, named where the close question sends the user.
+            SettingsGroup {
+                objectName: "settings-window-group"
+                Layout.topMargin: Theme.sp2xl
+                title: I18n.t("settings.appearance.group.window")
+                visible: Qt.platform.os === "windows" || Qt.platform.os === "osx" || !!startAtLoginRow._os.supported
                 // Only where there is a tray to close into.
                 SegRow {
                     objectName: "settings-close-to-tray"
@@ -1413,6 +1407,30 @@ Item {
                     onToggled: (checked) => {
                         AppController.setAutostart(!!startAtLoginRow._os.enabled, checked);
                         startAtLoginRow._os = AppController.autostartState();
+                    }
+                }
+            }
+            MoreBlock {
+                // The finer knobs: a cursor colour of its own, the themes.
+                // "Your own" accent (APP-174): the cursor colour from the swatches.
+                CursorColorRow {
+                    objectName: "settings-cursor-color"
+                    label: I18n.t("settings.appearance.cursorColor")
+                    hint: I18n.t("settings.appearance.cursorColor.hint")
+                    value: Theme.accentTone === "custom" ? Theme.cursorColorPick : ""
+                    onSelected: (color) => root.set("appearance", "cursorColor", color)
+                }
+                SettingsGroup {
+                    objectName: "settings-theme-card"
+                    Layout.topMargin: Theme.spLg
+                    title: I18n.t("settings.appearance.group.themes")
+                    SettingsRow {
+                        separator: false
+                        ThemeSettings {
+                            Layout.fillWidth: true
+                            appearance: root.settings.appearance || ({})
+                            onSetKey: (key, value) => root.set("appearance", key, value)
+                        }
                     }
                 }
             }
@@ -1836,7 +1854,11 @@ Item {
                                 Text {
                                     id: wdTxt
                                     anchors.centerIn: parent
-                                    text: I18n.dayName(wdChip.day % 7).toLowerCase()
+                                    // The case every option on the page has ("Mon"
+                                    // bold, "mon" quiet), as "Week starts on" has it
+                                    // (F3-EYES-14).
+                                    readonly property string _name: I18n.dayName(wdChip.day % 7)
+                                    text: root.opt(_name.charAt(0).toUpperCase() + _name.slice(1), false)
                                     color: wdChip.on ? Theme.text : Theme.textDim
                                     font.pixelSize: Theme.fsSm
                                     font.weight: wdChip.on && !root.quiet ? Theme.fwHeading : Theme.fwBody
@@ -1906,6 +1928,19 @@ Item {
                         ({value: "sun", label: I18n.t("settings.cal.weekStart.sun")})
                     ]
                     onSelected: (value) => root.set("calendar", "weekStart", value)
+                }
+                // Today with one profile or every one (A1-17): another
+                // profile's rows are labelled and open in that profile.
+                SegRow {
+                    objectName: "settings-today-scope"
+                    label: I18n.t("settings.cal.todayScope")
+                    hint: I18n.t("settings.cal.todayScope.hint")
+                    value: (root.settings.calendar && root.settings.calendar.todayScope) || "profile"
+                    options: [
+                        ({value: "profile", label: I18n.t("settings.cal.todayScope.this")}),
+                        ({value: "all", label: I18n.t("settings.cal.todayScope.all")})
+                    ]
+                    onSelected: (value) => root.set("calendar", "todayScope", value)
                 }
             }
             MoreBlock {
@@ -2181,7 +2216,7 @@ Item {
                     objectName: "settings-snapshot-before-import"
                     label: I18n.t("settings.safety.beforeImport")
                     value: safetyRoot.d.snapshotBeforeImport === false ? "no" : "yes"
-                    options: [ ({ value: "yes", label: I18n.t("settings.yes") }), ({ value: "no", label: I18n.t("settings.no") }) ]
+                    options: [ ({ value: "yes", label: I18n.t("settings.on") }), ({ value: "no", label: I18n.t("settings.off") }) ]
                     onSelected: (value) => root.set("data", "snapshotBeforeImport", value === "yes")
                 }
                 SegRow {
@@ -2189,7 +2224,7 @@ Item {
                     label: I18n.t("settings.safety.immersion")
                     hint: I18n.t("settings.safety.immersion.hint").arg(AppController.shortcutText("focus.immersion"))
                     value: AppController.safety.immersion === true ? "on" : "off"
-                    options: [ ({ value: "on", label: I18n.t("settings.safety.available") }), ({ value: "off", label: I18n.t("settings.off") }) ]
+                    options: [ ({ value: "on", label: I18n.t("settings.on") }), ({ value: "off", label: I18n.t("settings.off") }) ]
                     onSelected: (value) => AppController.setSafetySetting("immersion", value === "on")
                 }
             }
@@ -2273,6 +2308,8 @@ Item {
             property string conflictId: ""
             property bool conflictBuiltin: false
             property string reserved: ""
+            // A key every app uses for one thing: taken after a question (A7-9).
+            property string soft: ""
             readonly property bool capturing: capturingId.length > 0
             onCapturingChanged: {
                 if (typeof settingsBus !== "undefined" && settingsBus.setKeyCapture) settingsBus.setKeyCapture(keysRoot.capturing);
@@ -2306,17 +2343,39 @@ Item {
                 keysRoot.conflictId = "";
                 keysRoot.conflictBuiltin = false;
                 keysRoot.reserved = "";
+                keysRoot.soft = "";
             }
-            function cancel() { keysRoot.capturingId = ""; keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; }
+            function cancel() { keysRoot.capturingId = ""; keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; keysRoot.soft = ""; }
             function commit() {
                 const id = keysRoot.capturingId;
                 const seq = keysRoot.candidate;
                 keysRoot.cancel();
                 if (id.length > 0) AppController.setShortcut(id, seq);
+                keysRoot.refocus(id);
+            }
+            // A changed key rebuilds the list, and focus fell to nowhere: the
+            // next Tab started over at the sidebar (A7-8). Back on the key
+            // just changed, once the rows are rebuilt.
+            function refocus(id) {
+                if (!id) return;
+                Qt.callLater(function () {
+                    const chip = keysRoot._chip(keysRoot, "hotkey-chip-" + id);
+                    if (chip) chip.forceActiveFocus(Qt.TabFocusReason);
+                });
+            }
+            function _chip(item, name) {
+                if (!item) return null;
+                if (item.objectName === name) return item;
+                const kids = item.children || [];
+                for (let i = 0; i < kids.length; i++) {
+                    const hit = keysRoot._chip(kids[i], name);
+                    if (hit) return hit;
+                }
+                return null;
             }
             // A key heard while recording. Enter with nothing heard keeps the
             // old key; a conflict waits for the box below.
-            readonly property bool pending: keysRoot.conflictId.length > 0 || keysRoot.reserved.length > 0
+            readonly property bool pending: keysRoot.conflictId.length > 0 || keysRoot.reserved.length > 0 || keysRoot.soft.length > 0
             readonly property bool canReplace: keysRoot.reserved.length === 0 && !keysRoot.conflictBuiltin
             function hear(event) {
                 if (event.key === Qt.Key_Escape) { keysRoot.cancel(); return; }
@@ -2330,13 +2389,14 @@ Item {
                 // Backspace clears what was heard, as in the Hotkeys panel; only
                 // Delete takes the key off (IDIOT-SHELL-11).
                 if (event.key === Qt.Key_Backspace) {
-                    keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = "";
+                    keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; keysRoot.soft = "";
                     return;
                 }
                 if (event.key === Qt.Key_Delete) {
                     const id = keysRoot.capturingId;
                     keysRoot.cancel();
                     AppController.setShortcut(id, "");
+                    keysRoot.refocus(id);
                     return;
                 }
                 if (event.key === Qt.Key_Control || event.key === Qt.Key_Shift || event.key === Qt.Key_Alt
@@ -2345,11 +2405,12 @@ Item {
                 if (!chord) return;
                 keysRoot.candidate = chord;
                 keysRoot.reserved = AppController.reservedShortcutReason(chord);
+                keysRoot.soft = keysRoot.reserved.length > 0 ? "" : AppController.commonShortcutWarning(keysRoot.capturingId, chord);
                 keysRoot.conflictId = AppController.findShortcutConflict(keysRoot.capturingId, chord);
                 keysRoot.conflictBuiltin = keysRoot.conflictId.length > 0
                     && (AppController.builtinShortcutConflict(keysRoot.capturingId, chord).length > 0
                         || AppController.prefixShortcutConflict(keysRoot.capturingId, chord).length > 0);
-                if (keysRoot.reserved.length === 0 && keysRoot.conflictId.length === 0) keysRoot.commit();
+                if (!keysRoot.pending) keysRoot.commit();
             }
 
             Rectangle {
@@ -2489,7 +2550,11 @@ Item {
                                 id: resetMA
                                 objectName: "hotkeys-reset-" + keyRow.aid
                                 label: I18n.t("hotkeys.reset")
-                                onActivated: AppController.resetShortcut(keyRow.aid)
+                                onActivated: {
+                                    const id = keyRow.aid;
+                                    AppController.resetShortcut(id);
+                                    keysRoot.refocus(id);
+                                }
                             }
                         }
                         Item { visible: !(keyRow.changed && !keyRow.rec); Layout.preferredWidth: Theme.px(64) }
@@ -2497,7 +2562,7 @@ Item {
                     // The key heard is someone else's: replace it there, or pick another.
                     Rectangle {
                         objectName: "settings-keys-conflict"
-                        visible: keyRow.rec && (keysRoot.conflictId.length > 0 || keysRoot.reserved.length > 0)
+                        visible: keyRow.rec && keysRoot.pending
                         Layout.fillWidth: true
                         Layout.topMargin: Theme.spSm
                         Layout.bottomMargin: Theme.spLg
@@ -2519,6 +2584,7 @@ Item {
                                 color: Theme.textMuted
                                 font.pixelSize: Theme.fsSm
                                 text: keysRoot.reserved.length > 0 ? keysRoot.reserved
+                                    : keysRoot.soft.length > 0 && keysRoot.conflictId.length === 0 ? keysRoot.soft
                                     : keysRoot.conflictBuiltin
                                       ? I18n.t("hotkeys.conflict.builtin").arg(AppController.shortcutLabel(keysRoot.conflictId))
                                       : I18n.t("settings.keys.conflict").arg(AppController.keyText(keysRoot.candidate)).arg(AppController.shortcutLabel(keysRoot.conflictId))
@@ -2529,7 +2595,8 @@ Item {
                                     id: replaceBtn
                                     objectName: "settings-keys-replace"
                                     visible: keysRoot.reserved.length === 0 && !keysRoot.conflictBuiltin
-                                    text: I18n.t("settings.keys.replace")
+                                    text: keysRoot.soft.length > 0 && keysRoot.conflictId.length === 0
+                                          ? I18n.t("settings.keys.takeAnyway") : I18n.t("settings.keys.replace")
                                     primary: true
                                     onClicked: keysRoot.commit()
                                 }
@@ -2538,7 +2605,7 @@ Item {
                                     objectName: "settings-keys-other"
                                     text: I18n.t("settings.keys.other")
                                     onClicked: {
-                                        keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = "";
+                                        keysRoot.candidate = ""; keysRoot.conflictId = ""; keysRoot.reserved = ""; keysRoot.soft = "";
                                         capFocus.forceActiveFocus();  // and listen again
                                     }
                                 }
@@ -3438,7 +3505,7 @@ Item {
                     label: I18n.t("settings.git.link")
                     hint: I18n.t("settings.git.link.hint").arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "APP").toUpperCase())
                     value: root._get("git", "linkBranches", true) === false ? "no" : "yes"
-                    options: [ ({ value: "yes", label: I18n.t("settings.yes") }), ({ value: "no", label: I18n.t("settings.no") }) ]
+                    options: [ ({ value: "yes", label: I18n.t("settings.on") }), ({ value: "no", label: I18n.t("settings.off") }) ]
                     onSelected: (v) => root.set("git", "linkBranches", v === "yes")
                 }
                 SegRow {
@@ -3446,7 +3513,7 @@ Item {
                     label: I18n.t("settings.git.prState")
                     hint: I18n.t("settings.git.prState.hint")
                     value: root._get("git", "watchPrState", true) === false ? "no" : "yes"
-                    options: [ ({ value: "yes", label: I18n.t("settings.yes") }), ({ value: "no", label: I18n.t("settings.no") }) ]
+                    options: [ ({ value: "yes", label: I18n.t("settings.on") }), ({ value: "no", label: I18n.t("settings.off") }) ]
                     onSelected: (v) => root.set("git", "watchPrState", v === "yes")
                 }
                 SegRow {
@@ -3487,10 +3554,21 @@ Item {
         id: sectionData
         ColumnLayout {
             id: dataRoot
+            objectName: "settings-data-root"
             spacing: 0
             // Read on demand: listBackups() is a plain invokable.
             property var backups: []
             function refreshBackups() { dataRoot.backups = AppController.listBackups(); }
+            // When a copy was taken, the way the rest of the app says a
+            // time ("today 14:45", a day otherwise), never the raw ISO
+            // stamp (A7-6).
+            function whenTaken(mtime) {
+                const at = new Date(mtime);
+                if (isNaN(at.getTime())) return String(mtime);
+                return at.toDateString() === new Date().toDateString()
+                    ? I18n.t("settings.data.today").arg(I18n.fmtTime(at))
+                    : AppController.humanDate(at) + " " + I18n.fmtTime(at);
+            }
             Component.onCompleted: dataRoot.refreshBackups()
             SettingsGroup {
                 ActRow {
@@ -3502,14 +3580,8 @@ Item {
                         const every = I18n.t(d.backupInterval === "hourly" ? "settings.data.every.hourly"
                                              : d.backupInterval === "weekly" ? "settings.data.every.weekly" : "settings.data.every.daily");
                         let last = "";
-                        if (dataRoot.backups.length > 0) {
-                            const at = new Date(dataRoot.backups[0].mtime);
-                            const today = new Date();
-                            const when = isNaN(at.getTime()) ? String(dataRoot.backups[0].mtime)
-                                : at.toDateString() === today.toDateString() ? I18n.t("settings.data.today").arg(I18n.fmtTime(at))
-                                : AppController.humanDate(at);
-                            last = I18n.t("settings.data.backups.last").arg(when);
-                        }
+                        if (dataRoot.backups.length > 0)
+                            last = I18n.t("settings.data.backups.last").arg(dataRoot.whenTaken(dataRoot.backups[0].mtime));
                         return [I18n.t("settings.data.backups.line").arg(every).arg(AppController.backupRetention()), last].filter((s) => s.length > 0).join(" · ");
                     }
                     actions: [ ({ value: "folder", label: I18n.t("settings.data.openFolder") }), ({ value: "restore", label: I18n.t("settings.data.restoreDots") }) ]
@@ -3556,7 +3628,8 @@ Item {
                     model: dataRoot.backups
                     delegate: SettingsRow {
                         required property var modelData
-                        label: modelData.mtime
+                        objectName: "settings-backup-row"
+                        label: dataRoot.whenTaken(modelData.mtime)
                         hint: modelData.fileName + "  ·  " + I18n.t("common.kb").arg(modelData.sizeKb)  // КБ in Russian (SHELL-4)
                         ActionButton {
                             id: restoreBtn
@@ -3721,10 +3794,11 @@ Item {
                 SegRow {
                     objectName: "settings-time-format"
                     label: I18n.t("settings.language.dateFormat")
+                    // In the app's own date format: "ddd, d MMM" made English
+                    // read "Tue, 13 Oct", an order it shows nowhere (F3-EYES-12).
                     hint: {
                         const d = new Date();
-                        return Qt.locale(I18n.lang === "ru" ? "ru_RU" : "en_US").toString(d, "ddd, d MMM").replace(/\./g, "")
-                            + " · " + I18n.fmtTime(d);
+                        return I18n.fmtDate(d, "weekdayDay") + " · " + I18n.fmtTime(d);
                     }
                     value: (root.settings.calendar && root.settings.calendar.timeFormat) || "24h"
                     options: [ ({ value: "system", label: I18n.t("settings.language.system") }),
@@ -3871,7 +3945,9 @@ Item {
                 SettingsRow {
                     objectName: "settings-updates"
                     label: I18n.t("settings.about.updates")
-                    hint: AppController.updateStatus === "" ? I18n.t("settings.about.updates.hint") : AppController.updateStatus
+                    // The hint follows the choice (A7-3): "only by hand" never checks
+                    // on launch.
+                    hint: root.updatesHint(AppController.updateStatus, root._get("updates", "autoCheck", true) !== false)
                     LinkText {
                         objectName: "settings-check-updates"
                         visible: AppController.updatePhase !== "downloading" && AppController.updatePhase !== "installing"

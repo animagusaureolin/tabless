@@ -67,6 +67,8 @@ Popup {
             start: root.slot.start,
             end: root.slot.end,
             rule: x.rule || EventRule.fromChrono(p.recurrence),
+            // "15:00 EST", "по Москве": the meeting is kept there (A6-7).
+            tz: "",
             fromLine: false,
             words: [x.ruleText, x.lengthText].concat((p.spans || []).map(sp => String(sp.text)))
         };
@@ -75,6 +77,7 @@ Popup {
             out.fromLine = true;
             if (p.whenHasTime) {
                 const len = root.slot.end - root.slot.start;
+                out.tz = String(p.whenTz || "");
                 out.start = root._hours(p.when);
                 out.end = out.start + len;
                 if (root._valid(p.whenEnd)) {
@@ -109,9 +112,28 @@ Popup {
         }
         return out;
     }
+    // A meeting already there at that time, as a fact, never a refusal: the
+    // schedule field says it for a task, this line said nothing (A1-8).
+    function clashWith(r) {
+        if (!r || !r.date || !root._valid(r.date)) return "";
+        const day = new Date(r.date.getFullYear(), r.date.getMonth(), r.date.getDate());
+        const a = r.start;
+        const b = r.endDate ? 24 : r.end;
+        const occ = AppController.eventOccurrences(day, day);
+        for (let i = 0; i < occ.length; i++) {
+            const e = occ[i];
+            if (e.allDay) continue;
+            if (e.start < b && e.end > a) return String(e.title || "");
+        }
+        return "";
+    }
+    readonly property string _clash: root.visible ? root.clashWith(root.parsed) : ""
     function whenText(r) {
-        return I18n.fmtDate(r.date, "weekdayDay") + " · " + AppController.eventHourLabel(r.start)
+        const local = I18n.fmtDate(r.date, "weekdayDay") + " · " + AppController.eventHourLabel(r.start)
                + "–" + (r.endDate ? I18n.fmtDate(r.endDate, "weekdayDay") + " · " : "") + AppController.eventHourLabel(r.end);
+        // The hour where it was said, beside the local one (A6-4).
+        if (!r.tz || AppController.isLocalZone(r.tz)) return local;
+        return local + " · " + Theme.fmtHour(AppController.zoneHour(r.date, r.start, r.tz)) + " " + AppController.zoneName(r.tz);
     }
 
     function submit() {
@@ -125,6 +147,7 @@ Popup {
         d.date = r.date;
         d.endDate = r.endDate || r.date;
         d.rrule = r.rule;
+        d.tz = r.tz || "";
         AppController.saveEvent(d);
         root.close();
         root.created(d.id);
@@ -198,11 +221,39 @@ Popup {
                 label: I18n.t("event.capture.when")
                 value: root.whenText(root.parsed)
             }
+            Text {
+                objectName: "event-capture-clash"
+                visible: root._clash.length > 0
+                height: Theme.chipH
+                verticalAlignment: Text.AlignVCenter
+                text: I18n.t("schedule.clash").arg(root._clash)
+                color: Style.urgency ? Theme.warning : Theme.textMuted
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+            }
             Chip {
                 objectName: "event-capture-repeat"
                 visible: root.parsed.rule.length > 0
                 label: I18n.t("event.capture.repeat")
                 value: EventRule.describe(root.parsed.rule, root.parsed.date, I18n)
+            }
+        }
+        // How to commit or leave, as quick capture says it (F3-EYES-17).
+        Flow {
+            objectName: "event-capture-keys-hint"
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.spLg; Layout.rightMargin: Theme.spLg; Layout.bottomMargin: Theme.spLg
+            spacing: Theme.sp2xl
+            Repeater {
+                model: I18n.t("event.capture.hints").split(" · ")
+                delegate: Text {
+                    required property string modelData
+                    text: modelData
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.features: Theme.tabularNums
+                    font.pixelSize: Theme.fsXs
+                }
             }
         }
     }

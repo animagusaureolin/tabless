@@ -52,11 +52,12 @@ TestCase {
         typeText("fix");
         keyClick(Qt.Key_Return);
         tryVerify(() => AppController.taskChecklist(id).length === 2, 1000);
-        // Up from the empty field lands on the last item; Tab nests it.
+        // Up from the empty field lands on the last item; Alt+→ nests it
+        // (Tab moves on from a row, A1-11).
         keyClick(Qt.Key_Up);
         tryVerify(() => itemRow(doc, 1) && itemRow(doc, 1).activeFocus, 1000, "the last item did not get the keyboard");
-        keyClick(Qt.Key_Tab);
-        tryVerify(() => AppController.taskChecklist(id)[1].level === 2, 1000, "Tab did not nest the item");
+        keyClick(Qt.Key_Right, Qt.AltModifier);
+        tryVerify(() => AppController.taskChecklist(id)[1].level === 2, 1000, "Alt+Right did not nest the item");
         // Space ticks it: the only child done closes the parent, automatically.
         tryVerify(() => itemRow(doc, 1) && itemRow(doc, 1).activeFocus, 1000, "the keyboard was lost after Tab");
         keyClick(Qt.Key_Space);

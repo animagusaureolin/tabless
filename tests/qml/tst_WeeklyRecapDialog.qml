@@ -220,4 +220,40 @@ TestCase {
         compare(Math.round((a.getTime() - d.facts.weekStart.getTime()) / 86400000), 7);
         d.close();
     }
+    // F3-EYES-11: a week with nothing closed says so in one line, with no
+    // column of "0 closed" days.
+    function test_an_empty_week_says_so_once() {
+        const d = make();
+        d.open();
+        tryVerify(() => d.opened);
+        d.facts = { weekStart: new Date(2026, 9, 5), weekEnd: new Date(2026, 9, 11), perDay: [0, 0, 0, 0, 0, 0, 0], closed: [] };
+        d.meetingMinutes = 0;
+        compare(findChild(d.contentItem, "recap-facts").text, I18n.t("recap.noneClosed"));
+        verify(!findChild(d.contentItem, "recap-days").visible, "no per-day rows");
+        d.facts = tc.facts;
+        verify(findChild(d.contentItem, "recap-days").visible, "a week with closed tasks keeps them");
+        d.close();
+    }
+
+    // F3-EYES-4: every button stays inside the dialog, in both languages.
+    function test_buttons_stay_inside() {
+        const lang = AppController.language;
+        try {
+            for (const l of ["ru", "en"]) {
+                AppController.language = l;
+                const d = make();
+                d.open();
+                tryVerify(() => d.opened);
+                for (const n of ["weekly-recap-copy", "weekly-recap-prev", "weekly-recap-next"]) {
+                    const b = findChild(d.contentItem, n);
+                    const p = b.mapToItem(d.contentItem, 0, 0);
+                    verify(p.x + b.width <= d.width - Theme.inset + 0.5, l + ": " + n + " ends at " + (p.x + b.width) + " of " + d.width);
+                }
+                d.close();
+                d.destroy();
+            }
+        } finally {
+            AppController.language = lang;
+        }
+    }
 }

@@ -677,10 +677,22 @@ struct Entry {
   // Events the deletion detached from the profile (profileId cleared), so the
   // undo can hand them back (PLAT-14).
   QStringList profileEventIds;
+  // A move to another profile (A5-14) is not a diff of the active models
+  // either: the tasks leave one workspace for another. The entry sits on
+  // both profiles' stacks under one serial, so u in either takes it back
+  // (AppController::applyProfileMove_), and it says where everything is now.
+  bool profileMove = false;
+  QString moveFrom;
+  QString moveTo;
+  QStringList moveIds;                       // the tasks' ids in moveFrom
+  QHash<QString, QString> moveRenamed;       // id in moveFrom -> id in moveTo, where they differ
+  QHash<QString, int> moveRows;              // id in moveFrom -> its row there
+  QHash<QString, QString> moveStatusBefore;  // id in moveFrom -> its column, where the move changed it
+  QHash<QString, QString> moveStatusAfter;   // id in moveTo -> the column it got
 
   bool isEmpty() const {
-    return !profileRemoved && !statusesTouched && !docsStateTouched && !savedViewsTouched && tasks.isEmpty() && events.isEmpty() &&
-           people.isEmpty() && docPages.isEmpty() && notes.isEmpty();
+    return !profileRemoved && !profileMove && !statusesTouched && !docsStateTouched && !savedViewsTouched && tasks.isEmpty() &&
+           events.isEmpty() && people.isEmpty() && docPages.isEmpty() && notes.isEmpty();
   }
 };
 
@@ -752,6 +764,12 @@ class UndoStack {
     m_cursor = 0;
   }
 
+  // Drops everything redoable, keeping what can still be undone: for a step
+  // that failed to reverse and so cannot be replayed either.
+  void discardRedo() {
+    m_entries.resize(m_cursor);
+  }
+
   // Leaving a workspace drops its diffs, but a profile removal is not one:
   // it restores a whole profile from any workspace, so it stays undoable
   // across a switch (IDIOT-SHELL-2). It is always the bottom entry —
@@ -771,6 +789,38 @@ class UndoStack {
     }
     clear();
     return true;
+  }
+
+  // The workspace's own entries, without a profile removal at the bottom:
+  // what a profile switch parks so the workspace's undo comes back with it
+  // (A3-14). The removal stays with the live stack (clearKeepingProfileRemoval).
+  UndoStack workspacePart() const {
+    UndoStack out;
+    const int skip = !m_entries.isEmpty() && m_entries.at(0).profileRemoved ? 1 : 0;
+    out.m_entries = m_entries.mid(skip);
+    out.m_cursor = qMax(0, m_cursor - skip);
+    return out;
+  }
+
+  // Puts a parked workspace's entries back on top of what is undoable now
+  // (at most a profile removal), keeping their own redo tail.
+  void adopt(const UndoStack& parked) {
+    if(parked.m_entries.isEmpty()) {
+      return;
+    }
+    m_entries.resize(m_cursor);
+    const int base = m_cursor;
+    m_entries.append(parked.m_entries);
+    m_cursor = base + parked.m_cursor;
+    if(m_entries.size() > kMaxDepth) {
+      const int drop = static_cast<int>(m_entries.size()) - kMaxDepth;
+      m_entries.remove(0, drop);
+      m_cursor = qMax(0, m_cursor - drop);
+    }
+  }
+
+  bool isEmpty() const {
+    return m_entries.isEmpty();
   }
 
   // The undoable entry recorded under `serial`, or nullptr when it has been

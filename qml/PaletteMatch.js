@@ -17,8 +17,13 @@
 // score(query, text) returns the sum, or -1 when any query word misses. An
 // empty query scores 0.
 
+// Lower case with «ё» read as «е»: most people type е for ё (A3-11).
+function fold(s) {
+    return String(s || "").toLowerCase().replace(/ё/g, "е");
+}
+
 function _words(s) {
-    return String(s || "").toLowerCase().split(/[^0-9a-zа-яё_+#.-]+/i).filter(function (w) { return w.length > 0; });
+    return fold(s).split(/[^0-9a-zа-яё_+#.-]+/i).filter(function (w) { return w.length > 0; });
 }
 
 // Optimal string alignment distance (Damerau–Levenshtein without repeated
@@ -94,7 +99,7 @@ function _wordScore(qw, text, words) {
 function score(query, text) {
     var qws = _words(query);
     if (qws.length === 0) return 0;
-    var lower = String(text || "").toLowerCase();
+    var lower = fold(text);
     var words = _words(lower);
     var total = 0;
     for (var i = 0; i < qws.length; i++) {
@@ -115,7 +120,36 @@ function score(query, text) {
 function bodyHit(query, body) {
     var qws = _words(query);
     if (qws.length === 0 || !body) return false;
-    var lower = String(body).toLowerCase();
+    var lower = fold(body);
     for (var i = 0; i < qws.length; i++) if (lower.indexOf(qws[i]) < 0) return false;
     return true;
+}
+
+// Text typed in the wrong keyboard layout, typed back in the other one
+// ("gjxbybnm" → "починить", "куекн" → "retry"): the keys under the fingers
+// are the same, ЙЦУКЕН ↔ QWERTY (A4-20). "" when nothing changes.
+var _lat = "`qwertyuiop[]asdfghjkl;'zxcvbnm,./";
+var _cyr = "ёйцукенгшщзхъфывапролджэячсмитьбю.";
+function swapLayout(text) {
+    var s = String(text || "");
+    var latin = 0, cyr = 0;
+    for (var i = 0; i < s.length; i++) {
+        var ch = s.charAt(i).toLowerCase();
+        if (/[a-z]/.test(ch)) latin++;
+        else if (/[а-яё]/.test(ch)) cyr++;
+    }
+    if (latin === 0 && cyr === 0) return "";
+    var from = latin >= cyr ? _lat : _cyr;
+    var to = latin >= cyr ? _cyr : _lat;
+    var out = "";
+    for (var j = 0; j < s.length; j++) {
+        var c = s.charAt(j);
+        var lc = c.toLowerCase();
+        var k = from.indexOf(lc);
+        // A dot is a dot in both layouts; only a letter is swapped.
+        if (k < 0 || lc === ".") { out += c; continue; }
+        var m = to.charAt(k);
+        out += c !== lc ? m.toUpperCase() : m;
+    }
+    return out === s ? "" : out;
 }

@@ -3,10 +3,12 @@
 #include "Models.h"
 
 #include "board/Rank.h"
+#include "capture/CaptureParse.h"
 #include "history/TaskHistory.h"
 #include "integrations/SyncHealth.h"
 #include "notify/EventLog.h"
 #include "notify/NotifyPayload.h"
+#include "profile/ProfileMove.h"
 #include "safety/EndOfDay.h"
 #include "undo/UndoStack.h"
 
@@ -27,6 +29,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 class QNetworkAccessManager;
@@ -370,6 +373,10 @@ class AppController : public QObject {
   // identifier (e.g. "task.created"); returns the EN form as a last-resort
   // fallback if the key is missing in the active table.
   Q_INVOKABLE QString tr_(const QString& key) const;
+  // The same string in a given language, whatever the UI's is.
+  QString trIn_(const QString& key, bool ru) const;
+  // The name a task goes by on screen: its tracker key, else its id (A3-10).
+  Q_INVOKABLE QString displayKey(const QString& id) const;
 
   QString currentView() const {
     return m_currentView;
@@ -719,7 +726,9 @@ class AppController : public QObject {
   // One line of task input read the way quickTaskDraft reads it (APP-245):
   // {title, when, whenHasTime, due, dueHasTime, estimateMinutes, recurrence,
   //  spans: [{start, end, kind, text}]} — offsets into `raw` after the meta
-  // (priority, #labels, "// …") is taken out, i.e. into `head`.
+  // (priority, #labels, "// …") is taken out, i.e. into `head`. A "+Profile
+  // name" (A5-21) comes back as profileId / profileName and a "profile" mark,
+  // and quickTaskDraft carries it as _targetProfileId.
   Q_INVOKABLE QVariantMap captureParse(const QString& raw,
                                        const QDateTime& reference = QDateTime(),
                                        const QStringList& rejected = {}) const;
@@ -805,6 +814,12 @@ class AppController : public QObject {
 
   bool whatsNewDue() const {
     return m_whatsNewDue;
+  }
+
+  // The version this data last ran on when it was an earlier patch of the
+  // same line (A5-19): said once, quietly; "" otherwise. Cleared on read.
+  Q_INVOKABLE QString takeUpdatedFrom() {
+    return std::exchange(m_updatedFrom, QString());
   }
 
   Q_INVOKABLE void ackWhatsNew() {
@@ -1389,8 +1404,28 @@ class AppController : public QObject {
   // as it was dragged. A resize sets a single-day occurrence's own edges.
   Q_INVOKABLE void moveOccurrence(const QVariantMap& occurrence, double deltaHours, const QString& scope);
   Q_INVOKABLE void resizeOccurrence(const QVariantMap& occurrence, double start, double end, const QString& scope);
-  // The stored event as the editor reads it: every field, zone included.
+  // The stored event as the editor reads it: every field, on the viewer's
+  // clock, with the zone it is kept in as "tz" (and "srcTz"/"srcStart" when
+  // that zone is not the viewer's).
   Q_INVOKABLE QVariantMap eventById(const QString& id) const;
+  // ── Time zones (A6-7) ──
+  // The event editor's zone picker: zones for what was typed ("new york",
+  // "EST", "UTC+5", "москва"), each {id, city, region, offset}; with nothing
+  // typed, the zones the user's meetings are kept in.
+  Q_INVOKABLE QVariantList timeZoneSearch(const QString& query) const;
+  // `hour` on `date` on the viewer's clock, as the hour in zone `tz` (NaN
+  // for no zone), and how many days that is from `date` there (-1, 0, 1).
+  Q_INVOKABLE double zoneHour(const QDate& date, double hour, const QString& tz) const;
+  Q_INVOKABLE int zoneDayShift(const QDate& date, double hour, const QString& tz) const;
+  // "New York" for America/New_York, "UTC−5" for a fixed offset.
+  Q_INVOKABLE QString zoneName(const QString& tz) const;
+  // Whether `tz` is the viewer's own zone (or none).
+  Q_INVOKABLE bool isLocalZone(const QString& tz) const;
+  // The viewer's own zone id, and a zone's offset now ("UTC+3"; "" is the
+  // viewer's).
+  Q_INVOKABLE QString localZoneId() const;
+  Q_INVOKABLE QString zoneOffsetLabel(const QString& tz) const;
+  QStringList recentEventZones() const;
   // Whether heap can expand this RRULE body — what the editor's custom field
   // checks before it saves.
   Q_INVOKABLE bool isValidRRule(const QString& rule) const;
@@ -1458,8 +1493,10 @@ class AppController : public QObject {
   Q_INVOKABLE bool placeTaskAt(const QString& taskId, const QDate& date, double start);
   // Carrying leftovers on by hand (APP-248). `mode`: "tomorrow" (keeps the
   // time it had), "window" (the nearest free window from now on), "someday"
-  // or "clear" (no "when"). The deadline is never touched. One undo step and
-  // one toast for the whole selection; returns how many tasks changed.
+  // or "clear" (no "when"); the deadline is touched only by "clearDue", which
+  // removes it and nothing else. One undo step and one toast for the whole
+  // selection (it says when nothing changed, or when a deadline keeps a task
+  // overdue); returns how many tasks changed.
   Q_INVOKABLE int carryTasks(const QStringList& ids, const QString& mode);
   int carryTasksAt(const QStringList& ids, const QString& mode, const QDateTime& now);
   // Drag-to-reschedule in Week, Month and Timeline (APP-249), and the keys
@@ -1487,6 +1524,15 @@ class AppController : public QObject {
   // `schedDay` — the day's offset from `from`, or -1. Only candidates have
   // their fields read, which is what keeps a 10k-task profile's week cheap.
   Q_INVOKABLE QVariantList calendarTasks(const QDate& from, const QDate& to, bool includeArchived) const;
+  // The occurrences ahead of each open repeating task that fall in [from,
+  // to] (A2-25), worked out from its rule and drawn faintly by Week and
+  // Month: [{id, title, priority, date, day, hasTime, hour, recurrence}],
+  // `day` the offset from `from`. Display only: nothing is created ahead.
+  Q_INVOKABLE QVariantList calendarRepeats(const QDate& from, const QDate& to) const;
+  // A repeat said in words, as the editors' "Custom" row takes it (B7):
+  // "every 3 weeks", "каждые 2 дня", "mon, wed", "пн, ср", "2 weeks". The
+  // engine's token ("every:3:week"), or "" when the words are not a repeat.
+  Q_INVOKABLE QString recurrenceFromText(const QString& text) const;
   // The load of each day from `from` on (APP-247): [{date, workday,
   // meetings, tasks, free, overWork, work}] in minutes, each minute counted
   // once — the fact the calendar's day headers show.
@@ -1715,6 +1761,19 @@ class AppController : public QObject {
   Q_INVOKABLE void deleteProfile(const QString& id);
   Q_INVOKABLE QString duplicateProfile(const QString& id, const QString& newName);
   Q_INVOKABLE QVariantMap profileById(const QString& id) const;
+  // Moves tasks of the active profile to `profileId` (A5-14): history,
+  // checklist, local layer and timer sessions with them; a local id the
+  // target holds is renumbered and what pointed at it follows. A tracker card
+  // stays (it belongs to the profile whose integration pulled it) and is
+  // counted. One undo step, on both profiles' stacks. Returns {moved,
+  // trackerKept, renamed: {old: new}, profileName, error}; error "noProfile",
+  // "sameProfile", "tracker" (only tracker cards asked for) or "nothing".
+  Q_INVOKABLE QVariantMap moveTasksToProfile(const QStringList& ids, const QString& profileId);
+
+  // The picker for `ids`, from wherever a task menu is (moveToProfileRequested).
+  Q_INVOKABLE void requestMoveToProfile(const QStringList& ids) {
+    emit moveToProfileRequested(ids);
+  }
   // Whether a profile other than `exceptId` is already called `name`
   // (ignoring case): the editor says so inline (IDIOT-SHELL-12).
   Q_INVOKABLE bool profileNameTaken(const QString& name, const QString& exceptId) const;
@@ -1773,6 +1832,10 @@ class AppController : public QObject {
   // Ids of the active profile's notes / doc pages whose title, folder or body
   // contain every word of `query` — what the list filters show.
   Q_INVOKABLE QStringList notesMatching(const QString& query) const;
+  // "In other profiles: 6 in Personal" for a filter that finds nothing here;
+  // "" when no other profile has a match either (A3-13).
+  Q_INVOKABLE QString matchesElsewhere(const QString& text) const;
+  QStringList notesMatchingExactly_(const QString& query) const;
   Q_INVOKABLE QStringList docPagesMatching(const QString& query) const;
 
   // ---- Backups ----
@@ -1834,6 +1897,9 @@ class AppController : public QObject {
   Q_INVOKABLE QString shortcutText(const QString& id) const;
   // Why a key cannot be bound (the system keeps it, Tab drives dialogs); "".
   Q_INVOKABLE QString reservedShortcutReason(const QString& sequence) const;
+  // A key every app uses for one thing (Ctrl+C, Backspace…): bindable, after
+  // a question; empty when it is free or the action's own default (A7-9).
+  Q_INVOKABLE QString commonShortcutWarning(const QString& id, const QString& sequence) const;
   // The action whose sequence starts with `sequence`, or that `sequence`
   // starts with (g and g b): such a key is refused, not swapped; "" when none.
   Q_INVOKABLE QString prefixShortcutConflict(const QString& id, const QString& sequence) const;
@@ -1893,6 +1959,10 @@ class AppController : public QObject {
   // Whether the step Ctrl+Z would take back next is the one that made task
   // \p id — undoing it deletes the task (IDIOT-DOC-17).
   Q_INVOKABLE bool undoWouldRemoveTask(const QString& id) const;
+  // Whether that step touches only notes, doc pages and the Docs catalogue:
+  // the bare "u" in Knowledge takes back nothing done on another screen
+  // (IDIOT-KNOW-5, A4-4).
+  Q_INVOKABLE bool undoIsKnowledgeOnly() const;
   Q_INVOKABLE void redo();
 
   Q_INVOKABLE void undoLastDeletion() {
@@ -2109,6 +2179,9 @@ class AppController : public QObject {
   // `profileId` is the profile the task lives in; the window switches there
   // only once the editor's unsaved edits are settled (PRES-1).
   void openTaskRequested(const QString& id, const QString& profileId);
+  // A card's menu asked for "Move to profile…" (A5-14): the window opens
+  // its picker for these tasks.
+  void moveToProfileRequested(const QStringList& ids);
   // "Open" on a meeting / standup reminder: the calendar at `date`, and the
   // event's editor when `eventId` names a stored event (APP-155).
   void openEventRequested(const QString& eventId, const QDate& date);
@@ -2231,6 +2304,12 @@ class AppController : public QObject {
   // toggleDone() says "Done: X" itself; the move's own "X → Done" would be a
   // second toast for the same action (DG-140).
   bool m_moveToastHeld = false;
+  // The recurrence note a held move toast leaves for toggleDone (A2-18).
+  QString m_heldRecursNote;
+  // "tomorrow, Tue, Oct 13" / "завтра, вт, 13 окт" for a toast.
+  QString dayWords_(const QDate& d) const;
+  // "6 h 10 min" / "6 ч 10 мин".
+  QString durationWords_(int secs) const;
   // Sound palette (APP-177): muted for CLI requests; a bulk move plays one
   // sound when the loop ends, not one per card — "done" if anything closed,
   // else "refuse" if a card was refused. -1: nothing pending.
@@ -2539,6 +2618,7 @@ class AppController : public QObject {
   QJsonObject buildStateHead();
   QVariantMap m_keychainProblem;
   bool m_whatsNewDue = false;
+  QString m_updatedFrom;
   void setStorageState(const QString& state, const QString& message);
   // state.json exists but could not be read: show the newest backup (or an
   // empty workspace) read-only and never write over the file.
@@ -2671,6 +2751,30 @@ class AppController : public QObject {
   // Drops the undo history of the workspace being left; a profile removal
   // stays (IDIOT-SHELL-2).
   void clearWorkspaceUndo();
+  // Each profile keeps its undo history while another one is active (A3-14,
+  // A5-7): a stray Ctrl ] must not make a delete final. Parked on leaving a
+  // workspace, put back on returning to it.
+  QHash<QString, heap::undo::UndoStack> m_parkedUndo;
+  void parkWorkspaceUndo(const QString& profileId);
+  // Is `key` some task's id or a tracker card's key in this workspace?
+  bool ticketKeyTaken(const QString& key) const;
+  QString taskIdForKey(const QString& key) const;
+  void restoreWorkspaceUndo(const QString& profileId);
+  // Runs a recorded move between profiles back (backward) or again, and
+  // rewrites the entry to say where the tasks are now. False when either
+  // profile is gone or nothing could move.
+  bool applyProfileMove_(heap::undo::Entry& entry, bool backward);
+  // The "+Profile name" in a line of capture (A5-21), against every profile.
+  heap::capture::ProfileSigil profileSigilIn(const QString& raw) const;
+  // The twin of a move entry on the other profile's parked stack goes when
+  // one side takes the move back (and comes back with a redo).
+  QString profileMoveOtherSide_(const heap::undo::Entry& entry) const;
+  // Moves `ids` from one profile to another (either may be the active one)
+  // and brings the live models in step. See profile/ProfileMove.h.
+  heap::profilemove::Result relocateTasks_(const QString& fromId,
+                                           const QString& toId,
+                                           const QStringList& ids,
+                                           heap::profilemove::Options opt);
 
   // Selection state
   QSet<QString> m_selectedTaskIds;

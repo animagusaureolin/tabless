@@ -96,6 +96,23 @@ TestCase {
         compare(t._queue.length, 2);
     }
 
+    // A5-19 follow-up: "Updated: 0.8.2 → 0.8.9 · What's new" carries an
+    // action, yet nothing is lost by missing it. An Undo raised during its ten
+    // seconds is shown at once instead of waiting behind it as "+1".
+    function test_yielding_action_toast_gives_way_to_an_undo() {
+        const t = make();
+        t.showWithAction("Updated: 0.8.2 → 0.8.9", "What's new", 10, function () {}, "info", "", true);
+        compare(t.count, 1);
+        t.showUndo("Deleted: RET-1", "Undo", 10, function () {});
+        compare(t.count, 1);
+        compare(t.message, "Deleted: RET-1", "the Undo is on screen");
+        compare(t.waiting, 0, "nothing waits behind the update notice");
+        // A plain action toast still holds its place.
+        t.showWithAction("Sync failed", "Retry", 10, function () {});
+        compare(t.message, "Deleted: RET-1");
+        compare(t.waiting, 1);
+    }
+
     // PERSONA-7: the Undo on screen is the one Ctrl+Z takes back — the newest.
     function test_newest_undo_replaces_an_older_one() {
         const t = make();
@@ -120,6 +137,27 @@ TestCase {
         compare(t.message, "Deleted: A");
         compare(t.actionLabel, "");
         compare(t._items[0].key, "");
+    }
+
+    // A1-21: Ctrl+Z took back the action an Undo toast names; the toast
+    // goes, and the notice waiting behind it shows.
+    function test_an_undone_action_takes_its_toast_away() {
+        const t = make();
+        t.showUndo("RD-21: Tue 14:30", "Undo", 10, function () {}, "success", "Ctrl Z", 7);
+        t.show("waiting", "info");
+        compare(t._queue.length, 1, "a plain notice waits behind the Undo");
+        t.retireUndone(7);
+        compare(t.message, "RD-21: Tue 14:30", "still the newest entry: it stays");
+        t.retireUndone(6);
+        compare(t.message, "waiting", "undone: the waiting notice shows instead");
+        compare(t._queue.length, 0);
+    }
+
+    // The default serial is the newest history entry's, read when it shows.
+    function test_undo_toast_remembers_the_entry_it_names() {
+        const t = make();
+        t.showUndo("Moved", "Undo", 10, function () {});
+        compare(t._items[0].serial, Number(AppController.undoSerialForToast()));
     }
 
     function test_width_is_capped_and_long_text_wraps() {

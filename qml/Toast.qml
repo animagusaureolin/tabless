@@ -120,9 +120,11 @@ Item {
             }
         }
         if (_items.length >= maxVisible) {
-            // Make room by retiring the oldest plain notice.
+            // Make room by retiring the oldest plain notice, or an action
+            // toast that only offers more to read ("Updated · What's new"):
+            // it held an Undo back for its ten seconds (A5-19).
             let drop = -1;
-            for (let i = 0; i < _items.length; i++) if (!_items[i].actionLabel) { drop = i; break; }
+            for (let i = 0; i < _items.length; i++) if (!_items[i].actionLabel || _items[i].yields) { drop = i; break; }
             if (drop < 0) { _queue = _queue.concat([entry]); return; }
             const next = _items.slice();
             next.splice(drop, 1);
@@ -138,17 +140,71 @@ Item {
                 ms: _duration(k || "info", 0, false), tag: tag || "" });
     }
     // `key`: the shortcut that does the action too, shown after it ("Ctrl Z").
-    function showWithAction(s, label, seconds, fn, k, key) {
+    // `yields`: a newcomer pushes it off as it would a plain notice — for an
+    // action nobody loses anything by missing.
+    // `relabel`: () => ({ message, actionLabel }), the same words in the
+    // language the app speaks now (see relanguage()).
+    function showWithAction(s, label, seconds, fn, k, key, yields, relabel) {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",
-                actionFn: fn, action2Label: "", action2Fn: null, key: key || "",
+                actionFn: fn, action2Label: "", action2Fn: null, key: key || "", yields: !!yields,
+                relabel: typeof relabel === "function" ? relabel : null,
                 ms: _duration(k || "info", seconds, !!label) });
+    }
+    // The language changed under the toasts: "Обновлено: 0.8.2 → 0.8.9" stayed
+    // up in an English UI (F3-EYES-19). A toast that can say it again does;
+    // the rest go. An Undo stays with its button in the new language: its
+    // words say what was done, and the button was the way back to it.
+    function relanguage() {
+        const can = function (e) { return typeof e.relabel === "function" || (e.undo && e.actionLabel !== ""); };
+        const again = function (e) {
+            if (typeof e.relabel !== "function") {
+                e.actionLabel = I18n.t("undo.action");
+                return;
+            }
+            const r = e.relabel();
+            e.message = String(r.message);
+            if (r.actionLabel !== undefined) e.actionLabel = String(r.actionLabel);
+        };
+        const keep = _items.filter(can);
+        keep.forEach(again);
+        const wait = _queue.filter(can);
+        wait.forEach(again);
+        _queue = wait;
+        _items = keep;
+        _promote();
+    }
+    Connections {
+        target: I18n
+        function onLangChanged() { root.relanguage(); }
     }
     // An Undo for the action just done (Main.onUndoableToast): replaces an
     // older Undo on screen, and loses its action when the history goes.
-    function showUndo(s, label, seconds, fn, k, key) {
+    // `serial`: the history entry it names (by default the newest).
+    function showUndo(s, label, seconds, fn, k, key, serial) {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",
                 actionFn: fn, action2Label: "", action2Fn: null, key: key || "", undo: true,
+                serial: serial !== undefined ? Number(serial) : Number(AppController.undoSerialForToast()),
                 ms: _duration(k || "info", seconds, !!label) });
+    }
+    // Ctrl+Z took back what an Undo toast names (A1-21): it went on showing
+    // the change just undone, with an Undo link, while the "undone" notice
+    // waited behind it. History serials only grow, so a toast whose entry
+    // is newer than the top of the history names an undone action: it goes.
+    function retireUndone(top) {
+        const done = function (e) { return e.undo && e.serial > 0 && e.serial > top; };
+        const keep = _items.filter(function (e) { return !done(e); });
+        const wait = _queue.filter(function (e) { return !done(e); });
+        if (wait.length !== _queue.length) _queue = wait;
+        if (keep.length !== _items.length) {
+            _items = keep;
+            _promote();
+        }
+    }
+    Connections {
+        target: AppController
+        function onPendingUndoChanged() {
+            if (AppController.hasPendingUndo) root.retireUndone(Number(AppController.undoSerialForToast()));
+        }
     }
     // The undo history is gone (a profile switch, the action undone with
     // Ctrl+Z): an Undo toast that stays up offered a button that did nothing
@@ -156,6 +212,18 @@ Item {
     function dropUndo() {
         let changed = false;
         const strip = function (e) {
+            if (e.undo && e.undoSlot === 1 && e.action2Label) {
+                e.action2Label = "";
+                e.action2Fn = null;
+                changed = true;
+                return;
+            }
+            if (e.undo && e.undoSlot === 2 && e.action3Label) {
+                e.action3Label = "";
+                e.action3Fn = null;
+                changed = true;
+                return;
+            }
             if (!e.undo || !e.actionLabel) return;
             e.actionLabel = "";
             e.actionFn = null;
@@ -170,10 +238,14 @@ Item {
     // tracker" / "Archive" for a refused move (APP-204); open / in 15 min /
     // next free window on a task block's start (APP-256). Same look, same
     // clock: an action keeps it up at least ToastTiming.ACTION_MS.
-    function showWithActions(s, actions, seconds, k) {
+    // `undoSlot`: the index of the action that is an Undo of the newest
+    // action, if any: a newer Undo replaces the toast rather than waiting
+    // behind it (A2-28), and a lost history drops that action only.
+    function showWithActions(s, actions, seconds, k, undoSlot) {
         const a = actions || [];
         const label = a.length > 0 ? String(a[0].label) : "";
-        _push({ id: ++_seq, message: String(s), kind: k || "info",
+        const slot = typeof undoSlot === "number" && undoSlot >= 0 && undoSlot < a.length ? undoSlot : -1;
+        _push({ id: ++_seq, message: String(s), kind: k || "info", undo: slot >= 0, undoSlot: slot,
                 actionLabel: label, actionFn: a.length > 0 ? a[0].fn : null,
                 action2Label: a.length > 1 ? String(a[1].label) : "", action2Fn: a.length > 1 ? a[1].fn : null,
                 action3Label: a.length > 2 ? String(a[2].label) : "", action3Fn: a.length > 2 ? a[2].fn : null,

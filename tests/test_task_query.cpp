@@ -73,6 +73,13 @@ TEST(TaskQuery, StatusAndPriorityMatchCaseInsensitivelyAndAsSets) {
   EXPECT_FALSE(two.matches(mk(QStringLiteral("C"), QStringLiteral("todo"), QStringLiteral("P2"))));
 }
 
+// "з1" is "p1" typed in the Russian layout (A4-21).
+TEST(TaskQuery, PriorityShorthandInTheRussianLayout) {
+  const TaskQuery query = q(QString::fromUtf8("з1"));
+  EXPECT_TRUE(query.matches(mk(QStringLiteral("A"), QStringLiteral("todo"), QStringLiteral("P1"))));
+  EXPECT_FALSE(query.matches(mk(QStringLiteral("B"), QStringLiteral("todo"), QStringLiteral("P2"))));
+}
+
 TEST(TaskQuery, SeveralClausesAreAnded) {
   const TaskQuery query = q(QStringLiteral("status:prog priority:P0"));
   EXPECT_TRUE(query.matches(mk(QStringLiteral("A"), QStringLiteral("prog"), QStringLiteral("P0"))));
@@ -459,4 +466,74 @@ TEST(TaskQuery, IsArchivedAsksForTheArchivedCards) {
   EXPECT_TRUE(q(QStringLiteral("is:archived")).asksArchived());
   EXPECT_FALSE(q(QStringLiteral("-is:archived")).asksArchived());
   EXPECT_FALSE(q(QStringLiteral("is:open")).asksArchived());
+}
+
+// ─── 0.9 acceptance (APP-221, batch B4) ───
+
+TEST(TaskQuery, TwoPrioritiesMeanEither) {
+  // A1-25 / A3-12: a task has one priority, so "p0 p1" can only mean either.
+  // "з0,з1" is the list typed in the Russian layout (A4-21).
+  for(const QString& text : {QStringLiteral("p0 p1"),
+                             QStringLiteral("p0,p1"),
+                             QStringLiteral("priority:p0 priority:p1"),
+                             QString::fromUtf8("з0,з1"),
+                             QString::fromUtf8("p0,з1")}) {
+    const TaskQuery query = q(text);
+    EXPECT_TRUE(query.isQuery()) << text.toStdString();
+    EXPECT_TRUE(query.matches(mk(QStringLiteral("A"), QStringLiteral("todo"), QStringLiteral("P0")))) << text.toStdString();
+    EXPECT_TRUE(query.matches(mk(QStringLiteral("B"), QStringLiteral("todo"), QStringLiteral("P1")))) << text.toStdString();
+    EXPECT_FALSE(query.matches(mk(QStringLiteral("C"), QStringLiteral("todo"), QStringLiteral("P2")))) << text.toStdString();
+    EXPECT_TRUE(query.unknownClauses().isEmpty()) << text.toStdString();
+  }
+  // A negated priority still narrows.
+  EXPECT_FALSE(q(QStringLiteral("p0 -p0")).matches(mk(QStringLiteral("A"), QStringLiteral("todo"), QStringLiteral("P0"))));
+}
+
+TEST(TaskQuery, TwoStatusesMeanEither) {
+  const QVariantList statuses{QVariantMap{{"id", "todo"}, {"name", "To Do"}}, QVariantMap{{"id", "prog"}, {"name", "In Progress"}}};
+  const TaskQuery query = TaskQuery::compile(QStringLiteral("status:todo status:prog"), kToday, statuses);
+  EXPECT_TRUE(query.matches(mk(QStringLiteral("A"), QStringLiteral("todo"))));
+  EXPECT_TRUE(query.matches(mk(QStringLiteral("B"), QStringLiteral("prog"))));
+}
+
+TEST(TaskQuery, NoPriorityAndTrackerCards) {
+  // A1-26: priority:none, has:priority, is:tracker / is:local, source:jira.
+  const Task none = mk(QStringLiteral("N"), QStringLiteral("todo"), QString());
+  const Task rated = mk(QStringLiteral("R"), QStringLiteral("todo"), QStringLiteral("P1"));
+  Task jira = mk(QStringLiteral("J"));
+  jira.externalId = QStringLiteral("PLAT-1");
+  jira.externalProvider = QStringLiteral("jira");
+  EXPECT_TRUE(q(QStringLiteral("priority:none")).matches(none));
+  EXPECT_FALSE(q(QStringLiteral("priority:none")).matches(rated));
+  EXPECT_TRUE(q(QStringLiteral("priority:none")).unknownClauses().isEmpty());
+  EXPECT_TRUE(q(QStringLiteral("has:priority")).matches(rated));
+  EXPECT_FALSE(q(QStringLiteral("has:priority")).matches(none));
+  EXPECT_TRUE(q(QStringLiteral("is:tracker")).matches(jira));
+  EXPECT_FALSE(q(QStringLiteral("is:tracker")).matches(none));
+  EXPECT_TRUE(q(QStringLiteral("is:local")).matches(none));
+  EXPECT_TRUE(q(QStringLiteral("source:jira")).matches(jira));
+  EXPECT_FALSE(q(QStringLiteral("source:github")).matches(jira));
+  EXPECT_TRUE(q(QStringLiteral("is:tracker")).unknownClauses().isEmpty());
+}
+
+TEST(TaskQuery, YoReadsAsYe) {
+  // A3-11: «отчете» finds «отчёт».
+  EXPECT_EQ(q(QString::fromUtf8("ошибка в отчёте")).freeText(), QString::fromUtf8("ошибка в отчете"));
+  EXPECT_EQ(heap::query::foldSearch(QString::fromUtf8("Ёлка")), QString::fromUtf8("елка"));
+  EXPECT_TRUE(TaskModel::searchTextOf(mk(QString::fromUtf8("Отчёт"))).contains(QString::fromUtf8("отчет")));
+}
+
+TEST(TaskQuery, AWholeKeyIsMatchedAsAKey) {
+  // A3-23: SD-105 is not SD-1050.
+  EXPECT_TRUE(heap::query::textMatches(QStringLiteral("sd-105 title"), QStringLiteral("sd-105")));
+  EXPECT_TRUE(heap::query::textMatches(QStringLiteral("x sd-105"), QStringLiteral("sd-105")));
+  EXPECT_FALSE(heap::query::textMatches(QStringLiteral("sd-1050 title"), QStringLiteral("sd-105")));
+  EXPECT_TRUE(heap::query::textMatches(QStringLiteral("sd-1050 sd-105"), QStringLiteral("sd-105")));
+  // Ordinary words still match inside words.
+  EXPECT_TRUE(heap::query::textMatches(QStringLiteral("deployment"), QStringLiteral("deploy")));
+}
+
+TEST(TaskQuery, AProfileClauseIsReportedNotSwallowed) {
+  // A3-13: profile: cannot narrow one profile's board; it says so.
+  EXPECT_EQ(q(QStringLiteral("profile:Globex")).unknownClauses(), QStringList{QStringLiteral("profile:Globex")});
 }

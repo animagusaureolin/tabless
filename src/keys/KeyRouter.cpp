@@ -15,6 +15,9 @@ KeyRouter::KeyRouter(QObject* parent) : QObject(parent) {
   m_timeout.setSingleShot(true);
   m_timeout.setInterval(1000);
   connect(&m_timeout, &QTimer::timeout, this, &KeyRouter::cancel);
+  m_holdTimer.setSingleShot(true);
+  m_holdTimer.setInterval(0);
+  connect(&m_holdTimer, &QTimer::timeout, this, &KeyRouter::flushHeld);
   // A prefix waits for the next key where it was pressed: once the keyboard
   // is somewhere else, "g" then a click into the query ate the b of "bug"
   // (IDIOT-TASKS-17).
@@ -43,6 +46,7 @@ void KeyRouter::setEnabled(bool on) {
   m_enabled = on;
   if(!on) {
     cancel();
+    takeHeldText();
   }
   emit enabledChanged();
 }
@@ -79,7 +83,49 @@ void KeyRouter::setHoldUnlive(bool on) {
     return;
   }
   m_holdUnlive = on;
+  if(!on) {
+    flushHeld();
+  }
   emit holdUnliveChanged();
+}
+
+void KeyRouter::setTypingHoldMs(int ms) {
+  if(m_holdTimer.interval() == ms) {
+    return;
+  }
+  m_holdTimer.setInterval(ms);
+  emit typingHoldMsChanged();
+}
+
+void KeyRouter::flushHeld() {
+  m_holdTimer.stop();
+  if(m_heldChord.isEmpty()) {
+    return;
+  }
+  const QStringList ids = m_heldIds;
+  m_heldIds.clear();
+  m_heldChord.clear();
+  m_heldText.clear();
+  // A key held with nothing to act on (u with no history) stays swallowed.
+  if(!ids.isEmpty()) {
+    callHandler(ids, false);
+  }
+}
+
+void KeyRouter::holdKey(const QStringList& ids, const QString& chord, const QString& text) {
+  m_heldIds = ids;
+  m_heldChord = chord;
+  m_heldText = text;
+  m_holdTimer.start();
+}
+
+QString KeyRouter::takeHeldText() {
+  m_holdTimer.stop();
+  m_heldIds.clear();
+  m_heldChord.clear();
+  QString text;
+  text.swap(m_heldText);
+  return text;
 }
 
 void KeyRouter::setQtOwned(const QStringList& ids) {
@@ -108,6 +154,7 @@ void KeyRouter::setLayout(const QString& l) {
 
 void KeyRouter::cancel() {
   m_timeout.stop();
+  m_pendingText.clear();
   setPending(QString());
 }
 
@@ -188,11 +235,34 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
     emit chordPressed(chord);
   }
 
+  // A command key is waiting to see whether a word follows (A4-3).
+  if(!m_heldChord.isEmpty()) {
+    // The same key again is Vim's "dd", not a word: the command runs and
+    // this press goes on as a key of its own. Only a letter or digit
+    // carries the word on: "u[" is two dead keys, not a search.
+    if(!ke->isAutoRepeat() && m_holdUnlive && !focusTyping && typesText(ke) && ke->text().at(0).isLetterOrNumber() &&
+       chord != m_heldChord) {
+      const QString text = takeHeldText() + ke->text();
+      emit typedText(text);
+      return true;
+    }
+    if(ke->key() == Qt::Key_Escape) {
+      takeHeldText();
+      return true;
+    }
+    flushHeld();
+  }
+  // A letter or digit typed where type-to-search is live, and not a repeat:
+  // what may be the first letter of a word.
+  const bool wordLetter = m_holdUnlive && m_holdTimer.interval() > 0 && !focusTyping && !ke->isAutoRepeat() && typesText(ke) &&
+                          ke->text().at(0).isLetterOrNumber();
+
   if(!m_pending.isEmpty()) {
     if(ke->isAutoRepeat()) {
       return true;
     }
     const QString seq = m_pending + QStringLiteral(", ") + chord;
+    const QString prefixText = m_pendingText;
     cancel();
     if(ke->key() == Qt::Key_Escape) {
       return true;
@@ -204,11 +274,24 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
       }
     }
     if(!ids.isEmpty()) {
+      // "zap" typed on the board: z a would fold a column and search "p".
+      // A finished sequence waits as a single command letter does.
+      if(wordLetter) {
+        const QString live = callHandler(ids, true);
+        if(!live.isEmpty() && !heap::keys::isCursorMove(live)) {
+          holdKey(QStringList{live}, chord, prefixText + ke->text());
+          return true;
+        }
+      }
       callHandler(ids, false);
       return true;
     }
     // A second key that continues nothing is a key of its own: Ctrl+K after
-    // g opens the palette, d marks done (IDIOT-TASKS-17).
+    // g opens the palette, d marks done (IDIOT-TASKS-17). Where a word may
+    // be typed, the prefix's letter goes with it ("github").
+    if(wordLetter) {
+      m_heldText = prefixText;
+    }
   }
 
   // A single letter is the field's while the person types (keymap rule 1).
@@ -227,7 +310,10 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
   const bool prefixLive = !prefixed.isEmpty() && !callHandler(prefixed, true).isEmpty();
   if(prefixLive) {
     if(!ke->isAutoRepeat()) {
+      const QString held = m_heldText;
+      m_heldText.clear();
       setPending(chord);
+      m_pendingText = held + ke->text();
       m_timeout.start();
     }
     return true;
@@ -257,6 +343,29 @@ bool KeyRouter::decide(QKeyEvent* ke, bool focusTyping) {
       return true;
     }
   }
+  // Where type-to-search is live, a command letter waits a moment: the
+  // next letter typed inside the wait makes the two a word (A4-3). Moving
+  // the cursor runs at once, as it changes nothing.
+  if(wordLetter && !ids.isEmpty()) {
+    const QString live = callHandler(ids, true);
+    if(!live.isEmpty() && !heap::keys::isCursorMove(live)) {
+      holdKey(QStringList{live}, chord, m_heldText + ke->text());
+      return true;
+    }
+    // Nothing to act on (u with no history): swallowed as before, unless a
+    // word follows ("update" searched "pdate").
+    if(live.isEmpty()) {
+      holdKey(QStringList{}, chord, m_heldText + ke->text());
+      return true;
+    }
+  }
+  // A prefix and then a letter that is nobody's: both start the search.
+  if(wordLetter && ids.isEmpty() && !m_heldText.isEmpty()) {
+    const QString text = takeHeldText() + ke->text();
+    emit typedText(text);
+    return true;
+  }
+  m_heldText.clear();
   if(!callHandler(ids, false).isEmpty()) {
     return true;
   }
@@ -276,8 +385,11 @@ bool KeyRouter::typesText(const QKeyEvent* ke) {
 
 bool KeyRouter::eventFilter(QObject* watched, QEvent* event) {
   const QEvent::Type type = event->type();
-  if(type == QEvent::MouseButtonPress && !m_pending.isEmpty() && watched->isWindowType()) {
-    cancel();  // a click is somewhere else too (IDIOT-TASKS-17)
+  if(type == QEvent::MouseButtonPress && watched->isWindowType()) {
+    if(!m_pending.isEmpty()) {
+      cancel();  // a click is somewhere else too (IDIOT-TASKS-17)
+    }
+    flushHeld();
   }
   if(!m_enabled || (type != QEvent::ShortcutOverride && type != QEvent::KeyPress)) {
     return QObject::eventFilter(watched, event);

@@ -2,10 +2,13 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import TodoCpp
+import "TaskDates.js" as TaskDates
+import "EventRule.js" as EventRule
 
 Popup {
     PopupArrival { popup: root }
     id: root
+    objectName: "quick-capture-popup"
     // Standalone it is the whole window — there is nothing behind it to
     // dim or block, so no scrim.
     modal: !root.standalone
@@ -44,6 +47,10 @@ Popup {
     property var _rejected: []
     // The column the task goes to (APP-266 chip "Column").
     property string _status: "todo"
+    // The profile picked in the header's "in … v" menu: where the task goes,
+    // the app switching there only on submit, as the Ctrl N editor does. Esc
+    // leaves the app where it was (F1-new-7).
+    property string _pickedProfileId: ""
     property string _openStatus: ""
     // "+" on a column: the input, already pointed at that column.
     function openIn(statusId) {
@@ -207,6 +214,9 @@ Popup {
             "every:thu": "everyThu", "every:fri": "everyFri", "every:sat": "everySat",
             "every:sun": "everySun", "every:month": "monthly"
         };
+        // "раз в 2 недели", "по пн, ср" (B7).
+        const interval = TaskDates.intervalText(r);
+        if (interval.length > 0) return interval;
         const monthly = /^every:month:(\d+)$/.exec(String(r || ""));
         if (monthly) {
             const l = I18n.t("editor.recur.monthlyOn").arg(monthly[1]);
@@ -276,8 +286,8 @@ Popup {
         if (summary) root.captured(summary.title, summary.body, summary.taskId || "");
     }
 
-    // Ctrl+Enter adds and closes; Ctrl+Shift+Enter adds and stays open for
-    // the next one. Enter and Shift+Enter start a new line (APP-209): the
+    // Enter (and Ctrl+Enter) adds and closes; Ctrl+Shift+Enter adds and stays
+    // open for the next one. Shift+Enter starts a new line (APP-266): the
     // lines after the first are the task's description.
     function _submitFromKey(keep) {
         root.keepOpen = keep;
@@ -356,6 +366,8 @@ Popup {
         const draft = root._capTitle(AppController.quickTaskDraft(inputField.text, new Date(), root._rejected));
         draft.status = root._status;
         if (root.linkBranch && root._branch.length > 0) draft.branch = root._branch;
+        // Before the undo group: the step is recorded in the profile it lands in.
+        root._goToTarget(draft);
         // A meeting is a task and its calendar event: one undo step for both.
         AppController.beginUndoGroup(I18n.t("quick.undo").arg(draft.id));
         try {
@@ -364,6 +376,18 @@ Popup {
             AppController.endUndoGroup();
         }
     }
+
+    // "+Side project" in the line (A5-21): the task goes to that profile,
+    // the way the "в … ▾" menu above sends it — the app goes there first.
+    function _goToTarget(draft) {
+        const target = String(draft._targetProfileId || root._pickedProfileId || "");
+        if (target.length > 0 && target !== AppController.activeProfileId)
+            AppController.activeProfileId = target;
+    }
+    // The profile the header names: the one the line names, else the app's.
+    readonly property string _targetName: (root._parsed && root._parsed.profileName)
+                                          ? root._parsed.profileName
+                                          : (AppController.profileById(root._pickedProfileId || AppController.activeProfileId).name || "")
 
     function _submitTask(draft, kindEarly) {
         AppController.saveTask(draft);
@@ -398,6 +422,13 @@ Popup {
             ev.taskId    = draft.id;
             ev.date      = d;
             ev.attendees = attendees;
+            // "15:00 EST", "в 19:00 по Москве": the meeting is kept in that
+            // zone and follows its clocks; the task keeps the local time
+            // only (A6-7).
+            ev.tz        = root._parsed && root._parsed.whenTz ? String(root._parsed.whenTz) : "";
+            // "Team sync every 2 weeks on mon 15:00" + Also a meeting: the
+            // meeting repeats like its task, not once (F1-new-4).
+            ev.rrule     = EventRule.fromChrono(draft.recurrence || "");
             // The "// comment" tail rides along onto the meeting itself, not
             // just the linked task — it lands in the event's free-form context
             // so the note shows up on the calendar block too.
@@ -430,6 +461,13 @@ Popup {
     // "N tasks": each line its own task, read the same way.
     function _submitEachLine() {
         const lines = inputField.text.split("\n").filter(l => l.trim().length > 0);
+        // All of them go where the header says: the first line's "+Name".
+        let named = "";
+        for (const line of lines) {
+            named = AppController.captureParse(line, new Date(), []).profileId || "";
+            if (named) break;
+        }
+        root._goToTarget({ _targetProfileId: named });
         AppController.beginUndoGroup(I18n.t("capture.undo.many").arg(lines.length));
         let last = "";
         try {
@@ -498,6 +536,7 @@ Popup {
         _rejected = [];
         _status = _openStatus.length > 0 ? _openStatus : "todo";
         _openStatus = "";
+        _pickedProfileId = "";
         _pastedLines = false;
         _askLines = false;
         _prevNewlines = 0;
@@ -563,8 +602,8 @@ Popup {
                     spacing: Theme.spXs
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: I18n.t("capture.inProfile").arg(AppController.profileById(AppController.activeProfileId).name || "")
-                        color: profCA.hovered ? Theme.text : Theme.textMuted
+                        text: I18n.t("capture.inProfile").arg(root._targetName)
+                        color: profCA.hovered || !!(root._parsed && root._parsed.profileName) ? Theme.text : Theme.textMuted
                         Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsSm
@@ -581,7 +620,8 @@ Popup {
                 }
                 ClickArea {
                     id: profCA
-                    label: I18n.t("capture.inProfile").arg(AppController.profileById(AppController.activeProfileId).name || "")
+                    label: I18n.t("capture.inProfile").arg(root._targetName)
+                    tip: I18n.t("capture.inProfileHint")
                     enabled: AppController.profiles.length > 1
                     onActivated: profileMenu.popup(profRow, 0, profRow.height + Theme.spXs)
                 }
@@ -593,13 +633,17 @@ Popup {
                             id: profItem
                             required property var modelData
                             text: profItem.modelData.name
-                            marked: profItem.modelData.id === AppController.activeProfileId
-                            onTriggered: {
-                                AppController.activeProfileId = profItem.modelData.id;
-                                Qt.callLater(() => inputField.forceActiveFocus());
-                            }
+                            onTriggered: Qt.callLater(() => inputField.forceActiveFocus())
                         }
-                        onObjectAdded: (idx, obj) => profileMenu.insertItem(idx, obj)
+                        // The pick and its mark are wired here, in the file's
+                        // scope, not inside the delegate (qmllint unqualified).
+                        onObjectAdded: (idx, obj) => {
+                            profileMenu.insertItem(idx, obj);
+                            obj.marked = Qt.binding(() => obj.modelData.id === (root._pickedProfileId || AppController.activeProfileId));
+                            obj.triggered.connect(() => {
+                                root._pickedProfileId = obj.modelData.id === AppController.activeProfileId ? "" : obj.modelData.id;
+                            });
+                        }
                         onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
                     }
                 }
@@ -657,7 +701,7 @@ Popup {
                     // Every recognised word in the accent, as the sheet
                     // draws "завтра 11:00 p1" (R3-098).
                     colors: ({ when: Theme.accentStrong, due: Theme.accentStrong, estimate: Theme.accentStrong,
-                               priority: Theme.accentStrong, label: Theme.textMuted })
+                               priority: Theme.accentStrong, label: Theme.textMuted, profile: Theme.accentStrong })
                 }
                 onCursorPositionChanged: at.refresh()
 
@@ -672,6 +716,15 @@ Popup {
 
                 Keys.onPressed: (e) => {
                     const enter = e.key === Qt.Key_Return || e.key === Qt.Key_Enter;
+                    // Ctrl M: "also a meeting" from the keyboard; the chip was
+                    // mouse-only and Tab leaves for the document (A2-14).
+                    if (e.key === Qt.Key_M && (e.modifiers & Qt.ControlModifier) && !(e.modifiers & Qt.ShiftModifier)) {
+                        e.accepted = true;
+                        root._refreshPreview();
+                        if (meetingBox.visible) meetingBox.checked = !meetingBox.checked;
+                        else root._hint = I18n.t("capture.meeting.needTime");
+                        return;
+                    }
                     if (at.isOpen) {
                         if (e.key === Qt.Key_Down) {
                             at.moveSelection(+1);
@@ -697,6 +750,12 @@ Popup {
                             e.accepted = true;
                             return;
                         }
+                        // A partial "+Ли" is never a profile: plain Enter takes
+                        // the highlighted one and creates the task there, in
+                        // one key (F1-new-8). Labels and people keep the rule
+                        // above.
+                        if (enter && !(e.modifiers & (Qt.ControlModifier | Qt.ShiftModifier)) && at._trigger === "+")
+                            at.accept();
                         if (e.key === Qt.Key_Escape) {
                             at.dismiss();
                             e.accepted = true;
@@ -735,6 +794,7 @@ Popup {
                         root._refreshPreview();
                         const draft = AppController.quickTaskDraft(inputField.text, new Date(), root._rejected);
                         draft.status = root._status;
+                        root._goToTarget(draft);
                         inputField.clear();  // it goes on in the document, not as a draft
                         root.close();
                         root.openFullRequested(draft);
@@ -778,7 +838,11 @@ Popup {
                 small: false
                 removable: true
                 key: I18n.t("capture.when")
+                // The end of a range said with it ("23:00-01:00"), too.
+                readonly property bool _hasEnd: visible && root._preview.hasTime && !!root._preview.end
+                                                && !!root._preview.end.getTime && !isNaN(root._preview.end.getTime())
                 value: visible ? root._chipWhen(root._preview.start, root._preview.hasTime)
+                                 + (_hasEnd ? "–" + I18n.fmtTime(root._preview.end) : "")
                                  + (root._preview.whenPast ? " · " + I18n.t("capture.past") : "") : ""
                 valueColor: visible && root._preview.whenPast ? Theme.textDim : Theme.text
                 onRemoved: root.rejectSpan("when")
@@ -795,6 +859,16 @@ Popup {
                                  + (root._preview.duePast ? " · " + I18n.t("capture.past") : "") : ""
                 valueColor: visible && root._preview.duePast ? Theme.textDim : Theme.text
                 onRemoved: root.rejectSpan("due")
+            }
+            // A repeat said in the line, before Enter (A2-21): "каждый
+            // понедельник" read the same as a one-off "в понедельник".
+            PropertyChip {
+                outlined: true
+                objectName: "qc-repeat"
+                visible: !!(root._parsed && root._parsed.recurrence)
+                small: false
+                key: I18n.t("capture.repeat")
+                value: visible ? root._recurLabel(root._parsed.recurrence) : ""
             }
             PropertyChip {
                 outlined: true
@@ -816,6 +890,15 @@ Popup {
                 value: visible ? root._parsed.priority : ""
                 // Plain, as the sheet writes "приоритет P1" (R3-098).
                 valueColor: Theme.text
+            }
+            // "+Side project" (A5-21): the profile the task goes to.
+            PropertyChip {
+                outlined: true
+                objectName: "qc-profile-chip"
+                visible: !!(root._parsed && root._parsed.profileName)
+                small: false
+                key: I18n.t("capture.profile")
+                value: visible ? root._parsed.profileName : ""
             }
             Repeater {
                 model: (root._parsed && root._parsed.labels) || []
@@ -881,7 +964,7 @@ Popup {
                 id: ticketCA
                 label: parent.text
                 onActivated: {
-                    const id = root._parsed.ticketKey;
+                    const id = root._parsed.ticketTakenId || root._parsed.ticketKey;
                     root.close();
                     root.openTaskRequested(id);
                 }
@@ -936,7 +1019,15 @@ Popup {
                 Layout.fillWidth: true
                 spacing: Theme.sp2xl
                 Repeater {
-                    model: I18n.t("capture.hints").split(" · ")
+                    // Tab (the document) and Ctrl M (a meeting) are said where
+                    // they work: Tab opened the document unannounced (A2-14).
+                    model: {
+                        const keys = I18n.t("capture.hints").split(" · ");
+                        const extra = [];
+                        if (meetingBox.visible) extra.push(I18n.t("capture.hint.meeting"));
+                        if (!root.standalone) extra.push(I18n.t("capture.hint.tab"));
+                        return keys.slice(0, keys.length - 1).concat(extra).concat(keys.slice(keys.length - 1));
+                    }
                     delegate: Text {
                         required property string modelData
                         text: modelData
@@ -972,5 +1063,6 @@ Popup {
     MentionAutocomplete {
         id: at
         target: inputField
+        enableProfiles: true
     }
 }

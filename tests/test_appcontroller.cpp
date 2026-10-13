@@ -14,6 +14,7 @@
 #include "integrations/AutoSync.h"
 #include "integrations/IntegrationTypes.h"
 #include "local/Effective.h"
+#include "recur/RecurrenceEngine.h"
 #include "views/UiScale.h"
 
 #include <QApplication>
@@ -1177,6 +1178,121 @@ TEST_F(AppControllerTest, RecurringScheduledOnlyTaskKeepsAnInvalidDueDate) {
     }
   }
   EXPECT_TRUE(foundNext);
+}
+
+// B7: an interval repeat rolls from the task's own date, every n of them.
+TEST_F(AppControllerTest, CompletingAnIntervalRepeatSpawnsItNIntervalsOn) {
+  const QDate today = QDate::currentDate();
+
+  struct Case {
+    const char* rule;
+    QDate next;
+  };
+
+  const Case cases[] = {{"every:2:day", today.addDays(2)}, {"every:3:week", today.addDays(21)}, {"every:2:month", today.addMonths(2)}};
+  int n = 0;
+  for(const Case& c : cases) {
+    const QString id = QStringLiteral("INT-%1").arg(++n);
+    Task t = mkTask(id, QStringLiteral("Water plants"));
+    t.recurrence = QString::fromLatin1(c.rule);
+    t.scheduledAt = QDateTime(today, QTime(9, 0));
+    t.scheduledHasTime = true;
+    app_->tasks()->reset({t});
+    app_->moveTask(id, QStringLiteral("done"));
+    bool found = false;
+    for(const Task& x : app_->tasks()->items()) {
+      if(x.id != id) {
+        found = true;
+        EXPECT_EQ(x.scheduledAt, QDateTime(c.next, QTime(9, 0))) << c.rule;
+        // A monthly one keeps its day as the series rule (IDIOT-CAL-5).
+        EXPECT_EQ(x.recurrence, heap::recur::seriesRule(QString::fromLatin1(c.rule), today)) << c.rule;
+      }
+    }
+    EXPECT_TRUE(found) << c.rule;
+  }
+}
+
+// A list of days: Monday's done brings Wednesday's.
+TEST_F(AppControllerTest, CompletingADayListRepeatSpawnsTheNextDayOfIt) {
+  const QDate today = QDate::currentDate();
+  Task t = mkTask(QStringLiteral("DAYS-1"), QStringLiteral("Gym"));
+  t.recurrence = QStringLiteral("every:mon,wed");
+  t.scheduledAt = QDateTime(today, QTime(0, 0));
+  app_->tasks()->reset({t});
+  app_->moveTask(QStringLiteral("DAYS-1"), QStringLiteral("done"));
+  const QDate want = heap::recur::nextOccurrence(QStringLiteral("every:mon,wed"), today);
+  bool found = false;
+  for(const Task& x : app_->tasks()->items()) {
+    if(x.id != QStringLiteral("DAYS-1")) {
+      found = true;
+      EXPECT_EQ(x.scheduledAt.date(), want);
+      EXPECT_TRUE(want.dayOfWeek() == 1 || want.dayOfWeek() == 3);
+    }
+  }
+  EXPECT_TRUE(found);
+}
+
+// The editors' "Custom interval…" row reads words the way capture does.
+TEST_F(AppControllerTest, RecurrenceFromTextReadsARepeatOrNothing) {
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every 3 weeks")), QStringLiteral("every:3:week"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("3 weeks")), QStringLiteral("every:3:week"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every other day")), QStringLiteral("every:2:day"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("mon, wed")), QStringLiteral("every:mon,wed"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("пн, ср")), QStringLiteral("every:mon,wed"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("каждые 2 дня")), QStringLiteral("every:2:day"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("2 дня")), QStringLiteral("every:2:day"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("через день")), QStringLiteral("every:2:day"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("weekdays")), QStringLiteral("every:weekday"));
+  // Not a repeat, or one with words left over: nothing.
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("tomorrow")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every 2 weeks on the moon")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("banana")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QString()), QString());
+  // B7 follow-up: a day of the month with an interval, and the half-reads.
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every 2 months on the 15th")), QStringLiteral("every:2:month:15"));
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("раз в 2 месяца 15-го")), QStringLiteral("every:2:month:15"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("15th")), QStringLiteral("every:month:15"));
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("weeks")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QString::fromUtf8("недели")), QString());
+  EXPECT_EQ(app_->recurrenceFromText(QStringLiteral("every 2 weeks on mon, wed")), QString());
+}
+
+// A2-25: the repeats ahead are worked out, never created; a finished or
+// archived task brings none, a task with no rule none.
+TEST_F(AppControllerTest, CalendarRepeatsAreComputedNotCreated) {
+  const QDate today = QDate::currentDate();
+  Task daily = mkTask(QStringLiteral("GH-1"), QStringLiteral("Check backups"));
+  daily.recurrence = QStringLiteral("every:day");
+  daily.scheduledAt = QDateTime(today, QTime(9, 30));
+  daily.scheduledHasTime = true;
+  Task done = mkTask(QStringLiteral("GH-2"), QStringLiteral("Old one"));
+  done.recurrence = QStringLiteral("every:day");
+  done.status = QStringLiteral("done");
+  done.scheduledAt = QDateTime(today, QTime(0, 0));
+  Task archived = mkTask(QStringLiteral("GH-3"), QStringLiteral("Archived"));
+  archived.recurrence = QStringLiteral("every:day");
+  archived.archived = true;
+  archived.scheduledAt = QDateTime(today, QTime(0, 0));
+  Task plain = mkTask(QStringLiteral("GH-4"), QStringLiteral("Once"));
+  plain.scheduledAt = QDateTime(today, QTime(0, 0));
+  Task undated = mkTask(QStringLiteral("GH-5"), QStringLiteral("No date"));
+  undated.recurrence = QStringLiteral("every:week");
+  app_->tasks()->reset({daily, done, archived, plain, undated});
+  const int rows = app_->tasks()->rowCount();
+
+  const QVariantList ghosts = app_->calendarRepeats(today.addDays(-3), today.addDays(3));
+  ASSERT_EQ(ghosts.size(), 3) << "tomorrow and the two days after, nothing before today or on it";
+  for(int i = 0; i < ghosts.size(); ++i) {
+    const QVariantMap g = ghosts.at(i).toMap();
+    EXPECT_EQ(g.value("id").toString(), QStringLiteral("GH-1"));
+    EXPECT_EQ(g.value("date").toDate(), today.addDays(i + 1));
+    EXPECT_EQ(g.value("day").toInt(), 4 + i);
+    EXPECT_TRUE(g.value("ghost").toBool());
+    EXPECT_TRUE(g.value("hasTime").toBool());
+    EXPECT_DOUBLE_EQ(g.value("hour").toDouble(), 9.5);
+  }
+  EXPECT_EQ(app_->tasks()->rowCount(), rows) << "nothing is created ahead";
+  EXPECT_TRUE(app_->calendarRepeats(today, today.addDays(-1)).isEmpty());
 }
 
 TEST_F(AppControllerTest, TemplateCreatesPrefilledChecklistTask) {
@@ -3523,6 +3639,135 @@ TEST_F(AppControllerTest, CarryToWindowsLinesTheSelectionUp) {
   EXPECT_EQ(app_->tasks()->items().at(0).scheduledAt, QDateTime(QDate(2026, 10, 8), QTime(18, 0)));
   EXPECT_EQ(app_->tasks()->items().at(1).scheduledAt, QDateTime(QDate(2026, 10, 9), QTime(9, 0)))
       << "the second one does not stack on the first, nor run past the working day";
+}
+
+// ─── 0.9 acceptance (APP-221, batch B4) ───
+
+namespace {
+Task trackerCard(const QString& id, const QString& key) {
+  Task t = mkTask(id, QStringLiteral("incident"));
+  t.externalId = key;
+  t.externalProvider = QStringLiteral("jira");
+  t.externalUrl = QStringLiteral("https://jira.example.com/browse/") + key;
+  return t;
+}
+}  // namespace
+
+TEST_F(AppControllerTest, ATrackerKeyIsNotGivenToANewLocalTask) {
+  // A3-7: INC-100 is OPS-1's Jira key; "INC-100 follow up" must not become a
+  // second task answering to INC-100.
+  app_->tasks()->reset({trackerCard(QStringLiteral("OPS-1"), QStringLiteral("INC-100"))});
+  const QVariantMap draft = app_->quickTaskDraft(QStringLiteral("INC-100 follow up"));
+  EXPECT_NE(draft.value("id").toString(), QStringLiteral("INC-100"));
+  EXPECT_TRUE(draft.value("title").toString().contains(QStringLiteral("INC-100")));
+  const QVariantMap parse = app_->captureParse(QStringLiteral("INC-100 follow up"));
+  EXPECT_TRUE(parse.value("ticketTaken").toBool());
+  EXPECT_EQ(parse.value("ticketTakenId").toString(), QStringLiteral("OPS-1"));
+}
+
+TEST_F(AppControllerTest, TheCommandLineNamesATicketByItsKeyAndPutsTheExactKeyFirst) {
+  // A3-10, A3-23: rows read the key the card shows; SD-105 is not SD-1050.
+  app_->tasks()->reset(
+      {trackerCard(QStringLiteral("SUP-1"), QStringLiteral("SD-1050")), trackerCard(QStringLiteral("SUP-2"), QStringLiteral("SD-105"))});
+  const QVariantMap r = app_->commandLine(QStringLiteral("SD-105"), 10);
+  const QVariantList tasks = r.value("tasks").toList();
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_EQ(tasks.first().toMap().value("id").toString(), QStringLiteral("SUP-2"));
+  EXPECT_EQ(tasks.first().toMap().value("key").toString(), QStringLiteral("SD-105"));
+  EXPECT_EQ(app_->displayKey(QStringLiteral("SUP-1")), QStringLiteral("SD-1050"));
+}
+
+TEST_F(AppControllerTest, StartingASecondTimerSaysTheFirstOneStopped) {
+  // A1-14: a 6-hour timer ended without a word.
+  app_->tasks()->reset({mkTask(QStringLiteral("FE-26"), QStringLiteral("a")), mkTask(QStringLiteral("FE-3"), QStringLiteral("b"))});
+  app_->startTaskTimer(QStringLiteral("FE-26"));
+  QSignalSpy undoable(app_.get(), &AppController::undoableToast);
+  app_->startTaskTimer(QStringLiteral("FE-3"));
+  ASSERT_EQ(undoable.count(), 1);
+  EXPECT_TRUE(undoable.first().first().toString().contains(QStringLiteral("FE-26")));
+  EXPECT_TRUE(undoable.first().first().toString().contains(QStringLiteral("stopped")));
+}
+
+TEST_F(AppControllerTest, DoneOnARecurringTaskIsOneToastWithTheNextDay) {
+  // A2-18, A2-19: the note on the next copy was replaced at once by "Done",
+  // and it read an ISO date and the copy's "-r1" id.
+  Task t = mkTask(QStringLiteral("DBA-21"), QStringLiteral("check backups"));
+  t.recurrence = QStringLiteral("every:day");
+  t.scheduledAt = QDateTime(QDate::currentDate(), QTime(9, 0));
+  app_->tasks()->reset({t});
+  QSignalSpy plain(app_.get(), &AppController::toast);
+  QSignalSpy undoable(app_.get(), &AppController::undoableToast);
+  app_->toggleDone({QStringLiteral("DBA-21")});
+  ASSERT_EQ(undoable.count(), 1);
+  const QString msg = undoable.first().first().toString();
+  EXPECT_TRUE(msg.contains(QStringLiteral("Done: DBA-21"))) << msg.toStdString();
+  EXPECT_TRUE(msg.contains(QStringLiteral("next one tomorrow"))) << msg.toStdString();
+  EXPECT_FALSE(msg.contains(QStringLiteral("-r1"))) << msg.toStdString();
+  EXPECT_FALSE(msg.contains(QDate::currentDate().addDays(1).toString(Qt::ISODate))) << msg.toStdString();
+  for(const QList<QVariant>& args : plain) {
+    EXPECT_FALSE(args.first().toString().contains(QStringLiteral("next one"))) << "said once, in the Done toast";
+  }
+}
+
+TEST_F(AppControllerTest, ArchivingNamesTheKeyForDone) {
+  // A5-20: e is "complete" in Todoist; here it archives — and says what d is.
+  app_->tasks()->reset({mkTask(QStringLiteral("MOB-3"), QStringLiteral("a"))});
+  QSignalSpy undoable(app_.get(), &AppController::undoableToast);
+  app_->setArchived(QStringLiteral("MOB-3"), true);
+  ASSERT_EQ(undoable.count(), 1);
+  EXPECT_TRUE(undoable.first().first().toString().contains(QStringLiteral("done is"))) << undoable.first().first().toString().toStdString();
+}
+
+TEST_F(AppControllerTest, ACommonKeyAsksBeforeItIsTaken) {
+  // A7-9: Ctrl+C copies everywhere else; binding it asks first.
+  EXPECT_FALSE(app_->commonShortcutWarning(QStringLiteral("task.copyId"), QStringLiteral("Ctrl+C")).isEmpty());
+  EXPECT_FALSE(app_->commonShortcutWarning(QStringLiteral("task.copyId"), QStringLiteral("Backspace")).isEmpty());
+  EXPECT_TRUE(app_->commonShortcutWarning(QStringLiteral("task.copyId"), QStringLiteral("Ctrl+K")).isEmpty());
+}
+
+TEST_F(AppControllerTest, NotesAndDocsAreNamedAsTheSidebarNamesThem) {
+  // A1-31, A6-27, A7-10: "Go to Notes", and Docs has a key.
+  EXPECT_EQ(app_->shortcutLabel(QStringLiteral("section.knowledge")), QStringLiteral("Go to Notes"));
+  EXPECT_FALSE(app_->shortcutText(QStringLiteral("view.docs")).isEmpty());
+}
+
+// A5-8: carrying overdue tasks moves the plan date only; the toast says the
+// deadline keeps them overdue, "clear" with nothing to clear says so, and
+// "clearDue" removes a local deadline by name (never a tracker's).
+TEST_F(AppControllerTest, CarryOverdueByDeadlineSaysSo) {
+  const QDateTime now(QDate(2026, 10, 8), QTime(18, 0));
+  Task a = mkTask(QStringLiteral("T-1"), QStringLiteral("T-1"));
+  a.dueAt = QDateTime(QDate(2026, 10, 1), QTime(0, 0));
+  Task b = mkTask(QStringLiteral("T-2"), QStringLiteral("T-2"));
+  b.dueAt = QDateTime(QDate(2026, 10, 2), QTime(0, 0));
+  b.externalId = QStringLiteral("9");
+  b.externalProvider = QStringLiteral("jira");
+  app_->tasks()->reset({a, b});
+  QStringList toasts;
+  QObject::connect(app_.get(), &AppController::undoableToast, [&](const QString& m, int) {
+    toasts << m;
+  });
+  QObject::connect(app_.get(), &AppController::toast, [&](const QString& m, const QString&) {
+    toasts << m;
+  });
+
+  EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1"), QStringLiteral("T-2")}, QStringLiteral("tomorrow"), now), 2);
+  ASSERT_FALSE(toasts.isEmpty());
+  EXPECT_TRUE(toasts.last().contains(QStringLiteral("2 still overdue"))) << toasts.last().toStdString();
+  EXPECT_TRUE(app_->tasks()->items().at(0).dueAt.isValid()) << "carrying never touches the deadline";
+
+  app_->undo();
+  toasts.clear();
+  EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1"), QStringLiteral("T-2")}, QStringLiteral("clear"), now), 0);
+  ASSERT_EQ(toasts.size(), 1) << "nothing changed is said, not silent";
+  EXPECT_TRUE(toasts.first().contains(QStringLiteral("deadline")));
+
+  toasts.clear();
+  EXPECT_EQ(app_->carryTasksAt({QStringLiteral("T-1"), QStringLiteral("T-2")}, QStringLiteral("clearDue"), now), 1);
+  EXPECT_FALSE(app_->tasks()->items().at(0).dueAt.isValid());
+  EXPECT_TRUE(app_->tasks()->items().at(1).dueAt.isValid()) << "a tracker's deadline stays the tracker's";
+  app_->undo();
+  EXPECT_TRUE(app_->tasks()->items().at(0).dueAt.isValid()) << "one undo step";
 }
 
 TEST_F(AppControllerTest, CarryWithAnUnknownModeDoesNothing) {

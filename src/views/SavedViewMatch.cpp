@@ -28,7 +28,7 @@ bool accepts(const CompiledView& c, const Task& t, const QString& haystack) {
   if(!c.priorities.isEmpty() && !c.priorities.contains(heap::local::effectivePriority(t))) {
     return false;
   }
-  if(!c.freeText.isEmpty() && !haystack.contains(c.freeText)) {
+  if(!heap::query::textMatches(haystack, c.freeText)) {
     return false;
   }
   return !c.query.isQuery() || c.query.matches(t, haystack);

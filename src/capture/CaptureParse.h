@@ -34,6 +34,10 @@ struct Parsed {
   bool whenHasTime = false;
   // The end of a time range said with it ("16:00-16:45"): a meeting's length.
   QDateTime whenEnd;
+  // The zone the time was said in ("15:00 EST", "по Москве"), as an id
+  // CalEvent::tz keeps; empty when none was. `when` is already local: a task
+  // keeps no zone, a meeting may keep this one (A6-7).
+  QString whenZone;
   // Already behind `now` ("вчера"): allowed, shown greyed.
   bool whenPast = false;
   // A date after a deadline word ("до пятницы", "к 15:00", "due fri", "by
@@ -59,5 +63,23 @@ int estimateMinutes(QStringView token);
 // recognised phrases (Span::text) the person took back with the chip's ×:
 // they stay words in the title.
 Parsed parse(const QString& text, const heap::chrono::ChronoParser& chrono, const QDateTime& now, const QStringList& rejected = {});
+
+// The profile sigil (A5-21): "+Side project" names the profile a task goes
+// to, by the profile's whole name, any case. '#' stays a one-word label. A
+// '+word' that names no profile is just text.
+struct ProfileSigil {
+  int index = -1;  // into `names`; -1 = none
+  int start = -1;  // the '+'
+  int end = -1;    // one past the name
+  QString text;    // as typed, '+' included
+};
+
+// The first sigil in the first line of `text`, before any "//" note: a '+'
+// at the start or after a space, then the longest of `names` that follows,
+// ending the word. Pure.
+ProfileSigil findProfileSigil(const QString& text, const QStringList& names);
+
+// `text` without the sigil, the spaces around it closed up.
+QString withoutSigil(const QString& text, const ProfileSigil& sigil);
 
 }  // namespace heap::capture

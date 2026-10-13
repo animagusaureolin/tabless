@@ -340,6 +340,62 @@ TEST_F(StorageSafety, UndoAfterAProfileSwitchNeverTouchesTheOtherProfile) {
   EXPECT_FALSE(hasTask(app, "TASK-1")) << "A's deletion must not be undone into B";
 }
 
+TEST_F(StorageSafety, ACardWhoseColumnIsGoneLandsInTheFirstColumn) {
+  // A2-2: a status no column has hid the card on the board; a done card
+  // stays done.
+  writeRaw(statePath(), stateDoc({profileJson("a", {taskJson("QA-261", "c-deleted"), taskJson("QA-1", "todo")})}, "a"));
+  AppController app;
+  const int row = app.tasks()->indexOfId(QStringLiteral("QA-261"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app.tasks()->items().at(row).status, QStringLiteral("backlog"));
+  EXPECT_EQ(app.tasks()->items().at(app.tasks()->indexOfId(QStringLiteral("QA-1"))).status, QStringLiteral("todo"));
+}
+
+TEST_F(StorageSafety, ABuiltInStatusMissingFromTheColumnListIsKept) {
+  // An older profile's column list may lack a built-in status; the card's
+  // status is data and loading must not rewrite it (upgrade loses nothing).
+  QJsonObject profile = profileJson("a", {taskJson("QA-7", "review"), taskJson("QA-8", "prog"), taskJson("QA-9", "c-gone")});
+  profile["statuses"] = QJsonArray{QJsonObject{{"id", "todo"}, {"name", "To Do"}, {"category", "todo"}}};
+  writeRaw(statePath(), stateDoc({profile}, "a"));
+  AppController app;
+  EXPECT_EQ(app.tasks()->items().at(app.tasks()->indexOfId(QStringLiteral("QA-9"))).status, QStringLiteral("todo"))
+      << "an unknown status still lands in the first column";
+  EXPECT_EQ(app.tasks()->items().at(app.tasks()->indexOfId(QStringLiteral("QA-7"))).status, QStringLiteral("review"));
+  EXPECT_EQ(app.tasks()->items().at(app.tasks()->indexOfId(QStringLiteral("QA-8"))).status, QStringLiteral("prog"));
+}
+
+TEST_F(StorageSafety, AFilterThatFindsNothingHereSaysWhereItWould) {
+  // A3-13: "Taxes" from Acme names Personal instead of only "Nothing under".
+  writeRaw(statePath(),
+           stateDoc({profileJson("acme", {taskJson("ACM-1", "todo")}), profileJson("me", {taskJson("ME-106", "todo")})}, "acme"));
+  AppController app;
+  const QString where = app.matchesElsewhere(QStringLiteral("me-106"));
+  EXPECT_TRUE(where.contains(QStringLiteral("ME"))) << where.toStdString();
+  EXPECT_TRUE(where.contains(QStringLiteral("1"))) << where.toStdString();
+  EXPECT_TRUE(app.matchesElsewhere(QStringLiteral("zzqnothing")).isEmpty());
+}
+
+TEST_F(StorageSafety, AProfileKeepsItsUndoAcrossASwitchAndBack) {
+  // A3-14 / A5-7: delete, Ctrl ], Ctrl [, u — the delete must not be final.
+  writeRaw(statePath(), stateDoc({profileJson("a", {taskJson("TASK-1", "todo")}), profileJson("b", {taskJson("TASK-2", "todo")})}, "a"));
+  AppController app;
+  app.deleteTask(QStringLiteral("TASK-1"));
+  ASSERT_TRUE(app.hasPendingUndo());
+  app.setActiveProfileId(QStringLiteral("b"));
+  EXPECT_FALSE(app.hasPendingUndo()) << "B has nothing of A's to undo";
+  app.setActiveProfileId(QStringLiteral("a"));
+  EXPECT_TRUE(app.hasPendingUndo()) << "A's history comes back with A";
+  app.undo();
+  EXPECT_TRUE(hasTask(app, "TASK-1"));
+  // And B's own history survives a visit to A as well.
+  app.setActiveProfileId(QStringLiteral("b"));
+  app.deleteTask(QStringLiteral("TASK-2"));
+  app.setActiveProfileId(QStringLiteral("a"));
+  app.setActiveProfileId(QStringLiteral("b"));
+  app.undo();
+  EXPECT_TRUE(hasTask(app, "TASK-2"));
+}
+
 // ── TASKS-1/31, UX-32: task ids ──
 
 TEST_F(StorageSafety, IdsStartAtOneAreNeverReusedAndNeverCollideAcrossProfiles) {

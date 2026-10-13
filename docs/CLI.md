@@ -7,13 +7,14 @@ closed, Tabless reads and saves `state.json` itself. Nothing here talks to the n
 
 ```sh
 tabless add "fix login tomorrow 14:00 p1 #backend // check the refresh token"   # read like quick capture
+tabless add "call vendor +Globex"   # +Profile adds it there (an explicit --profile wins)
 tabless now                    # the task with a running timer, else the one your git branch names
 tabless list --status prog     # also --profile <name>, --json
 tabless today                  # overdue first, then in progress, scheduled or due today
 tabless done APP-12
 tabless open APP-12            # show it in the window (starts Tabless if it is closed)
 tabless sched . tomorrow 14:00 # plan it for a day ("." = the task your git branch names); "none" clears
-tabless due APP-12 fri         # its deadline; on a tracker card it is your own date, the tracker keeps its own
+tabless due APP-12 fri         # its due date; on a tracker card it is your own date, the tracker keeps its own
 tabless est . 1h30m            # the estimate; "none" clears
 tabless someday APP-12         # park it (and "someday APP-12 off" to take it back)
 tabless help
@@ -22,7 +23,7 @@ tabless help
 Each change answers with one line of fact in the app's language (`--json` gives the task instead).
 
 `tabless now` prints nothing and exits 0 when there is no current task, so it fits a shell prompt.
-`--format` takes `{id} {title} {status} {priority} {profile} {source} {elapsed}`:
+`--format` takes `{id} {key} {title} {status} {priority} {profile} {source} {elapsed}`:
 
 ```toml
 # starship.toml

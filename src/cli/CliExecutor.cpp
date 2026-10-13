@@ -70,7 +70,7 @@ Response taskResult(const AppController& c, const QString& taskId, const QString
   if(json) {
     r.out = QString::fromUtf8(QJsonDocument(taskJson(p, t, now)).toJson(QJsonDocument::Indented));
   } else {
-    r.out = cliText(key, after.language).arg(t.id, t.title) + QChar('\n');
+    r.out = cliText(key, after.language).arg(shownKey(t), t.title) + QChar('\n');
   }
   return r;
 }
@@ -87,20 +87,38 @@ Response add(AppController& c, const Request& req, const QDateTime& now) {
     toasts << message;
   });
   QString id;
+  QString note;  // stderr: a "+Name" that --profile overrode
+  // "+Globex" in the text sends the task there, as quick capture does
+  // (F1-new-2); an explicit --profile wins and says so.
+  int target = pi;
   {
-    const ProfileScope scope(c, before.profiles.at(pi).id, /*restore=*/true);
-    const QVariantMap draft = c.quickTaskDraft(req.text, now);
+    const ProfileScope probe(c, before.profiles.at(pi).id, /*restore=*/true);
+    const QString named = c.quickTaskDraft(req.text, now).value(QStringLiteral("_targetProfileId")).toString();
+    const int ni = named.isEmpty() ? -1 : findProfile(before, named);
+    if(ni >= 0 && ni != pi) {
+      if(req.profile.isEmpty()) {
+        target = ni;
+      } else {
+        note = cliText(QStringLiteral("profileWins"), before.language).arg(before.profiles.at(ni).name, before.profiles.at(pi).name) +
+               QChar('\n');
+      }
+    }
+  }
+  {
+    const ProfileScope scope(c, before.profiles.at(target).id, /*restore=*/true);
+    QVariantMap draft = c.quickTaskDraft(req.text, now);
     if(draft.value(QStringLiteral("title")).toString().trimmed().isEmpty()) {
       return failure(kExitUsage, QStringLiteral("nothing to add: '%1' has no title besides the date").arg(req.text));
     }
+    draft.remove(QStringLiteral("_targetProfileId"));
     id = draft.value(QStringLiteral("id")).toString();
     if(!c.saveTask(draft)) {
       return failure(kExitData, QStringLiteral("could not add the task: %1").arg(reasons(toasts, QStringLiteral("refused"))));
     }
   }
-  // The task lives in profile `pi`, whichever one is active now.
+  // The task lives in profile `target`, whichever one is active now.
   const Snapshot after = snapshotOf(c);
-  const int api = findProfile(after, before.profiles.at(pi).id);
+  const int api = findProfile(after, before.profiles.at(target).id);
   if(api >= 0) {
     const ProfileData& p = after.profiles.at(api);
     for(const Task& t : p.tasks) {
@@ -108,10 +126,14 @@ Response add(AppController& c, const Request& req, const QDateTime& now) {
         continue;
       }
       Response r;
+      r.err = note;
       if(req.json) {
         r.out = QString::fromUtf8(QJsonDocument(taskJson(p, t, now)).toJson(QJsonDocument::Indented));
+      } else if(target != pi) {
+        // Not where it would have gone without "+Name": say where it went.
+        r.out = cliText(QStringLiteral("addedTo"), after.language).arg(shownKey(t), p.name, t.title) + QChar('\n');
       } else {
-        r.out = cliText(QStringLiteral("added"), after.language).arg(t.id, t.title) + QChar('\n');
+        r.out = cliText(QStringLiteral("added"), after.language).arg(shownKey(t), t.title) + QChar('\n');
       }
       return r;
     }
@@ -150,9 +172,9 @@ Response done(AppController& c, const Request& req, const QDateTime& now) {
     moved = moved_ref.found() && after.profiles.at(moved_ref.profile).tasks.at(moved_ref.task).status == target;
   }
   if(!moved) {
-    return failure(
-        kExitData,
-        QStringLiteral("could not move %1 to %2: %3").arg(id, statusName(p.statuses, target), reasons(toasts, QStringLiteral("refused"))));
+    return failure(kExitData,
+                   QStringLiteral("could not move %1 to %2: %3")
+                       .arg(shownKey(t), statusName(p.statuses, target), reasons(toasts, QStringLiteral("refused"))));
   }
   return taskResult(c, id, QStringLiteral("done"), req.json, now);
 }
@@ -166,12 +188,13 @@ Response open(AppController& c, const Request& req) {
   }
   const ProfileData& p = s.profiles.at(ref.profile);
   const QString id = p.tasks.at(ref.task).id;
+  const QString name = shownKey(p.tasks.at(ref.task));
   // Opening a task of another profile is going there.
   const ProfileScope scope(c, p.id, /*restore=*/false);
   emit c.openTaskRequested(id, p.id);
   Response r;
   r.out = req.json ? QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("id"), id}}).toJson(QJsonDocument::Compact)) + QChar('\n')
-                   : cliText(QStringLiteral("opened"), s.language).arg(id) + QChar('\n');
+                   : cliText(QStringLiteral("opened"), s.language).arg(name) + QChar('\n');
   return r;
 }
 
@@ -232,7 +255,8 @@ bool isNone(const QString& v) {
   return v.compare(QLatin1String("none"), Qt::CaseInsensitive) == 0 || v == QStringLiteral("нет");
 }
 
-Response setDate(AppController& c, const Request& req, const QString& id, const QDateTime& now) {
+// `name` is what the line calls the task: its tracker key when it has one.
+Response setDate(AppController& c, const Request& req, const QString& id, const QString& name, const QDateTime& now) {
   const bool due = req.verb == Verb::Due;
   const QString field = due ? QStringLiteral("due") : QStringLiteral("scheduled");
   QDateTime when;
@@ -250,11 +274,12 @@ Response setDate(AppController& c, const Request& req, const QString& id, const 
   c.setSoundMuted(false);
   QString line;
   if(!changed) {
-    line = cliText(QStringLiteral("unchanged"), language).arg(id);
+    line = cliText(QStringLiteral("unchanged"), language).arg(name);
   } else if(!when.isValid()) {
-    line = cliText(due ? QStringLiteral("dueCleared") : QStringLiteral("schedCleared"), language).arg(id);
+    line = cliText(due ? QStringLiteral("dueCleared") : QStringLiteral("schedCleared"), language).arg(name);
   } else {
-    line = cliText(due ? QStringLiteral("due") : QStringLiteral("sched"), language).arg(id, humanDate(when, hasTime, language, now.date()));
+    line =
+        cliText(due ? QStringLiteral("due") : QStringLiteral("sched"), language).arg(name, humanDate(when, hasTime, language, now.date()));
   }
   if(changed && due && tracker) {
     line += QStringLiteral(" (") + cliText(QStringLiteral("dueMine"), language) + QChar(')');
@@ -264,7 +289,7 @@ Response setDate(AppController& c, const Request& req, const QString& id, const 
 
 // Estimate and someday go through saveTask with the task's own draft, as the
 // editor saves them: same undo step, same "someday files it under Backlog".
-Response saveField(AppController& c, const Request& req, const QString& id, const QDateTime& now) {
+Response saveField(AppController& c, const Request& req, const QString& id, const QString& name, const QDateTime& now) {
   QVariantMap draft = c.taskById(id);
   const QString language = c.language();
   QString line;
@@ -276,16 +301,16 @@ Response saveField(AppController& c, const Request& req, const QString& id, cons
     }
     changed = draft.value(QStringLiteral("estimateMinutes")).toInt() != minutes;
     draft.insert(QStringLiteral("estimateMinutes"), minutes);
-    line = minutes == 0 ? cliText(QStringLiteral("estCleared"), language).arg(id)
-                        : cliText(QStringLiteral("est"), language).arg(id, humanMinutes(minutes, language));
+    line = minutes == 0 ? cliText(QStringLiteral("estCleared"), language).arg(name)
+                        : cliText(QStringLiteral("est"), language).arg(name, humanMinutes(minutes, language));
   } else {
     const bool on = req.value != QLatin1String("off");
     changed = draft.value(QStringLiteral("someday")).toBool() != on;
     draft.insert(QStringLiteral("someday"), on);
-    line = cliText(on ? QStringLiteral("someday") : QStringLiteral("somedayOff"), language).arg(id);
+    line = cliText(on ? QStringLiteral("someday") : QStringLiteral("somedayOff"), language).arg(name);
   }
   if(!changed) {
-    return changeResult(c, id, cliText(QStringLiteral("unchanged"), language).arg(id), false, req.json, now);
+    return changeResult(c, id, cliText(QStringLiteral("unchanged"), language).arg(name), false, req.json, now);
   }
   draft.insert(QStringLiteral("_originalId"), id);
   QStringList toasts;
@@ -297,7 +322,24 @@ Response saveField(AppController& c, const Request& req, const QString& id, cons
   const bool saved = c.saveTask(draft);
   c.setSoundMuted(false);
   if(!saved) {
-    return failure(kExitData, QStringLiteral("could not change %1: %2").arg(id, reasons(toasts, QStringLiteral("refused"))));
+    return failure(kExitData, QStringLiteral("could not change %1: %2").arg(name, reasons(toasts, QStringLiteral("refused"))));
+  }
+  // Someday files a task under Backlog, and taking it back leaves it there:
+  // the line says where it is rather than leave that to be found (A3-18).
+  if(req.verb == Verb::Someday) {
+    const QString was = draft.value(QStringLiteral("status")).toString();
+    const QString is = c.taskById(id).value(QStringLiteral("status")).toString();
+    QString name = is;
+    for(const QVariant& v : c.statuses()) {
+      if(v.toMap().value(QStringLiteral("id")).toString() == is) {
+        name = v.toMap().value(QStringLiteral("name")).toString();
+      }
+    }
+    if(is != was) {
+      line += cliText(QStringLiteral("column"), language).arg(name);
+    } else if(req.value == QLatin1String("off") && is == QLatin1String("backlog")) {
+      line += cliText(QStringLiteral("stays"), language).arg(name);
+    }
   }
   return changeResult(c, id, line, true, req.json, now);
 }
@@ -313,11 +355,12 @@ Response plan(AppController& c, const Request& req, const QDateTime& now) {
   }
   const ProfileData& p = before.profiles.at(ref.profile);
   const QString id = p.tasks.at(ref.task).id;
+  const QString name = shownKey(p.tasks.at(ref.task));
   const ProfileScope scope(c, p.id, /*restore=*/true);
   if(req.verb == Verb::Sched || req.verb == Verb::Due) {
-    return setDate(c, req, id, now);
+    return setDate(c, req, id, name, now);
   }
-  return saveField(c, req, id, now);
+  return saveField(c, req, id, name, now);
 }
 
 }  // namespace

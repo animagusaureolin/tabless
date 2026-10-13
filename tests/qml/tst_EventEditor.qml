@@ -188,6 +188,54 @@ TestCase {
         AppController.deleteEvent(ev.id);
     }
 
+    // "9am-5pm" keeps each end's am/pm (A6-1), and "22:00-01:00" ends the
+    // next morning instead of being cut to the old length (A6-2).
+    function test_when_ranges_across_meridiem_and_midnight() {
+        const day = new Date();
+        day.setDate(day.getDate() + 431);
+        day.setHours(0, 0, 0, 0);
+        const ev = AppController.newEventDraft(22, day);
+        ev.title = "late sync probe";
+        ev.end = 23;
+        ev.date = day;
+        AppController.saveEvent(ev);
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.showForId(ev.id);
+        compare(ed.applyWhen("9am-5pm"), "");
+        compare(ed.startHour, 9);
+        compare(ed.endHour, 17);
+        compare(ed.applyWhen("11am-1pm"), "");
+        compare(ed.startHour, 11);
+        compare(ed.endHour, 13);
+        compare(ed.applyWhen("22:00-01:00"), "");
+        compare(ed.startHour, 22);
+        compare(ed.endHour, 1);
+        compare(ed._spanDays(), 1, "the meeting ends the next day");
+        const saved = AppController.eventById(ev.id);
+        compare(saved.start, 22);
+        compare(saved.end, 1);
+        compare(Qt.formatDate(saved.endDate, "yyyy-MM-dd"),
+                Qt.formatDate(new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1), "yyyy-MM-dd"));
+        // REG-2: a lone time keeps the 3 h across midnight; a same-day range
+        // typed after it is one morning again, not a 25-hour meeting.
+        compare(ed.applyWhen("23:00"), "");
+        compare(ed.startHour, 23);
+        compare(ed.endHour, 2);
+        compare(ed._spanDays(), 1);
+        compare(ed.applyWhen("10:00-11:30"), "");
+        compare(ed.startHour, 10);
+        compare(ed.endHour, 11.5);
+        compare(ed._spanDays(), 0, "the overnight end does not stick");
+        const oneDay = AppController.eventById(ev.id).endDate;
+        verify(!oneDay || !oneDay.getFullYear || Qt.formatDate(oneDay, "yyyy-MM-dd") === Qt.formatDate(day, "yyyy-MM-dd"),
+               "the saved meeting ends on its own day");
+        compare(ed.applyWhen("9:00"), "");
+        compare(ed.endHour, 10.5);
+        compare(ed._spanDays(), 0);
+        ed.close();
+        AppController.deleteEvent(ev.id);
+    }
+
     // The words of a rule, and what the one-line input takes out first.
     function test_rule_words() {
         const fri = new Date(2026, 9, 9);
@@ -196,12 +244,28 @@ TestCase {
             compare(EventRule.describe("FREQ=WEEKLY;INTERVAL=2", fri, I18n), "раз в 2 недели");
         }
         compare(EventRule.describe("", fri, I18n), I18n.t("event.repeat.none"));
-        const x = EventRule.extract("Ретро спринта пт 16:00 на 1 ч каждые 2 недели");
+        // F1-new-15: a month rule on a day names the day.
+        compare(EventRule.describe("FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15", fri, I18n),
+                I18n.count(2, "event.repeat.everyNMonths") + " · " + I18n.t("repeat.monthDay").arg("15"));
+        compare(EventRule.describe("FREQ=MONTHLY;BYMONTHDAY=1", fri, I18n),
+                I18n.t("event.repeat.monthly") + " · " + I18n.t("repeat.monthDay").arg("1"));
+        const x =EventRule.extract("Ретро спринта пт 16:00 на 1 ч каждые 2 недели");
         compare(x.rule, "FREQ=WEEKLY;INTERVAL=2");
         compare(x.minutes, 60);
         compare(x.text, "Ретро спринта пт 16:00");
         compare(EventRule.fromChrono("every:fri"), "FREQ=WEEKLY;BYDAY=FR");
         compare(EventRule.fromChrono("every:weekday"), "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR");
+        // B7: interval repeats and lists of days.
+        compare(EventRule.fromChrono("every:mon,wed"), "FREQ=WEEKLY;BYDAY=MO,WE");
+        compare(EventRule.fromChrono("every:2:day"), "FREQ=DAILY;INTERVAL=2");
+        compare(EventRule.fromChrono("every:3:week"), "FREQ=WEEKLY;INTERVAL=3");
+        compare(EventRule.fromChrono("every:2:month:15"), "FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15");
+        compare(EventRule.fromChrono("every:2:mon"), "");
+        if (I18n.lang === "ru")
+            compare(EventRule.describe("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH", fri, I18n), "раз в 2 недели · пн, чт");
+        // Words in the custom row's field read as a rule.
+        compare(EventRule.fromChrono(AppController.recurrenceFromText("every 3 weeks")), "FREQ=WEEKLY;INTERVAL=3");
+        compare(EventRule.fromChrono(AppController.recurrenceFromText("пн, ср")), "FREQ=WEEKLY;BYDAY=MO,WE");
     }
 
     // A new meeting comes from one line, with chips for what was read.
@@ -227,6 +291,21 @@ TestCase {
         compare(ev.title, "capture probe");
         compare(ev.rrule, "FREQ=WEEKLY;INTERVAL=2");
         AppController.deleteEvent(made);
+    }
+
+    // F3-EYES-17: the one-line input says how to commit and how to leave,
+    // as quick capture does.
+    function test_one_line_input_names_its_keys() {
+        const cap = make('import TodoCpp; EventCapture { }');
+        cap.openAt({ date: new Date(), start: 9, end: 10 });
+        tryVerify(() => cap.opened);
+        const row = findChild(cap.contentItem, "event-capture-keys-hint");
+        verify(row !== null && row.visible, "no key hint row");
+        const texts = [];
+        for (const c of row.children) if (c.text !== undefined) texts.push(c.text);
+        compare(texts.join(" · "), I18n.t("event.capture.hints"));
+        verify(row.height > 0);
+        cap.close();
     }
 
     // IDIOT-CAL-11: a meeting past midnight ends on the next day instead of

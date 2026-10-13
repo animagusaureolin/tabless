@@ -107,13 +107,24 @@ Item {
     }
 
     // A click on the view being followed takes it off: the filters go back
-    // to none, as they were before it was picked.
+    // to none, as they were before it was picked. Only while it is on
+    // screen as saved and unchanged: from Today its key turned it off and
+    // showed nothing (A1-27); there, and after the filter moved (A6-24), the
+    // key opens it.
     function toggle(id) {
-        if (id !== "" && id === root.activeId) { root.clear(); return true; }
+        if (id !== "" && id === root.activeId && !root.modified && root.shownAsSaved()) { root.clear(); return true; }
         return root.apply(id);
     }
+    // The active view is what the screen shows: a task view of its kind,
+    // with its filters untouched.
+    function shownAsSaved() {
+        if (!root.activeView) return false;
+        if (["board", "list", "week", "month"].indexOf(AppController.currentView) < 0) return false;
+        return !root.modified && root.currentState().view === root.activeView.view;
+    }
 
-    // Alt+N: the Nth view in the sidebar, 1-based; pressed again, off.
+    // The Nth view's key (its catalogue key, g 1…): the Nth view in the
+    // sidebar, 1-based; pressed again while it is shown, off.
     function applyAt(n) {
         const list = AppController.savedViews;
         if (n < 1 || n > list.length) return false;
@@ -162,7 +173,18 @@ Item {
     function openSave() {
         const s = root.currentState();
         nameDialog.targetId = "";
+        nameDialog.paletteQuery = false;
         nameDialog.openFor("save", root.suggestName(s), s.query || "", AppController.savedViews.length + 1);
+    }
+    // Ctrl S in the command line saves what it says, not the filter on
+    // screen, and leaves that filter alone, saved or cancelled (A3-15).
+    function openSaveQuery(query) {
+        const s = root.currentState();
+        s.query = String(query || "").trim();
+        s.priorities = [];
+        nameDialog.targetId = "";
+        nameDialog.paletteQuery = true;
+        nameDialog.openFor("save", root.suggestName(s), s.query, AppController.savedViews.length + 1);
     }
     function openRename(id) {
         const v = AppController.savedView(id);
@@ -197,6 +219,9 @@ Item {
     SavedViewNameDialog {
         id: nameDialog
         property string targetId: ""
+        // Opened from the command line: the view is its query alone and the
+        // filters on screen stay as they are.
+        property bool paletteQuery: false
         onNamed: (name) => {
             if (nameDialog.mode === "rename") {
                 AppController.renameSavedView(nameDialog.targetId, name);
@@ -213,13 +238,20 @@ Item {
             }
             const st = root.currentState();
             st.query = nameDialog.query.trim();
+            if (nameDialog.paletteQuery) {
+                st.priorities = [];
+                st.archived = false;
+                st.showDone = false;
+                AppController.saveView(name, st);
+                return;
+            }
             const id = AppController.saveView(name, st);
             if (id.length > 0) root.activeId = id;
         }
     }
     readonly property alias nameDialog: nameDialog
 
-    // Alt+1 … Alt+9.
+    // savedView.1 … savedView.9 (Ctrl 4… for the first six; g 1… is KeyRouter's).
     // An inline component does not see this file's ids, so each key is handed
     // the host it works for.
     component ViewKey: Shortcut {

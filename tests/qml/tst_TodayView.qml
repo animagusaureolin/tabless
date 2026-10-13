@@ -138,11 +138,12 @@ TestCase {
             verify(v.plain, "quiet is not plain");
             const m = v.rows.filter(r => r.kind === "meeting")[0];
             verify(!!m, "no meeting row");
-            compare(v._sub("meeting", m.block), [I18n.t("today.q.meeting"), I18n.fmtMinutes(30), "Zoom"].join(" · "));
+            // The type in the editor's words (A3-20): "team sync", not "meeting".
+            compare(v._sub("meeting", m.block), [v._typeName(m.block, true), I18n.fmtMinutes(30), "Zoom"].join(" · "));
             compare(findChild(v, "today-prev").border.width, 0, "quiet arrows are boxed");
             Style.apply("bold");
             verify(!v.plain);
-            compare(v._sub("meeting", m.block), [I18n.t("event.kind.meeting"), "Zoom"].join(" · "));
+            compare(v._sub("meeting", m.block), [v._typeName(m.block, false), "Zoom"].join(" · "));
             compare(findChild(v, "today-prev").border.width, 1);
         } finally {
             AppController.appSettingsJson = saved;

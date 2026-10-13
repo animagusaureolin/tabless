@@ -32,6 +32,18 @@ Button {
     // Tab focus only: a pill clicked with the mouse must not keep the keyboard
     // (the board cursor keys stand down while a tabbed-to control has it).
     focusPolicy: Qt.TabFocus
+    // A Controls Button presses on Space only; every other button in the app
+    // (ClickArea, ActionButton) also takes Return and the keypad Enter, and a
+    // dialog that opens with a pill focused promised Enter would answer it
+    // (A1-9, A7-1, A5-16).
+    Keys.onReturnPressed: (event) => root._pressByKey(event)
+    Keys.onEnterPressed: (event) => root._pressByKey(event)
+    function _pressByKey(event) {
+        event.accepted = true;
+        if (!root.enabled) return;
+        if (root.checkable) root.toggle();
+        root.clicked();
+    }
     Accessible.role: Accessible.Button
     Accessible.name: root.text
     rightPadding: root.small ? Theme.spLg : Theme.spXl

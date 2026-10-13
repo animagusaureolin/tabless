@@ -310,7 +310,7 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
     }
     // The model's cached haystack (see SearchTextRole), not a concatenation
     // of a few fields here, which would quietly narrow what the board finds.
-    if(!m_searchText.isEmpty() && !tasks->searchTextAt(sourceRow).contains(m_searchText)) {
+    if(!heap::query::textMatches(tasks->searchTextAt(sourceRow), m_searchText)) {
       return false;
     }
     return !m_query.isQuery() || m_query.matches(t, tasks->searchTextAt(sourceRow));
@@ -337,7 +337,7 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
   // and covering the ticket key, labels, assignee, project and milestone as
   // well as title/id/description. Concatenating a few fields here instead
   // would quietly narrow what the board can find.
-  if(!m_searchText.isEmpty() && !src->data(idx, TaskModel::SearchTextRole).toString().contains(m_searchText)) {
+  if(!heap::query::textMatches(src->data(idx, TaskModel::SearchTextRole).toString(), m_searchText)) {
     return false;
   }
   // Structured clauses need the real Task, which only a TaskModel source has.
