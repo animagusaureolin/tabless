@@ -58,6 +58,8 @@ inline const QHash<QString, QByteArray>& zoneCityNames() {
       {QStringLiteral("tashkent"), "Asia/Tashkent"},
       {QStringLiteral("bangalore"), "Asia/Kolkata"},
       {QStringLiteral("delhi"), "Asia/Kolkata"},
+      {QStringLiteral("mumbai"), "Asia/Kolkata"},
+      {QStringLiteral("india"), "Asia/Kolkata"},
       {QStringLiteral("singapore"), "Asia/Singapore"},
       {QStringLiteral("hong kong"), "Asia/Hong_Kong"},
       {QStringLiteral("shanghai"), "Asia/Shanghai"},
@@ -117,9 +119,64 @@ inline const QHash<QString, QByteArray>& zoneCityNames() {
       {QString::fromUtf8("сингапуру"), "Asia/Singapore"},
       {QString::fromUtf8("токио"), "Asia/Tokyo"},
       {QString::fromUtf8("сидней"), "Australia/Sydney"},
+      {QString::fromUtf8("индия"), "Asia/Kolkata"},
+      {QString::fromUtf8("индии"), "Asia/Kolkata"},
       {QString::fromUtf8("сиднею"), "Australia/Sydney"},
   };
   return names;
+}
+
+// Old IANA names to the ones that replaced them. Both are in the database,
+// so a search listed Kiev beside Kyiv and Indianapolis twice; the old name is
+// still read (a stored tz, "kiev" typed) and shown by the new one.
+inline const QHash<QByteArray, QByteArray>& legacyZoneIds() {
+  static const QHash<QByteArray, QByteArray> ids = {
+      {"America/Indianapolis", "America/Indiana/Indianapolis"},
+      {"America/Fort_Wayne", "America/Indiana/Indianapolis"},
+      {"America/Louisville", "America/Kentucky/Louisville"},
+      {"America/Buenos_Aires", "America/Argentina/Buenos_Aires"},
+      {"America/Catamarca", "America/Argentina/Catamarca"},
+      {"America/Cordoba", "America/Argentina/Cordoba"},
+      {"America/Jujuy", "America/Argentina/Jujuy"},
+      {"America/Mendoza", "America/Argentina/Mendoza"},
+      {"America/Godthab", "America/Nuuk"},
+      {"Europe/Kiev", "Europe/Kyiv"},
+      {"Asia/Calcutta", "Asia/Kolkata"},
+      {"Asia/Katmandu", "Asia/Kathmandu"},
+      {"Asia/Saigon", "Asia/Ho_Chi_Minh"},
+      {"Asia/Rangoon", "Asia/Yangon"},
+      {"Asia/Dacca", "Asia/Dhaka"},
+      {"Asia/Thimbu", "Asia/Thimphu"},
+      {"Asia/Ulan_Bator", "Asia/Ulaanbaatar"},
+      {"Asia/Ujung_Pandang", "Asia/Makassar"},
+      {"Asia/Macao", "Asia/Macau"},
+      {"Asia/Ashkhabad", "Asia/Ashgabat"},
+      {"Asia/Chongqing", "Asia/Shanghai"},
+      {"Asia/Chungking", "Asia/Shanghai"},
+      {"Asia/Harbin", "Asia/Shanghai"},
+      {"Asia/Kashgar", "Asia/Urumqi"},
+      {"Asia/Tel_Aviv", "Asia/Jerusalem"},
+      {"Asia/Istanbul", "Europe/Istanbul"},
+      {"Atlantic/Faeroe", "Atlantic/Faroe"},
+      {"Africa/Asmera", "Africa/Asmara"},
+      {"Pacific/Ponape", "Pacific/Pohnpei"},
+      {"Pacific/Truk", "Pacific/Chuuk"},
+      {"Pacific/Enderbury", "Pacific/Kanton"},
+      {"Australia/ACT", "Australia/Sydney"},
+      {"Australia/Canberra", "Australia/Sydney"},
+      {"Australia/NSW", "Australia/Sydney"},
+  };
+  return ids;
+}
+
+// The current name of a zone, when this build knows it; otherwise the id
+// as given.
+inline QByteArray canonicalZoneId(const QByteArray& id) {
+  const auto it = legacyZoneIds().constFind(id);
+  if(it != legacyZoneIds().cend() && QTimeZone(it.value()).isValid()) {
+    return it.value();
+  }
+  return id;
 }
 
 // The zone a city name stands for (lower-case, as zoneCityNames() lists
@@ -129,7 +186,7 @@ inline QTimeZone cityZone(const QString& lowerName) {
   if(it == zoneCityNames().cend()) {
     return {};
   }
-  const QTimeZone z(it.value());
+  const QTimeZone z(canonicalZoneId(it.value()));
   return z.isValid() ? z : QTimeZone();
 }
 
@@ -249,7 +306,9 @@ inline const QList<QByteArray>& searchableZoneIds() {
 // goes before an equal match that is not.
 inline QVector<ZoneMatch> searchZones(const QString& query, const QDateTime& at, const QStringList& recent, int limit = 12) {
   QHash<QString, int> score;
-  const auto add = [&](const QByteArray& id, int s) {
+  const auto add = [&](const QByteArray& given, int s) {
+    // One row per place: an old name ("Europe/Kiev") counts for the new one.
+    const QByteArray id = canonicalZoneId(given);
     const QString key = QString::fromUtf8(id);
     if(!QTimeZone(id).isValid()) {
       return;
@@ -302,7 +361,8 @@ inline QVector<ZoneMatch> searchZones(const QString& query, const QDateTime& at,
         add(id, 120);
       }
     }
-    for(const QString& r : recent) {
+    for(const QString& given : recent) {
+      const QString r = QString::fromUtf8(canonicalZoneId(given.toUtf8()));
       if(score.contains(r)) {
         score[r] += 10;
       }

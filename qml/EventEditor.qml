@@ -77,6 +77,13 @@ FocusScope {
         return Theme.fmtHour(h) + " " + city + (shift > 0 ? " · " + I18n.t("event.zone.nextDay")
                                                : shift < 0 ? " · " + I18n.t("event.zone.prevDay") : "");
     }
+    // The start's date on the zone's own clock: the day its rule repeats on.
+    function _zoneDate() {
+        const d = root.pickedDate;
+        if (!d || !d.getTime || isNaN(d.getTime())) return d;
+        const shift = AppController.zoneDayShift(d, root.startHour, root.tz);
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate() + shift);
+    }
     function openZonePicker() {
         if (root.readOnly) return;
         zonePicker.openFor(root.tz, root.pickedDate, root.startHour);
@@ -701,10 +708,11 @@ FocusScope {
                     objectName: "event-repeat"
                     activeFocusOnTab: true
                     // A series kept in another zone repeats on that zone's
-                    // days, which here can be a day off (A6-5).
-                    text: EventRule.describe(root.rule, root.pickedDate, I18n)
-                          + (root._foreignZone && root.rule.length > 0
-                             ? " · " + I18n.t("event.zoneTime").arg(AppController.zoneName(root.tz)) : "")
+                    // days, which here can be a day off (A6-5): they are
+                    // named as that zone has them, with the city beside.
+                    text: root._foreignZone && root.rule.length > 0
+                          ? EventRule.describe(root.rule, root._zoneDate(), I18n) + " · " + AppController.zoneName(root.tz)
+                          : EventRule.describe(root.rule, root.pickedDate, I18n)
                     onActivated: repeatMenu.popup(repeatLink, 0, repeatLink.height)
                     Keys.onReturnPressed: repeatMenu.popup(repeatLink, 0, repeatLink.height)
                     AppMenu {

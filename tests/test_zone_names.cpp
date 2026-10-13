@@ -87,3 +87,20 @@ TEST(ZoneNames, NamesAndOffsetsAsShown) {
   EXPECT_EQ(heap::cal::cityZone(QString::fromUtf8("москве")).id(), QByteArray("Europe/Moscow"));
   EXPECT_FALSE(heap::cal::cityZone(QStringLiteral("atlantis")).isValid());
 }
+
+// Old IANA names are the same place: one row each, found by either name.
+TEST(ZoneNames, AnOldNameIsNotASecondRow) {
+  for(const char* q : {"india", "indianapolis", "kiev", "kyiv", "calcutta", "kathmandu"}) {
+    const auto out = searchZones(QString::fromLatin1(q), kAt, {}, 40);
+    QStringList cities;
+    for(const auto& m : out) {
+      EXPECT_FALSE(heap::cal::legacyZoneIds().contains(m.id.toUtf8()) && QTimeZone(heap::cal::canonicalZoneId(m.id.toUtf8())).isValid())
+          << q << ": " << m.id.toStdString();
+      cities << m.city;
+    }
+    EXPECT_EQ(cities.removeDuplicates(), 0) << q << ": " << cities.join(QStringLiteral(", ")).toStdString();
+  }
+  EXPECT_TRUE(has(QStringLiteral("india"), QStringLiteral("Asia/Kolkata")));
+  EXPECT_TRUE(has(QString::fromUtf8("индия"), QStringLiteral("Asia/Kolkata")));
+  EXPECT_TRUE(has(QStringLiteral("calcutta"), QStringLiteral("Asia/Kolkata")));
+}

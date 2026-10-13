@@ -242,6 +242,74 @@ TEST_F(EventZoneTest, TheZonePickerSearchesAndOffersRecentZones) {
   EXPECT_DOUBLE_EQ(app_->zoneHour(local.date, local.hour, kNy), 10.0);
 }
 
+// A zone picked for a series whose master was opened by id (a capture just
+// made, a reminder, People): the editor saves the master, not an occurrence.
+// Over there its first meeting falls on another date, and the rule's days
+// went with the old one: a Monday 20:00 series became Sundays and lost its
+// first meeting (A6-7, verify 2026-10-13).
+TEST_F(EventZoneTest, AZonePickedForASeriesByItsMasterKeepsEveryMeeting) {
+  // Kiritimati is UTC+14: 20:00 anywhere from UTC-12 to UTC+3 is the next day
+  // there, so the master's date moves in every zone a CI runner or a laptop
+  // here can be in.
+  const QString far = QStringLiteral("Pacific/Kiritimati");
+  QDate monday(2027, 9, 13);
+  ASSERT_EQ(monday.dayOfWeek(), 1);
+  const Wall there = inZone(monday, 20.0, far);
+  if(there.date == monday) {
+    GTEST_SKIP() << "the machine's zone puts 20:00 on the same date in Kiritimati";
+  }
+  QVariantMap d = app_->newEventDraft(20.0, monday);
+  d["title"] = QStringLiteral("Weekly");
+  d["date"] = monday;
+  d["start"] = 20.0;
+  d["end"] = 21.0;
+  d["rrule"] = QStringLiteral("FREQ=WEEKLY;BYDAY=MO");
+  app_->saveEvent(d);
+  const QString id = d.value("id").toString();
+
+  QVariantMap ev = app_->eventById(id);
+  ev["tz"] = far;
+  app_->saveEvent(ev);
+
+  const QVariantMap m = stored(id);
+  EXPECT_EQ(m.value("tz").toString(), far);
+  EXPECT_EQ(m.value("date").toDate(), there.date);
+  EXPECT_DOUBLE_EQ(m.value("start").toDouble(), there.hour);
+  const QVariantList occ = app_->eventOccurrences(monday.addDays(-1), monday.addDays(15));
+  QList<QDate> days;
+  for(const QVariant& v : occ) {
+    const QVariantMap o = v.toMap();
+    if(o.value("title").toString() == QStringLiteral("Weekly")) {
+      days << o.value("date").toDate();
+      EXPECT_NEAR(o.value("start").toDouble(), 20.0, 1e-6) << o.value("date").toDate().toString().toStdString();
+    }
+  }
+  EXPECT_EQ(days, (QList<QDate>{monday, monday.addDays(7), monday.addDays(14)})) << "still every Monday, the first one kept";
+
+  // Undo puts the series back as it was.
+  app_->undo();
+  EXPECT_TRUE(stored(id).value("tz").toString().isEmpty());
+  EXPECT_EQ(stored(id).value("date").toDate(), monday);
+}
+
+// "15:00 UTC+3" said in a zone that is UTC+3 at that moment is a local
+// meeting: it keeps no zone, and the zone row does not say the hour twice.
+TEST_F(EventZoneTest, TheViewersOwnOffsetIsLocalTime) {
+  const QDate day(2026, 10, 20);
+  const QDateTime at = heap::cal::wallInstant(day, 15.0, QTimeZone::systemTimeZone());
+  const QString own = QString::fromUtf8(QTimeZone(QTimeZone::systemTimeZone().offsetFromUtc(at)).id());
+  QVariantMap d = app_->newEventDraft(15.0, day);
+  d["title"] = QStringLiteral("Own offset");
+  d["date"] = day;
+  d["start"] = 15.0;
+  d["end"] = 16.0;
+  d["tz"] = own;
+  app_->saveEvent(d);
+  const QVariantMap s = stored(d.value("id").toString());
+  EXPECT_TRUE(s.value("tz").toString().isEmpty()) << s.value("tz").toString().toStdString();
+  EXPECT_DOUBLE_EQ(s.value("start").toDouble(), 15.0);
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

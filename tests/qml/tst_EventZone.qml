@@ -141,4 +141,39 @@ TestCase {
         ed.close();
         AppController.deleteEvent(id);
     }
+
+    // A series opened by its id (a capture just made, a reminder, People)
+    // and put into a zone where its first meeting falls on another date: it
+    // still meets every Monday at the same hour, the first one too, and the
+    // repeat row names that zone's day (A6-7 verify, 2026-10-13).
+    function test_a_series_opened_by_id_keeps_its_days_in_a_zone() {
+        const far = "Pacific/Kiritimati";   // UTC+14: 20:00 is the next day there
+        const day = probeDay();
+        while (day.getDay() !== 1) day.setDate(day.getDate() + 1);
+        if (AppController.zoneDayShift(day, 20, far) === 0)
+            skip("20:00 here is the same date in Kiritimati");
+        const d = AppController.newEventDraft(20, day);
+        d.title = "zone probe series";
+        d.date = day; d.start = 20; d.end = 21; d.rrule = "FREQ=WEEKLY;BYDAY=MO";
+        AppController.saveEvent(d);
+        const ed = editor();
+        ed.showForId(d.id);
+        ed.setZone(far);
+        const until = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 15);
+        const occ = AppController.eventOccurrences(new Date(day.getFullYear(), day.getMonth(), day.getDate() - 1), until)
+            .filter(o => o.title === "zone probe series");
+        compare(occ.length, 3, JSON.stringify(occ.map(o => String(o.date))));
+        for (let i = 0; i < occ.length; i++) {
+            compare(occ[i].date.getDay(), 1, "still a Monday: " + occ[i].date);
+            fuzzyCompare(Number(occ[i].start), 20, 1e-6);
+        }
+        compare(occ[0].date.getDate(), day.getDate(), "the first meeting is kept");
+        compare(AppController.eventSeriesMaster(d.id).tz, far);
+        // Kiritimati's Monday 20:00 here is its Tuesday: the row says Tuesday.
+        const repeat = findChild(ed, "event-repeat");
+        verify(repeat.text.indexOf("Kiritimati") > 0, repeat.text);
+        verify(repeat.text.indexOf(I18n.t("event.zoneTime").arg("Kiritimati")) < 0, "the city alone, not a long phrase: " + repeat.text);
+        ed.close();
+        AppController.deleteEvent(d.id);
+    }
 }

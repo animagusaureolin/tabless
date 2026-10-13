@@ -4475,6 +4475,32 @@ void AppController::saveEvent(const QVariantMap& draft) {
     e.exdates = prev->exdates;
     e.extra = prev->extra;  // keys a newer build wrote (PLAT-15)
   }
+  // A series put into another zone by its master (an editor opened by id, a
+  // capture just made): its days are the old zone's, and its first meeting
+  // may fall on another date over there. Moved as "all" of it, so the rule's
+  // weekdays, deletions and moves go with the date, and not one meeting moves
+  // in time (A6-7). Without it a Monday 20:00 Moscow series picked into Tokyo
+  // turned into Sundays and lost its first meeting.
+  if(prev != nullptr && !prev->rrule.isEmpty() && prev->masterId.isEmpty() && e.masterId.isEmpty() && !e.rrule.isEmpty() && !e.allDay &&
+     !prev->allDay && e.tz != prev->tz && prev->date.isValid()) {
+    QVariantMap d = draft;
+    d["masterId"] = e.id;
+    d["originalDate"] = prev->date;
+    d["tz"] = e.tz;
+    saveOccurrence(d, QStringLiteral("all"));
+    return;
+  }
+  // "15:00 UTC+3" typed in Moscow is a local meeting: one moment with the
+  // viewer's own offset keeps no zone, or the zone row says the same hour
+  // twice. A series keeps it, since the viewer's offset may change.
+  if(!e.allDay && e.rrule.isEmpty() && !e.tz.isEmpty() && !e.tz.contains(QLatin1Char('/')) && e.date.isValid()) {
+    const QTimeZone fixed(e.tz.toUtf8());
+    const QTimeZone local = QTimeZone::systemTimeZone();
+    const QDateTime at = heap::cal::wallInstant(e.date, e.start, local);
+    if(fixed.isValid() && !fixed.hasDaylightTime() && fixed.offsetFromUtc(at) == local.offsetFromUtc(at)) {
+      e.tz.clear();
+    }
+  }
   // A draft is on the viewer's clock: the editor, a drag and the capture
   // line all speak it. An event kept in a zone stores its wall time there,
   // so a New York meeting stays 10:00 New York (A6-7). A day is a day in
@@ -5161,7 +5187,16 @@ bool AppController::isLocalZone(const QString& tz) const {
     return true;
   }
   const QTimeZone zone(tz.toUtf8());
-  return zone.isValid() && zone.id() == QTimeZone::systemTimeZone().id();
+  const QTimeZone local = QTimeZone::systemTimeZone();
+  if(!zone.isValid()) {
+    return false;
+  }
+  if(zone.id() == local.id()) {
+    return true;
+  }
+  // "UTC+3" in Moscow: the viewer's own hours, said as an offset.
+  const QDateTime now = QDateTime::currentDateTimeUtc();
+  return !tz.contains(QLatin1Char('/')) && !zone.hasDaylightTime() && zone.offsetFromUtc(now) == local.offsetFromUtc(now);
 }
 
 void AppController::saveOccurrence(const QVariantMap& draft, const QString& scope) {
