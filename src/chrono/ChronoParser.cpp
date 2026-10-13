@@ -2,6 +2,7 @@
 #include "ChronoParser.h"
 #include "ChronoTokenizer.h"
 
+#include "cal/ZoneNames.h"
 #include "recur/RecurrenceEngine.h"
 
 #include <QChar>
@@ -179,6 +180,7 @@ class ChronoParser::Impl {
         best.date = here.date();
         best.start = here.time();
         best.timeLast = zoneLast;
+        best.zone = QString::fromUtf8(zone.id());
       }
     }
 
@@ -259,6 +261,7 @@ class ChronoParser::Impl {
     QTime end;
     bool hasRange = false;
     QString recurrence;
+    QString zone;                       // the zone the time was said in (A6-7), as CalEvent::tz keeps it
     int dateFirst = -1, dateLast = -1;  // token span of the date half
     int timeFirst = -1, timeLast = -1;  // token span of the time half
   };
@@ -436,21 +439,6 @@ class ChronoParser::Impl {
         {QStringLiteral("AEST"), 10},
         {QStringLiteral("AEDT"), 11},
     };
-    static const QHash<QString, QByteArray> kCities = {
-        {QStringLiteral("new york"), "America/New_York"},
-        {QStringLiteral("london"), "Europe/London"},
-        {QStringLiteral("berlin"), "Europe/Berlin"},
-        {QStringLiteral("paris"), "Europe/Paris"},
-        {QStringLiteral("amsterdam"), "Europe/Amsterdam"},
-        {QStringLiteral("moscow"), "Europe/Moscow"},
-        {QStringLiteral("tokyo"), "Asia/Tokyo"},
-        {QStringLiteral("singapore"), "Asia/Singapore"},
-        {QStringLiteral("chicago"), "America/Chicago"},
-        {QStringLiteral("los angeles"), "America/Los_Angeles"},
-        {QStringLiteral("san francisco"), "America/Los_Angeles"},
-        {QString::fromUtf8("москве"), "Europe/Moscow"},
-        {QString::fromUtf8("москва"), "Europe/Moscow"},
-    };
     int i = k;
     // "по мск", "по Москве", "in London".
     const bool lead = toks[i].lower == QString::fromUtf8("по") || toks[i].lower == QStringLiteral("in");
@@ -461,20 +449,38 @@ class ChronoParser::Impl {
       }
     }
     const QString& w = toks[i].lower;
+    // Moscow by name rather than as a bare +3: the meeting then says
+    // "Moscow", and it is the same hour all year.
     if(w == QString::fromUtf8("мск") || w == QStringLiteral("msk")) {
-      zone = QTimeZone(3 * 3600);
+      zone = QTimeZone("Europe/Moscow");
+      if(!zone.isValid()) {
+        zone = QTimeZone(3 * 3600);
+      }
       return i;
     }
-    if(i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Word) {
-      const auto city = kCities.constFind(w + QLatin1Char(' ') + toks[i + 1].lower);
-      if(city != kCities.cend()) {
-        zone = QTimeZone(city.value());
-        return zone.isValid() ? i + 1 : -1;
+    // The cities are the zone picker's (cal/ZoneNames.h): "New York",
+    // "по Москве", "in London". Without "по"/"in" a city counts only
+    // written as a name, so "15:00 boston office" keeps its words.
+    const bool named = lead || (!toks[i].text.isEmpty() && toks[i].text.at(0).isUpper());
+    if(named && i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Word) {
+      const QTimeZone city = heap::cal::cityZone(w + QLatin1Char(' ') + toks[i + 1].lower);
+      if(city.isValid()) {
+        zone = city;
+        return i + 1;
       }
     }
-    if(const auto city = kCities.constFind(w); city != kCities.cend()) {
-      zone = QTimeZone(city.value());
-      return zone.isValid() ? i : -1;
+    // "Нью-Йорк", "Лос-Анджелес": one name the tokenizer cut at the dash.
+    if(named && i + 2 < toks.size() && toks[i + 1].kind == TokenKind::Dash && toks[i + 2].kind == TokenKind::Word &&
+       adjacent(toks[i], toks[i + 1]) && adjacent(toks[i + 1], toks[i + 2])) {
+      const QTimeZone city = heap::cal::cityZone(w + QLatin1Char('-') + toks[i + 2].lower);
+      if(city.isValid()) {
+        zone = city;
+        return i + 2;
+      }
+    }
+    if(const QTimeZone city = named ? heap::cal::cityZone(w) : QTimeZone(); city.isValid()) {
+      zone = city;
+      return i;
     }
     if(lead) {
       return -1;  // "по" / "in" before anything else is not a zone
@@ -600,6 +606,7 @@ class ChronoParser::Impl {
     r.ok = true;
     r.recurrence = m.recurrence;
     r.hasTime = m.hasTime;
+    r.zone = m.zone;
     r.start = QDateTime(m.date, m.hasTime ? m.start : QTime(0, 0));
     // "22:00-01:00" ends the next morning; it used to end before it began
     // and the editor quietly made it an hour long (IDIOT-CAL-11). An end more

@@ -12,6 +12,7 @@ import "EventRule.js" as EventRule
 //   ▢ встреча · повторяется                            сохранено
 //   1:1 с Олегом
 //   Когда         пт, 9 окт · 11:00–11:30
+//   Часовой пояс  местное время  (or "04:00 New York")
 //   Повтор        каждую неделю по пятницам
 //   Участники     Олег Т.
 //   Звонок        zoom.us/j/8812… · подключиться
@@ -62,11 +63,38 @@ FocusScope {
     property string context: ""
     property string location: ""
     property int reminderMinutes: -1
-    // A meeting kept in another zone (A6-4): the zone and its start there,
-    // shown read-only beside the local hours.
-    property string srcTz: ""
-    property real srcStart: 0
-    function zoneCity(tz) { return String(tz || "").split("/").pop().replace(/_/g, " "); }
+    // The zone the meeting is kept in (A6-7): "" floats (local time). The
+    // fields above stay on the viewer's clock; the zone row says the start
+    // there ("10:00 New York", A6-4) and picks another one.
+    property string tz: ""
+    readonly property bool _foreignZone: root.tz.length > 0 && !AppController.isLocalZone(root.tz)
+    function zoneText() {
+        if (root.tz.length === 0) return I18n.t("event.zone.local");
+        const city = AppController.zoneName(root.tz);
+        if (!root._foreignZone) return city + " · " + I18n.t("event.zone.yours");
+        const h = AppController.zoneHour(root.pickedDate, root.startHour, root.tz);
+        const shift = AppController.zoneDayShift(root.pickedDate, root.startHour, root.tz);
+        return Theme.fmtHour(h) + " " + city + (shift > 0 ? " · " + I18n.t("event.zone.nextDay")
+                                               : shift < 0 ? " · " + I18n.t("event.zone.prevDay") : "");
+    }
+    // The start's date on the zone's own clock: the day its rule repeats on.
+    function _zoneDate() {
+        const d = root.pickedDate;
+        if (!d || !d.getTime || isNaN(d.getTime())) return d;
+        const shift = AppController.zoneDayShift(d, root.startHour, root.tz);
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate() + shift);
+    }
+    function openZonePicker() {
+        if (root.readOnly) return;
+        zonePicker.openFor(root.tz, root.pickedDate, root.startHour);
+    }
+    // Another zone: the same moment, kept on that zone's clock from now on.
+    // The zone is the series' like its title (no "this one or all?").
+    function setZone(tz) {
+        if (root.readOnly || tz === root.tz) return;
+        root.tz = tz;
+        root._save("text");
+    }
     property var _stored: ({})
     readonly property bool repeating: root.masterId.length > 0 || root.rule.length > 0
     // An occurrence the series generated (not a stored override of it). Told
@@ -109,8 +137,7 @@ FocusScope {
         root.taskId = src.taskId || "";
         root.profileId = src.profileId || "";
         root.context = src.context || "";
-        root.srcTz = src.srcTz || "";
-        root.srcStart = Number(src.srcStart) || 0;
+        root.tz = src.tz || "";
         root.reminderMinutes = src.reminderMinutes === undefined || src.reminderMinutes === null ? -1 : Number(src.reminderMinutes);
         root._error = "";
         root._customOpen = false;
@@ -258,6 +285,9 @@ FocusScope {
             date = new Date(r.start.getFullYear(), r.start.getMonth(), r.start.getDate());
             if (r.hasTime) {
                 allDay = false;
+                // "10:00 New York", "в 19:00 по Москве": the meeting is kept
+                // there (A6-7); the hours read are already local.
+                if (r.tz && String(r.tz).length > 0) root.tz = String(r.tz);
                 start = r.start.getHours() + r.start.getMinutes() / 60;
                 const hasEnd = r.end && r.end.getTime && r.end.getTime() > r.start.getTime();
                 // "22:00-01:00" ends the next morning (A6-2): it used to be
@@ -375,7 +405,8 @@ FocusScope {
             location: root.location,
             url: callField.text.trim(),
             notes: agenda.text,
-            reminderMinutes: root.reminderMinutes
+            reminderMinutes: root.reminderMinutes,
+            tz: root.allDay ? "" : root.tz
         };
     }
     // `kind`: "text" (the words), "time" (when), "rule" (repeat).
@@ -645,17 +676,29 @@ FocusScope {
                 }
             }
             FieldRow {
-                visible: root.srcTz.length > 0
+                visible: !root.allDay
                 RowLabel { text: I18n.t("common.timezone") }
-                Text {
+                ValueLink {
+                    id: zoneLink
                     objectName: "event-zone"
-                    Layout.fillWidth: true
-                    text: Theme.fmtHour(root.srcStart) + " " + root.zoneCity(root.srcTz)
-                    color: Theme.textMuted
-                    font.family: Theme.fontUi
+                    activeFocusOnTab: true
+                    text: root.zoneText()
+                    // Local time is the quiet default, like "+ link a task".
+                    add: root.tz.length === 0
                     font.features: Theme.tabularNums
-                    font.pixelSize: Theme.fsMd
-                    elide: Text.ElideRight
+                    Accessible.name: I18n.t("common.timezone")
+                    onActivated: root.openZonePicker()
+                    Keys.onReturnPressed: root.openZonePicker()
+                    Keys.onEnterPressed: root.openZonePicker()
+                    Keys.onSpacePressed: root.openZonePicker()
+                    ZonePicker {
+                        id: zonePicker
+                        // Right-aligned with the row, so it stays inside the panel.
+                        x: zoneLink.width - width
+                        y: zoneLink.height + Theme.spXs
+                        onPicked: (tz) => root.setZone(tz)
+                        onClosed: zoneLink.forceActiveFocus()
+                    }
                 }
             }
             FieldRow {
@@ -665,9 +708,11 @@ FocusScope {
                     objectName: "event-repeat"
                     activeFocusOnTab: true
                     // A series kept in another zone repeats on that zone's
-                    // days, which here can be a day off (A6-5).
-                    text: EventRule.describe(root.rule, root.pickedDate, I18n)
-                          + (root.srcTz.length > 0 ? " · " + I18n.t("event.zoneTime").arg(root.zoneCity(root.srcTz)) : "")
+                    // days, which here can be a day off (A6-5): they are
+                    // named as that zone has them, with the city beside.
+                    text: root._foreignZone && root.rule.length > 0
+                          ? EventRule.describe(root.rule, root._zoneDate(), I18n) + " · " + AppController.zoneName(root.tz)
+                          : EventRule.describe(root.rule, root.pickedDate, I18n)
                     onActivated: repeatMenu.popup(repeatLink, 0, repeatLink.height)
                     Keys.onReturnPressed: repeatMenu.popup(repeatLink, 0, repeatLink.height)
                     AppMenu {

@@ -360,3 +360,77 @@ TEST(Occurrences, AZonedSeriesCarriesItsSourceHour) {
   ASSERT_EQ(floating.size(), 1);
   EXPECT_TRUE(floating.first().srcTz.isEmpty());
 }
+
+// A6-7: a weekly New York meeting stays 10:00 New York through both DST
+// changes. The US and the EU change clocks on different Sundays, so for a
+// viewer in Berlin it is 16:00, then 15:00 for the weeks only one side has
+// changed, then 16:00 again; for one in Moscow (no DST) it moves an hour once.
+TEST(Occurrences, AWeeklyNewYorkMeetingFollowsNewYorkAcrossBothDstChanges) {
+  CalEvent e = master(QStringLiteral("ny"), QStringLiteral("FREQ=WEEKLY"), QDate(2026, 10, 6));  // a Tuesday
+  e.tz = QStringLiteral("America/New_York");
+  e.start = 10.0;
+  e.end = 10.5;
+  const QTimeZone berlin("Europe/Berlin");
+  const QTimeZone moscow("Europe/Moscow");
+  ASSERT_TRUE(berlin.isValid() && moscow.isValid());
+
+  const auto startOn = [&](const QDate& day, const QTimeZone& viewer) {
+    const auto out = expandEvents({e}, day, day, nullptr, viewer);
+    return out.size() == 1 ? out.first().event.start : -1.0;
+  };
+  // Autumn: EU back to CET on 25 Oct, US back to EST on 1 Nov 2026.
+  EXPECT_DOUBLE_EQ(startOn(QDate(2026, 10, 20), berlin), 16.0) << "EDT and CEST";
+  EXPECT_DOUBLE_EQ(startOn(QDate(2026, 10, 27), berlin), 15.0) << "EDT and CET: only Europe changed";
+  EXPECT_DOUBLE_EQ(startOn(QDate(2026, 11, 3), berlin), 16.0) << "EST and CET";
+  // Spring: US to EDT on 14 Mar, EU to CEST on 28 Mar 2027.
+  EXPECT_DOUBLE_EQ(startOn(QDate(2027, 3, 9), berlin), 16.0) << "EST and CET";
+  EXPECT_DOUBLE_EQ(startOn(QDate(2027, 3, 16), berlin), 15.0) << "EDT and CET: only the US changed";
+  EXPECT_DOUBLE_EQ(startOn(QDate(2027, 3, 30), berlin), 16.0) << "EDT and CEST";
+  // Moscow keeps one offset all year: the meeting moves only with New York.
+  EXPECT_DOUBLE_EQ(startOn(QDate(2026, 10, 27), moscow), 17.0);
+  EXPECT_DOUBLE_EQ(startOn(QDate(2026, 11, 3), moscow), 18.0);
+  EXPECT_DOUBLE_EQ(startOn(QDate(2027, 3, 16), moscow), 17.0);
+
+  // Every occurrence says the same hour on its own clock and the zone it
+  // is kept in, whatever the viewer's hour is that week.
+  const auto weeks = expandEvents({e}, QDate(2026, 10, 19), QDate(2026, 11, 8), nullptr, berlin);
+  ASSERT_EQ(weeks.size(), 3);
+  for(const Occurrence& o : weeks) {
+    EXPECT_DOUBLE_EQ(o.srcStart, 10.0);
+    EXPECT_EQ(o.zone, QStringLiteral("America/New_York"));
+  }
+}
+
+// A6-7: what the editor writes back is the inverse of what it was shown.
+TEST(Occurrences, FromViewerIsTheInverseOfLocalized) {
+  CalEvent e = master(QStringLiteral("tk"), QString(), QDate(2026, 10, 27));
+  e.tz = QStringLiteral("Asia/Tokyo");
+  e.start = 9.0;
+  e.end = 10.0;
+  const QTimeZone berlin("Europe/Berlin");
+  const CalEvent shown = heap::cal::localized(e, berlin);
+  EXPECT_EQ(shown.date, QDate(2026, 10, 27));
+  EXPECT_DOUBLE_EQ(shown.start, 1.0) << "09:00 JST is 01:00 CET";
+  CalEvent edited = shown;
+  edited.tz = e.tz;
+  const CalEvent back = heap::cal::fromViewer(edited, berlin);
+  EXPECT_EQ(back.date, e.date);
+  EXPECT_DOUBLE_EQ(back.start, 9.0);
+  EXPECT_DOUBLE_EQ(back.end, 10.0);
+  EXPECT_EQ(back.tz, e.tz);
+
+  // A late evening in Berlin is the next morning in Tokyo.
+  edited.date = QDate(2026, 10, 26);
+  edited.start = 23.0;
+  edited.end = 23.5;
+  const CalEvent late = heap::cal::fromViewer(edited, berlin);
+  EXPECT_EQ(late.date, QDate(2026, 10, 27));
+  EXPECT_DOUBLE_EQ(late.start, 7.0);
+
+  // A floating event is left as it is.
+  const CalEvent floating = master(QStringLiteral("f"), QString());
+  const CalEvent same = heap::cal::fromViewer(floating, berlin);
+  EXPECT_EQ(same.date, floating.date);
+  EXPECT_DOUBLE_EQ(same.start, floating.start);
+  EXPECT_TRUE(same.tz.isEmpty());
+}

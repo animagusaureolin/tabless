@@ -95,4 +95,33 @@ inline void toZoneWall(const QDate& date, double hour, const QTimeZone& display,
   wallOf(at, zone, outDate, outHour);
 }
 
+// An event whose span was given on the viewer's clock (an editor, a drag),
+// written into the wall clock of the zone it keeps: the inverse of
+// localized(). A floating or all-day event, or one whose zone this build
+// does not know, comes back unchanged (A6-7).
+inline CalEvent fromViewer(const CalEvent& shown, const QTimeZone& display) {
+  const QTimeZone zone = zoneOf(shown);
+  if(!zone.isValid() || !shown.date.isValid() || shown.allDay) {
+    return shown;
+  }
+  const QTimeZone here = display.isValid() ? display : QTimeZone::systemTimeZone();
+  const QDate endDay = (shown.endDate.isValid() && shown.endDate > shown.date) ? shown.endDate : shown.date;
+  CalEvent out = shown;
+  QDate sd;
+  QDate ed;
+  double sh = 0.0;
+  double eh = 0.0;
+  wallOf(wallInstant(shown.date, shown.start, here), zone, &sd, &sh);
+  wallOf(wallInstant(endDay, shown.end, here), zone, &ed, &eh);
+  if(eh <= 1e-9 && ed > sd) {
+    ed = ed.addDays(-1);
+    eh = 24.0;
+  }
+  out.date = sd;
+  out.start = sh;
+  out.endDate = ed > sd ? ed : QDate();
+  out.end = eh;
+  return out;
+}
+
 }  // namespace heap::cal

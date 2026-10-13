@@ -45,6 +45,9 @@ struct Occurrence {
   // Empty for a floating event.
   QString srcTz;
   double srcStart = 0;
+  // The zone the event is kept in, said even when it is the viewer's own:
+  // an edit handed back must keep it (A6-7). Empty for a floating event.
+  QString zone;
 };
 
 // An occurrence with where it came from: `src` is the event before it was
@@ -52,6 +55,9 @@ struct Occurrence {
 inline Occurrence occurrenceOf(const CalEvent& src, const CalEvent& shown, const QDate& day, bool generated, const QTimeZone& display) {
   Occurrence o{shown, day, generated};
   const QTimeZone zone = zoneOf(src);
+  if(!src.allDay && zone.isValid()) {
+    o.zone = src.tz;
+  }
   if(!src.allDay && shown.tz.isEmpty() && zone.isValid() && zone.id() != display.id()) {
     o.srcTz = src.tz;
     o.srcStart = src.start;

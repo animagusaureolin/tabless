@@ -1398,8 +1398,28 @@ class AppController : public QObject {
   // as it was dragged. A resize sets a single-day occurrence's own edges.
   Q_INVOKABLE void moveOccurrence(const QVariantMap& occurrence, double deltaHours, const QString& scope);
   Q_INVOKABLE void resizeOccurrence(const QVariantMap& occurrence, double start, double end, const QString& scope);
-  // The stored event as the editor reads it: every field, zone included.
+  // The stored event as the editor reads it: every field, on the viewer's
+  // clock, with the zone it is kept in as "tz" (and "srcTz"/"srcStart" when
+  // that zone is not the viewer's).
   Q_INVOKABLE QVariantMap eventById(const QString& id) const;
+  // ── Time zones (A6-7) ──
+  // The event editor's zone picker: zones for what was typed ("new york",
+  // "EST", "UTC+5", "москва"), each {id, city, region, offset}; with nothing
+  // typed, the zones the user's meetings are kept in.
+  Q_INVOKABLE QVariantList timeZoneSearch(const QString& query) const;
+  // `hour` on `date` on the viewer's clock, as the hour in zone `tz` (NaN
+  // for no zone), and how many days that is from `date` there (-1, 0, 1).
+  Q_INVOKABLE double zoneHour(const QDate& date, double hour, const QString& tz) const;
+  Q_INVOKABLE int zoneDayShift(const QDate& date, double hour, const QString& tz) const;
+  // "New York" for America/New_York, "UTC−5" for a fixed offset.
+  Q_INVOKABLE QString zoneName(const QString& tz) const;
+  // Whether `tz` is the viewer's own zone (or none).
+  Q_INVOKABLE bool isLocalZone(const QString& tz) const;
+  // The viewer's own zone id, and a zone's offset now ("UTC+3"; "" is the
+  // viewer's).
+  Q_INVOKABLE QString localZoneId() const;
+  Q_INVOKABLE QString zoneOffsetLabel(const QString& tz) const;
+  QStringList recentEventZones() const;
   // Whether heap can expand this RRULE body — what the editor's custom field
   // checks before it saves.
   Q_INVOKABLE bool isValidRRule(const QString& rule) const;

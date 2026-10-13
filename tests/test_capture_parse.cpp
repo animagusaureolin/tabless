@@ -365,6 +365,38 @@ TEST(CaptureAcceptance, AZoneSaidWithTheTime) {
   EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(15, 0), QTimeZone("America/Los_Angeles")));
 }
 
+// A6-7: the zone said is kept by name, so a meeting can stay in it. The
+// time itself is already local (above); a task keeps only that.
+TEST(CaptureAcceptance, TheZoneSaidIsNamed) {
+  const QDateTime now(QDate(2026, 10, 12), QTime(10, 0));
+  EXPECT_EQ(at(QStringLiteral("Standup tomorrow 3pm EST"), now).whenZone, QStringLiteral("UTC-05:00"));
+  EXPECT_EQ(at(QStringLiteral("review tomorrow 3pm PT"), now).whenZone, QStringLiteral("America/Los_Angeles"));
+  Parsed r = at(QStringLiteral("sync tomorrow 10:00 New York"), now);
+  EXPECT_EQ(r.title, QStringLiteral("sync"));
+  EXPECT_EQ(r.whenZone, QStringLiteral("America/New_York"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(10, 0), QTimeZone("America/New_York")));
+  r = at(QString::fromUtf8("созвон завтра в 19:00 по Москве"), now);
+  EXPECT_EQ(r.title, QString::fromUtf8("созвон"));
+  EXPECT_EQ(r.whenZone, QStringLiteral("Europe/Moscow"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(19, 0), QTimeZone("Europe/Moscow")));
+  r = at(QString::fromUtf8("созвон завтра в 19:00 по мск"), now);
+  EXPECT_EQ(r.whenZone, QStringLiteral("Europe/Moscow")) << "MSK is Moscow, not a bare +3";
+  r = at(QString::fromUtf8("звонок пт 18:00 по Нью-Йорку"), now);
+  EXPECT_EQ(r.title, QString::fromUtf8("звонок"));
+  EXPECT_EQ(r.whenZone, QStringLiteral("America/New_York"));
+  r = at(QStringLiteral("call tue 15:00 UTC+5"), now);
+  EXPECT_EQ(r.whenZone, QStringLiteral("UTC+05:00"));
+  EXPECT_EQ(r.when, QDateTime(QDate(2026, 10, 13), QTime(15, 0), QTimeZone(5 * 3600)));
+  r = at(QStringLiteral("call 15:00 in London"), now);
+  EXPECT_EQ(r.title, QStringLiteral("call"));
+  EXPECT_EQ(r.whenZone, QStringLiteral("Europe/London"));
+  // No zone said, none named; a city in lower case without "in" is a word.
+  EXPECT_TRUE(at(QStringLiteral("call tomorrow 15:00"), now).whenZone.isEmpty());
+  r = at(QStringLiteral("demo tomorrow 15:00 boston office"), now);
+  EXPECT_TRUE(r.whenZone.isEmpty());
+  EXPECT_EQ(r.title, QStringLiteral("demo boston office"));
+}
+
 // A2-20, A5-4, A4-22: habitual repeats, and the ones the app has no rule
 // for stay whole in the title instead of being half read.
 TEST(CaptureAcceptance, HabitualRepeats) {
