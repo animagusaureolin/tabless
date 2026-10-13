@@ -366,7 +366,12 @@ TestCase {
         try {
             // The calendar's width in a 1280-1312px window: the sidebar
             // folds to icons at 150%.
-            for (const c of [[1, 1050], [1.1, 1083], [1.25, 1083], [1.5, 1200]]) {
+            // The third value: the tray must stay. Those are the calendar's
+            // widths in 1280x720 @100/110/125%, 1440x900 @125/150% and
+            // 1366x768 @150% windows (the sidebar folds to icons from 125%).
+            for (const c of [[1, 1050], [1.1, 1083], [1.25, 1083], [1.5, 1200],
+                             [1, 1072, true], [1.1, 1051, true], [1.25, 1218, true],
+                             [1.25, 1180, true], [1.5, 1374, true], [1.5, 1300, true]]) {
                 const o = JSON.parse(saved || "{}");
                 o.appearance = Object.assign({}, o.appearance || {}, { uiScale: c[0] });
                 AppController.appSettingsJson = JSON.stringify(o);
@@ -383,6 +388,13 @@ TestCase {
                 verify(wv.laneFit >= 2, tag + "two lanes side by side, fit " + wv.laneFit + " avail " + wv.laneAvail);
                 verify(wv.laneAvail / wv.laneFit >= wv.minLaneW - 1e-9, tag + "no lane under the minimum");
                 if (cv.trayW >= Theme.px(180)) verify(cv.trayW <= Theme.px(260), tag + cv.trayW);
+                // The tray narrows rather than leave: its F6 stop and S stay
+                // at these ordinary sizes (the first cut hid it under 180px).
+                const trayItem = findChild(cv, "undated-tray");
+                verify(trayItem, tag + "tray");
+                compare(trayItem.visible, cv.trayW >= Theme.px(90), tag + "tray shown while 90px are left, " + cv.trayW);
+                if (c[2]) verify(trayItem.visible, tag + "tray stays, " + cv.trayW);
+                compare(trayItem.compact, cv.trayW < Theme.px(180), tag + "compact under 180px");
                 // Every title drawn shows at least six letters' room.
                 const titles = [];
                 (function walk(it) {

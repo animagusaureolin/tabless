@@ -14,6 +14,9 @@ Rectangle {
     objectName: "undated-tray"
 
     property string searchText: ""
+    // Narrow beside a tight grid: slimmer margins, the hint left out, so
+    // the rows keep their titles (F2-REG-2..4 left it under 180px).
+    property bool compact: false
     // The task picked for a click on the grid; "" when none.
     property string armedId: ""
     signal taskOpened(string id)
@@ -83,14 +86,20 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spXl
-        anchors.rightMargin: Theme.spLg
+        anchors.leftMargin: root.compact ? Theme.spSm : Theme.spXl
+        anchors.rightMargin: root.compact ? Theme.spXs : Theme.spLg
         anchors.topMargin: Theme.spLg
         spacing: Theme.spXs
 
-        Row {
+        // A compact tray elides its title before the count goes off the edge.
+        RowLayout {
+            Layout.fillWidth: true
             spacing: Theme.spXs
             Text {
+                objectName: "undated-tray-title"
+                Layout.fillWidth: true
+                Layout.maximumWidth: implicitWidth
+                elide: Text.ElideRight
                 text: I18n.t("tray.title") + (root.plain ? " · " + root.count : "")
                 color: root.plain ? Theme.textDim : Theme.text
                 font.pixelSize: Theme.fsMd
@@ -107,7 +116,7 @@ Rectangle {
             }
         }
         Text {
-            visible: !root.plain
+            visible: !root.plain && !root.compact
             Layout.fillWidth: true
             text: I18n.t("tray.hint")
             color: Theme.textDim
