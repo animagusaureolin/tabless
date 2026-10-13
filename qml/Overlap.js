@@ -88,15 +88,19 @@ function computeByDay(days) {
 const MIN_LANE_W = 44;
 const MIN_LANES = 2;
 
-// How many lanes fit side by side.
-function capacity(avail, minW) {
+// How many lanes fit side by side. `minLanes` (default two) is the floor;
+// the week passes one, because it measures `minW` from its title font and
+// makes room for two lanes by itself (the tray and the rail give way), so a
+// lane never gets narrower than a readable title (F2-REG-2..4).
+function capacity(avail, minW, minLanes) {
     if (minW === undefined) minW = MIN_LANE_W;
-    return Math.max(MIN_LANES, Math.floor((avail + 1e-9) / minW));
+    if (minLanes === undefined) minLanes = MIN_LANES;
+    return Math.max(minLanes, Math.floor((avail + 1e-9) / minW));
 }
 
-function lane(col, cols, avail, minW) {
+function lane(col, cols, avail, minW, minLanes) {
     const n = Math.max(1, cols);
-    const fit = capacity(avail, minW);
+    const fit = capacity(avail, minW, minLanes);
     if (n <= fit) {
         const tile = avail / n;
         return { x: col * tile, w: tile, folded: false };
