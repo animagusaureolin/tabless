@@ -11,6 +11,10 @@ struct ParseResult {
     QDateTime end;
     bool hasTime = false;
     QString recurrence;
+    // A zone said with the time ("15:00 EST", "по Москве"): its id, the way
+    // CalEvent::tz keeps it. `start`/`end` are already converted to the
+    // reference's zone; a meeting may keep this one (A6-7).
+    QString zone;
     QString consumed;
     int startOffset = -1;
     int endOffset = -1;
