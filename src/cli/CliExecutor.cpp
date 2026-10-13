@@ -87,20 +87,38 @@ Response add(AppController& c, const Request& req, const QDateTime& now) {
     toasts << message;
   });
   QString id;
+  QString note;  // stderr: a "+Name" that --profile overrode
+  // "+Globex" in the text sends the task there, as quick capture does
+  // (F1-new-2); an explicit --profile wins and says so.
+  int target = pi;
   {
-    const ProfileScope scope(c, before.profiles.at(pi).id, /*restore=*/true);
-    const QVariantMap draft = c.quickTaskDraft(req.text, now);
+    const ProfileScope probe(c, before.profiles.at(pi).id, /*restore=*/true);
+    const QString named = c.quickTaskDraft(req.text, now).value(QStringLiteral("_targetProfileId")).toString();
+    const int ni = named.isEmpty() ? -1 : findProfile(before, named);
+    if(ni >= 0 && ni != pi) {
+      if(req.profile.isEmpty()) {
+        target = ni;
+      } else {
+        note = cliText(QStringLiteral("profileWins"), before.language).arg(before.profiles.at(ni).name, before.profiles.at(pi).name) +
+               QChar('\n');
+      }
+    }
+  }
+  {
+    const ProfileScope scope(c, before.profiles.at(target).id, /*restore=*/true);
+    QVariantMap draft = c.quickTaskDraft(req.text, now);
     if(draft.value(QStringLiteral("title")).toString().trimmed().isEmpty()) {
       return failure(kExitUsage, QStringLiteral("nothing to add: '%1' has no title besides the date").arg(req.text));
     }
+    draft.remove(QStringLiteral("_targetProfileId"));
     id = draft.value(QStringLiteral("id")).toString();
     if(!c.saveTask(draft)) {
       return failure(kExitData, QStringLiteral("could not add the task: %1").arg(reasons(toasts, QStringLiteral("refused"))));
     }
   }
-  // The task lives in profile `pi`, whichever one is active now.
+  // The task lives in profile `target`, whichever one is active now.
   const Snapshot after = snapshotOf(c);
-  const int api = findProfile(after, before.profiles.at(pi).id);
+  const int api = findProfile(after, before.profiles.at(target).id);
   if(api >= 0) {
     const ProfileData& p = after.profiles.at(api);
     for(const Task& t : p.tasks) {
@@ -108,8 +126,12 @@ Response add(AppController& c, const Request& req, const QDateTime& now) {
         continue;
       }
       Response r;
+      r.err = note;
       if(req.json) {
         r.out = QString::fromUtf8(QJsonDocument(taskJson(p, t, now)).toJson(QJsonDocument::Indented));
+      } else if(target != pi) {
+        // Not where it would have gone without "+Name": say where it went.
+        r.out = cliText(QStringLiteral("addedTo"), after.language).arg(shownKey(t), p.name, t.title) + QChar('\n');
       } else {
         r.out = cliText(QStringLiteral("added"), after.language).arg(shownKey(t), t.title) + QChar('\n');
       }
