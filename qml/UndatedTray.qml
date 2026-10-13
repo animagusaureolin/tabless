@@ -44,6 +44,25 @@ Rectangle {
     }
     onItemsChanged: if (root.armedId && !root.items.some(t => t.id === root.armedId)) root.armedId = ""
 
+    // Down / Up (j / k) walk the rows' key stops, so S on any of them asks
+    // when: the list's own arrows put focus on a bare row, where S was the
+    // calendar's "go to date" (F2-NEW-1).
+    function focusRow(i: int): bool {
+        if (i < 0 || i >= list.count) return false;
+        list.positionViewAtIndex(i, ListView.Contain);
+        const r = list.itemAtIndex(i);
+        if (!r) return false;
+        r.keyStop.forceActiveFocus(Qt.TabFocusReason);
+        return true;
+    }
+
+    // The row of task `id` on screen, or null: the window's "when" field
+    // opens under it (F2-NEW-3).
+    function rowItem(id: string): Item {
+        const i = root.shown.findIndex(t => t.id === id);
+        return i >= 0 ? list.itemAtIndex(i) : null;
+    }
+
     // S on the picked task: the next free window of the selected day (APP-253).
     function scheduleArmed() {
         if (!root.armedId) return false;
@@ -117,6 +136,7 @@ Rectangle {
             clip: true
             model: root.shown
             boundsBehavior: Flickable.StopAtBounds
+            keyNavigationEnabled: false
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
             delegate: Item {
                 id: row
@@ -126,6 +146,7 @@ Rectangle {
                 width: list.width
                 height: Theme.px(34)
                 readonly property bool armed: root.armedId === row.modelData.id
+                readonly property Item keyStop: rowKey
 
                 Rectangle {
                     anchors.fill: parent
@@ -169,8 +190,17 @@ Rectangle {
                     acceptedButtons: Qt.NoButton
                     onActivated: root.armedId = row.armed ? "" : row.modelData.id
                     Keys.onPressed: (event) => {
-                        if (event.modifiers !== Qt.NoModifier) return;
-                        if (event.key === Qt.Key_S) {
+                        if (event.modifiers !== Qt.NoModifier && event.modifiers !== Qt.KeypadModifier) return;
+                        // At either end it stays put rather than move the grid.
+                        if (event.key === Qt.Key_Down || event.key === Qt.Key_J) {
+                            root.focusRow(row.index + 1);
+                            event.accepted = true;
+                        } else if (event.key === Qt.Key_Up || event.key === Qt.Key_K) {
+                            root.focusRow(row.index - 1);
+                            event.accepted = true;
+                        } else if (event.modifiers !== Qt.NoModifier) {
+                            return;
+                        } else if (event.key === Qt.Key_S) {
                             // The "when" field, as s everywhere else: the
                             // first free hour was taken without asking (A1-19).
                             root.scheduleRequested(row.modelData.id);
