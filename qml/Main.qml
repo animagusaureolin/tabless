@@ -1527,13 +1527,7 @@ ApplicationWindow {
                         onTaskCaptureRequested: (text) => quickCapture.openWithText(text)
                         // A block's "Запланировать…" and s on a tray row
                         // (A1-19): the "when" field.
-                        onScheduleRequested: (id) => {
-                            schedulePopup.openFor([id], "scheduled");
-                            // Under the tray row it came from, not at the
-                            // window's corner (F2-NEW-3).
-                            const tray = win._trayItem();
-                            win._placeUnderCard(schedulePopup, id, tray ? tray.rowItem(id) : null);
-                        }
+                        onScheduleRequested: (id) => win.scheduleFromCalendar(id)
                         onResetFilterRequested: win.resetTaskFilter()
                     }
                 }
@@ -3257,6 +3251,14 @@ ApplicationWindow {
     property string regionShown: ""
     // The calendar's "Без даты" tray, when the view shows one: a region of
     // its own, so "pick one and press s" needs no 47 Tabs (A1-18).
+    // A block's "Schedule..." and s on a tray row (A1-19): the "when" field,
+    // under the tray row it came from, not at the window's corner (F2-NEW-3).
+    function scheduleFromCalendar(id) {
+        schedulePopup.openFor([id], "scheduled");
+        const tray = win._trayItem();
+        win._placeUnderCard(schedulePopup, id, tray ? tray.rowItem(id) : null);
+    }
+
     function _trayItem() {
         // The calendar lens hands its inner grid to activeViewItem(); the
         // tray sits beside that grid, so look from the lens itself.
