@@ -71,7 +71,17 @@ TestCase {
         // Every column carries the folded-Done item; only Done's is shown.
         const shown = allByName(board, "column-done-folded", []);
         compare(shown.length, 1);
-        verify(byName(shown[0], "column-done-show").visible);
+        // "Show" when there is something done to show (F3-EYES-18: "Done 0"
+        // offered it and revealed nothing).
+        const link = byName(shown[0], "column-done-show");
+        const m = AppController.tasks;
+        const rid = m.roleOf("id");
+        let anyDone = false;
+        for (let i = 0; i < m.rowCount() && !anyDone; i++)
+            anyDone = AppController.taskById(m.data(m.index(i, 0), rid)).status === doneId;
+        if (!anyDone) verify(!link.visible, "Show with nothing done");
+        add({ id: "H2B-D", title: "a done card", status: doneId });
+        tryVerify(() => link.visible, 2000, "no Show with a done card");
     }
 
     function test_show_opens_done_and_is_remembered() {

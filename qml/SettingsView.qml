@@ -1854,7 +1854,11 @@ Item {
                                 Text {
                                     id: wdTxt
                                     anchors.centerIn: parent
-                                    text: I18n.dayName(wdChip.day % 7).toLowerCase()
+                                    // The case every option on the page has ("Mon"
+                                    // bold, "mon" quiet), as "Week starts on" has it
+                                    // (F3-EYES-14).
+                                    readonly property string _name: I18n.dayName(wdChip.day % 7)
+                                    text: root.opt(_name.charAt(0).toUpperCase() + _name.slice(1), false)
                                     color: wdChip.on ? Theme.text : Theme.textDim
                                     font.pixelSize: Theme.fsSm
                                     font.weight: wdChip.on && !root.quiet ? Theme.fwHeading : Theme.fwBody
@@ -2212,7 +2216,7 @@ Item {
                     objectName: "settings-snapshot-before-import"
                     label: I18n.t("settings.safety.beforeImport")
                     value: safetyRoot.d.snapshotBeforeImport === false ? "no" : "yes"
-                    options: [ ({ value: "yes", label: I18n.t("settings.yes") }), ({ value: "no", label: I18n.t("settings.no") }) ]
+                    options: [ ({ value: "yes", label: I18n.t("settings.on") }), ({ value: "no", label: I18n.t("settings.off") }) ]
                     onSelected: (value) => root.set("data", "snapshotBeforeImport", value === "yes")
                 }
                 SegRow {
@@ -2220,7 +2224,7 @@ Item {
                     label: I18n.t("settings.safety.immersion")
                     hint: I18n.t("settings.safety.immersion.hint").arg(AppController.shortcutText("focus.immersion"))
                     value: AppController.safety.immersion === true ? "on" : "off"
-                    options: [ ({ value: "on", label: I18n.t("settings.safety.available") }), ({ value: "off", label: I18n.t("settings.off") }) ]
+                    options: [ ({ value: "on", label: I18n.t("settings.on") }), ({ value: "off", label: I18n.t("settings.off") }) ]
                     onSelected: (value) => AppController.setSafetySetting("immersion", value === "on")
                 }
             }
@@ -3501,7 +3505,7 @@ Item {
                     label: I18n.t("settings.git.link")
                     hint: I18n.t("settings.git.link.hint").arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "APP").toUpperCase())
                     value: root._get("git", "linkBranches", true) === false ? "no" : "yes"
-                    options: [ ({ value: "yes", label: I18n.t("settings.yes") }), ({ value: "no", label: I18n.t("settings.no") }) ]
+                    options: [ ({ value: "yes", label: I18n.t("settings.on") }), ({ value: "no", label: I18n.t("settings.off") }) ]
                     onSelected: (v) => root.set("git", "linkBranches", v === "yes")
                 }
                 SegRow {
@@ -3509,7 +3513,7 @@ Item {
                     label: I18n.t("settings.git.prState")
                     hint: I18n.t("settings.git.prState.hint")
                     value: root._get("git", "watchPrState", true) === false ? "no" : "yes"
-                    options: [ ({ value: "yes", label: I18n.t("settings.yes") }), ({ value: "no", label: I18n.t("settings.no") }) ]
+                    options: [ ({ value: "yes", label: I18n.t("settings.on") }), ({ value: "no", label: I18n.t("settings.off") }) ]
                     onSelected: (v) => root.set("git", "watchPrState", v === "yes")
                 }
                 SegRow {
@@ -3790,10 +3794,11 @@ Item {
                 SegRow {
                     objectName: "settings-time-format"
                     label: I18n.t("settings.language.dateFormat")
+                    // In the app's own date format: "ddd, d MMM" made English
+                    // read "Tue, 13 Oct", an order it shows nowhere (F3-EYES-12).
                     hint: {
                         const d = new Date();
-                        return Qt.locale(I18n.lang === "ru" ? "ru_RU" : "en_US").toString(d, "ddd, d MMM").replace(/\./g, "")
-                            + " · " + I18n.fmtTime(d);
+                        return I18n.fmtDate(d, "weekdayDay") + " · " + I18n.fmtTime(d);
                     }
                     value: (root.settings.calendar && root.settings.calendar.timeFormat) || "24h"
                     options: [ ({ value: "system", label: I18n.t("settings.language.system") }),

@@ -435,8 +435,12 @@ ApplicationWindow {
     function _showUpdatedFrom() {
         const from = AppController.takeUpdatedFrom();
         if (from.length === 0) return;
-        toast.showWithAction(I18n.t("update.patched").arg(from).arg(AppController.appVersion),
-                             I18n.t("update.line.whatsNew"), 10, function () { whatsNew.showNow(); }, "info", "", true);
+        const words = function () {
+            return { message: I18n.t("update.patched").arg(from).arg(AppController.appVersion),
+                     actionLabel: I18n.t("update.line.whatsNew") };
+        };
+        toast.showWithAction(words().message, words().actionLabel, 10, function () { whatsNew.showNow(); },
+                             "info", "", true, words);
     }
     function _showShellNotice() {
         const msg = AppController.shellNotice;
@@ -3693,6 +3697,27 @@ ApplicationWindow {
         anchors.fill: parent
         // Under the toasts (z 100): meetings still remind.
         z: 95
+    }
+    // Out of focus mode (Esc, d, the button) the keyboard goes back where it
+    // came from: it stayed on the window root, where the view keys were dead
+    // until another Esc (F2-NEW-2).
+    Connections {
+        id: immersionReturn
+        target: immersionView
+        property Item cameFrom: null
+        function onVisibleChanged() {
+            if (immersionView.visible) {
+                immersionReturn.cameFrom = win.activeFocusItem;
+                return;
+            }
+            const back = immersionReturn.cameFrom;
+            immersionReturn.cameFrom = null;
+            Qt.callLater(function () {
+                if (immersionView.visible) return;
+                if (back && back.visible && back.enabled) back.forceActiveFocus();
+                else win.focusActiveView();
+            });
+        }
     }
     KeyCheatSheet {
         id: cheatSheet
