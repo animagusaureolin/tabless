@@ -771,7 +771,7 @@ ApplicationWindow {
     // document; the rest of the keymap waits until it closes.
     readonly property var _docTaskKeys: ["task.done", "task.timer", "task.priority0", "task.priority1", "task.priority2",
                                          "task.priority3", "task.schedule", "task.due", "task.copyId", "task.copyBranch",
-                                         "task.copyLink", "task.openExternal", "task.rename", "task.createBranch",
+                                         "task.copyLink", "task.openExternal", "task.rename", "task.createBranch", "task.moveProfile",
                                          "search.focus", "hotkeys.open"]
     // Global shortcuts (switch view, new task, palette, undo…) stand down
     // behind a modal: Ctrl+3 used to switch the view under an open task
@@ -780,7 +780,7 @@ ApplicationWindow {
     readonly property bool _modalOpen: taskEditor.opened || AppController.immersion
         || personEditor.opened || profileEditor.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || eventCapture.opened || cheatSheet.opened
-        || closeAsk.opened || goToDatePopup.opened || eventLog.opened
+        || closeAsk.opened || goToDatePopup.opened || eventLog.opened || profileMoveDialog.opened
         || (_focusInPopup && !_focusInPopover) || _dimmerShown
         // The crash card waits for an answer over the whole window (A7-2).
         || splash.waiting
@@ -1374,6 +1374,8 @@ ApplicationWindow {
                         function onEventClicked(id, occurrence) { win.openEvent(id, occurrence); }
                         function onCreateRequested(startHour, endHour, day) { win.createEventAt(startHour, endHour, day); }
                         function onTaskClicked(id) { win.openTask(id); }
+                        function onOtherProfileTaskClicked(id, profileId) { win.openInProfile(id, profileId); }
+                        function onOtherProfileKeys(id, profileName) { win.notice(I18n.t("today.otherProfileKeys").arg(id).arg(profileName)); }
                         function onUndatedRequested() { win.showQuery("is:undated", "list"); }
                         function onOverdueRequested() { win.showQuery("due:overdue", "list"); }
                         function onRecapRequested() { win.runCommand("recap.open"); }
@@ -1728,6 +1730,8 @@ ApplicationWindow {
                 win.showTask(AppController.taskById(taskId));
             });
         }
+        // A task menu's "Move to profile…" (A5-14).
+        function onMoveToProfileRequested(ids) { win.moveToProfile(ids); }
         // "Open" on a meeting / standup reminder (APP-155): that day in the
         // week view, and the meeting itself when it is a stored event.
         function onOpenEventRequested(eventId, date) {
@@ -1785,6 +1789,22 @@ ApplicationWindow {
             AppController.removeExample();
         }
     }
+    // To another profile (A5-14): the task menu, the selection bar, Ctrl K
+    // and Shift M all come here. Nothing under the key, nothing happens; one
+    // profile, it says why.
+    function moveToProfile(ids) {
+        if (!ids || ids.length === 0) return;
+        if ((AppController.profiles || []).length < 2) {
+            win.notice(I18n.t("moveProfile.title") + ": " + I18n.t("moveProfile.why.one"), "info");
+            return;
+        }
+        profileMoveDialog.openFor(ids);
+    }
+    ProfileMoveDialog {
+        id: profileMoveDialog
+        onClosed: Qt.callLater(win.focusActiveView)
+    }
+
     // On the small-dialog template (X-Dlg-Small, R4-063).
     SmallDialog {
         id: removeExampleDialog
@@ -1845,6 +1865,17 @@ ApplicationWindow {
     }
     function openTask(id) {
         win.showTask(AppController.taskById(id));
+    }
+    // Another profile's task on Today (A1-17): opened in its own profile,
+    // and the toast says the app went there.
+    function openInProfile(id, profileId) {
+        taskEditor.settleThen(() => {
+            if (profileId && profileId !== AppController.activeProfileId) {
+                AppController.activeProfileId = profileId;
+                win.notice(I18n.t("today.openedIn").arg(AppController.profileById(profileId).name || "").arg(id));
+            }
+            win.showTask(AppController.taskById(id));
+        });
     }
     // The tasks a key acts on: the selection, else the one under the
     // cursor or the pointer in the open view.
@@ -2005,6 +2036,7 @@ ApplicationWindow {
         case "task.new":             win.newTask(""); break;
         case "task.done":            win.markDone(); break;
         case "task.schedule":        win.scheduleKeyTasks(); break;
+        case "task.moveProfile":     win.moveToProfile(win._keyTaskIds()); break;
         case "quick-capture":        quickCapture.open(); break;
         case "quick-capture-notes":  quickCaptureNotes.open(); break;
         case "people.open":          peopleDialog.showFor(""); break;
@@ -2091,6 +2123,7 @@ ApplicationWindow {
             win.showQuery(query, mode === "board" ? "board" : "list");
         }
         onCreateRequested: (text) => quickCapture.openWithText(text)
+        onMoveToProfileRequested: (ids) => win.moveToProfile(ids)
         onOpenTask: (taskId) => win.showTask(AppController.taskById(taskId))
         onOpenPerson: (personId) => personEditor.showFor(AppController.personById(personId))
         // The catalogue is listed in Knowledge (DG-070): an entry opens
@@ -2541,6 +2574,7 @@ ApplicationWindow {
             if (ids.length > 0) AppController.createBranchForTask(ids[0]);
             return;
         }
+        case "task.moveProfile": win.moveToProfile(win._keyTaskIds()); return;
         case "selection.toggle":
             if (b && typeof b.toggleCursorSelection === "function") { call("toggleCursorSelection"); return; }
             win._eachKeyTask(function (t) { AppController.toggleTaskSelection(t.id); });

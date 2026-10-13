@@ -78,7 +78,8 @@ Popup {
             { label: "keys.row.moveColumn", words: "keys.words.moveColumn", ids: ["board.moveLeft", "board.moveRight"] },
             { label: "keys.row.moveUpDown", words: "keys.words.moveUpDown", ids: ["board.moveDown", "board.moveUp"] },
             { label: "keys.row.blockLength", ids: ["cal.longer", "cal.shorter"] },
-            { label: "keys.row.columnMove", ids: ["board.columnLeft", "board.columnRight"] }
+            { label: "keys.row.columnMove", ids: ["board.columnLeft", "board.columnRight"] },
+            { label: "keys.row.moveProfile", ids: ["task.moveProfile"] }
         ] },
         { id: "copy", col: 0, rows: [
             { label: "keys.row.copyId", ids: ["task.copyId"] },
