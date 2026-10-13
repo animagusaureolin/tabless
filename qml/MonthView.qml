@@ -976,8 +976,17 @@ Item {
                             // Says when a meeting is among them (A6-22): at 150%
                             // the evening sync sat silently inside "+2".
                             readonly property int _evHidden: dayCell.cell.events.length - dayCell._eventsShown
-                            text: (root.chrome ? "+" + _extra : I18n.t("cal.moreN").arg(_extra))
+                            readonly property string _short: root.chrome ? "+" + _extra : I18n.t("cal.moreN").arg(_extra)
+                            readonly property string _long: _short
                                   + (_evHidden > 0 && !root.chrome ? " · " + I18n.count(_evHidden, "today.n.meetings") : "")
+                            // The meetings part goes when the cell is too
+                            // narrow for it, and what is left still elides:
+                            // at 1280px it was cut at the edge (F3-EYES-9).
+                            // The column's width, not its own: that follows the text.
+                            text: moreFm.advanceWidth(_long) <= parent.width ? _long : _short
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            FontMetrics { id: moreFm; font: moreText.font }
                             color: moreMA.hovered ? Theme.text : Theme.textDim
                             Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                             font.family: Theme.fontUi

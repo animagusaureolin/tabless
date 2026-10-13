@@ -147,6 +147,17 @@ TestCase {
         compare(Overlap.folds(items, Overlap.compute(items), Overlap.capacity(98)).length, 0);
     }
 
+    // F2-REG-2..4: the week measures its own minimum and floors at one
+    // lane, so no lane is drawn narrower than it.
+    function test_a_measured_minimum_never_squeezes() {
+        compare(Overlap.capacity(100, 57, 1), 1);
+        compare(Overlap.capacity(114, 57, 1), 2);
+        const l = Overlap.lane(1, 2, 100, 57, 1);
+        verify(l.folded, "the second folds onto +1 instead of two 50px lanes");
+        compare(l.w, 100);
+        compare(Overlap.capacity(100, 57), 2, "the default floor is still two");
+    }
+
     // The "+N" chip keeps off the title of the block drawn in the last lane.
     function test_fold_chip_keeps_off_titles() {
         const chip = 0.4, title = 1.4;

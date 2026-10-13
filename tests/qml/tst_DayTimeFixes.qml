@@ -170,6 +170,28 @@ TestCase {
         verify(b);
         const sub = v._sub("meeting", b);
         verify(sub.toLowerCase().indexOf(word.toLowerCase()) < 0, sub);
+        // F3-EYES-1: nor its storage id, nor a task's "planned by you".
+        verify(sub.indexOf(b.id) < 0, sub);
+        verify(sub.indexOf(I18n.t("today.plannedByYou")) < 0, sub);
+        // The same for a meeting with no type titled "Meeting", plain or not.
+        const kind = I18n.t("event.kind.meeting");
+        tc.addEvent(kind, day, 12, 13);
+        const v2 = tc.today();
+        const m = v2.dayData.blocks.filter(x => x.title === kind)[0];
+        verify(m);
+        const was = Style.chipFill ? "bold" : "quiet";
+        try {
+            for (const look of ["bold", "quiet"]) {
+                Style.apply(look);
+                const s2 = v2._sub("meeting", m);
+                verify(s2.indexOf(m.id) < 0, look + ": " + s2);
+                verify(s2.indexOf(I18n.t("today.plannedByYou")) < 0, look + ": " + s2);
+            }
+        } finally {
+            Style.apply(was);
+        }
+        // A task still says its id.
+        verify(v2._sub("task", { id: "APP-1", start: 9, end: 10 }).indexOf("APP-1") >= 0);
     }
 
     // A2-10 (verify): "N more above" has a band of its own, never over the
@@ -323,6 +345,92 @@ TestCase {
         compare(lanes, Math.min(wv.laneFit, 3));
         const di = folds[0].dayIndex;
         verify(findChild(wv, "week-fold-" + di) !== null, "+N chip drawn");
+    }
+
+    // F2-REG-2/3/4, F3-EYES-8: at 100-150% two lanes stand side by side,
+    // none narrower than six letters and an ellipsis; the tray gives way
+    // to them; a task title is never cut through a word.
+    TextMetrics { id: sixLetters; text: "oooooo…" }
+    FontMetrics { id: titleFm }
+    function test_week_lanes_keep_six_letters() {
+        const saved = AppController.appSettingsJson;
+        const day = tc.probeDay();
+        tc.addEvent("Standup", day, 9, 9.5);
+        tc.addEvent("Design review", day, 9, 10);
+        tc.addEvent("1:1 Ana", day, 9.25, 9.75);
+        tc.addEvent("Ops sync", day, 9.5, 11);
+        tc.addEvent("Синхронизация", day, 14, 15);
+        tc.addTask("Обновить pydantic до v2 и прогнать", { scheduledAt: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 14, 0), hasTime: true, estimateMinutes: 60 });
+        tc.addTask("tray probe undated");
+        AppController.selectedDate = day;
+        try {
+            // The calendar's width in a 1280-1312px window: the sidebar
+            // folds to icons at 150%.
+            // The third value: the tray must stay. Those are the calendar's
+            // widths in 1280x720 @100/110/125%, 1440x900 @125/150% and
+            // 1366x768 @150% windows (the sidebar folds to icons from 125%).
+            for (const c of [[1, 1050], [1.1, 1083], [1.25, 1083], [1.5, 1200],
+                             [1, 1072, true], [1.1, 1051, true], [1.25, 1218, true],
+                             [1.25, 1180, true], [1.5, 1374, true], [1.5, 1300, true]]) {
+                const o = JSON.parse(saved || "{}");
+                o.appearance = Object.assign({}, o.appearance || {}, { uiScale: c[0] });
+                AppController.appSettingsJson = JSON.stringify(o);
+                const holder = createTemporaryQmlObject('import QtQuick; Item { width: ' + c[1] + '; height: 700 }', host);
+                const cv = createTemporaryQmlObject('import TodoCpp; CalendarView { anchors.fill: parent; zoom: "week" }', holder);
+                tryVerify(() => cv.calendarView && cv.calendarView.days.length === 7, 2000);
+                const wv = cv.calendarView;
+                wait(50);
+                const tag = "scale " + c[0] + " width " + c[1] + ": ";
+                sixLetters.font.family = Theme.fontUi;
+                sixLetters.font.pixelSize = Theme.fsXs;
+                sixLetters.font.weight = Theme.fwHeading;
+                verify(wv.minLaneW >= Math.ceil(sixLetters.advanceWidth), tag + wv.minLaneW);
+                verify(wv.laneFit >= 2, tag + "two lanes side by side, fit " + wv.laneFit + " avail " + wv.laneAvail);
+                verify(wv.laneAvail / wv.laneFit >= wv.minLaneW - 1e-9, tag + "no lane under the minimum");
+                if (cv.trayW >= Theme.px(180)) verify(cv.trayW <= Theme.px(260), tag + cv.trayW);
+                // The tray narrows rather than leave: its F6 stop and S stay
+                // at these ordinary sizes (the first cut hid it under 180px).
+                const trayItem = findChild(cv, "undated-tray");
+                verify(trayItem, tag + "tray");
+                compare(trayItem.visible, cv.trayW >= Theme.px(90), tag + "tray shown while 90px are left, " + cv.trayW);
+                if (c[2]) verify(trayItem.visible, tag + "tray stays, " + cv.trayW);
+                compare(trayItem.compact, cv.trayW < Theme.px(180), tag + "compact under 180px");
+                // Every title drawn shows at least six letters' room.
+                const titles = [];
+                (function walk(it) {
+                    if (!it) return;
+                    if (it.objectName === "week-event-title" || it.objectName === "week-taskblock-title") titles.push(it);
+                    for (const k of it.children || []) walk(k);
+                })(wv);
+                verify(titles.length >= 3, tag + titles.length);
+                for (const t of titles) {
+                    let b = t;
+                    while (b && b._lane === undefined) b = b.parent;
+                    if (!b || !b.visible) continue;
+                    verify(t.width >= Math.ceil(sixLetters.advanceWidth) - 1, tag + t.text + " gets " + t.width);
+                    // A word wider than the title is never wrapped through.
+                    titleFm.font = t.font;
+                    if (!wv.wordsFit(t.text, titleFm, t.width)) {
+                        compare(t.wrapMode, Text.NoWrap, tag + t.text);
+                        compare(t.elide, Text.ElideRight, tag + t.text);
+                    }
+                }
+                holder.destroy();
+                wait(20);
+            }
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+        // The word check itself.
+        titleFm.font.pixelSize = 12;
+        verify(wv_wordsFit("a b", 200));
+        verify(!wv_wordsFit("Обновить", 10));
+    }
+    function wv_wordsFit(text, w) {
+        const wv = createTemporaryQmlObject('import TodoCpp; WeekView { width: 400; height: 300 }', host);
+        const r = wv.wordsFit(text, titleFm, w);
+        wv.destroy();
+        return r;
     }
 
     // A2-13, A6-8: what is above the hours on screen has a chip that says so.

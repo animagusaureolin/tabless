@@ -14,6 +14,9 @@ Rectangle {
     objectName: "undated-tray"
 
     property string searchText: ""
+    // Narrow beside a tight grid: slimmer margins, the hint left out, so
+    // the rows keep their titles (F2-REG-2..4 left it under 180px).
+    property bool compact: false
     // The task picked for a click on the grid; "" when none.
     property string armedId: ""
     signal taskOpened(string id)
@@ -44,6 +47,24 @@ Rectangle {
     }
     onItemsChanged: if (root.armedId && !root.items.some(t => t.id === root.armedId)) root.armedId = ""
 
+    // Down / Up (j / k) walk the rows' key stops, so S on any of them asks
+    // when: the list's own arrows put focus on a bare row, where S was the
+    // calendar's "go to date" (F2-NEW-1).
+    signal rowFocusRequested(int index)
+    function focusRow(i: int): bool {
+        if (i < 0 || i >= list.count) return false;
+        list.positionViewAtIndex(i, ListView.Contain);
+        root.rowFocusRequested(i);
+        return true;
+    }
+
+    // The row of task `id` on screen, or null: the window's "when" field
+    // opens under it (F2-NEW-3).
+    function rowItem(id: string): Item {
+        const i = root.shown.findIndex(t => t.id === id);
+        return i >= 0 ? list.itemAtIndex(i) : null;
+    }
+
     // S on the picked task: the next free window of the selected day (APP-253).
     function scheduleArmed() {
         if (!root.armedId) return false;
@@ -65,14 +86,20 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spXl
-        anchors.rightMargin: Theme.spLg
+        anchors.leftMargin: root.compact ? Theme.spSm : Theme.spXl
+        anchors.rightMargin: root.compact ? Theme.spXs : Theme.spLg
         anchors.topMargin: Theme.spLg
         spacing: Theme.spXs
 
-        Row {
+        // A compact tray elides its title before the count goes off the edge.
+        RowLayout {
+            Layout.fillWidth: true
             spacing: Theme.spXs
             Text {
+                objectName: "undated-tray-title"
+                Layout.fillWidth: true
+                Layout.maximumWidth: implicitWidth
+                elide: Text.ElideRight
                 text: I18n.t("tray.title") + (root.plain ? " · " + root.count : "")
                 color: root.plain ? Theme.textDim : Theme.text
                 font.pixelSize: Theme.fsMd
@@ -89,7 +116,7 @@ Rectangle {
             }
         }
         Text {
-            visible: !root.plain
+            visible: !root.plain && !root.compact
             Layout.fillWidth: true
             text: I18n.t("tray.hint")
             color: Theme.textDim
@@ -117,6 +144,7 @@ Rectangle {
             clip: true
             model: root.shown
             boundsBehavior: Flickable.StopAtBounds
+            keyNavigationEnabled: false
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
             delegate: Item {
                 id: row
@@ -126,6 +154,12 @@ Rectangle {
                 width: list.width
                 height: Theme.px(34)
                 readonly property bool armed: root.armedId === row.modelData.id
+                Connections {
+                    target: root
+                    function onRowFocusRequested(i: int) {
+                        if (i === row.index) rowKey.forceActiveFocus(Qt.TabFocusReason);
+                    }
+                }
 
                 Rectangle {
                     anchors.fill: parent
@@ -169,8 +203,17 @@ Rectangle {
                     acceptedButtons: Qt.NoButton
                     onActivated: root.armedId = row.armed ? "" : row.modelData.id
                     Keys.onPressed: (event) => {
-                        if (event.modifiers !== Qt.NoModifier) return;
-                        if (event.key === Qt.Key_S) {
+                        if (event.modifiers !== Qt.NoModifier && event.modifiers !== Qt.KeypadModifier) return;
+                        // At either end it stays put rather than move the grid.
+                        if (event.key === Qt.Key_Down || event.key === Qt.Key_J) {
+                            root.focusRow(row.index + 1);
+                            event.accepted = true;
+                        } else if (event.key === Qt.Key_Up || event.key === Qt.Key_K) {
+                            root.focusRow(row.index - 1);
+                            event.accepted = true;
+                        } else if (event.modifiers !== Qt.NoModifier) {
+                            return;
+                        } else if (event.key === Qt.Key_S) {
                             // The "when" field, as s everywhere else: the
                             // first free hour was taken without asking (A1-19).
                             root.scheduleRequested(row.modelData.id);

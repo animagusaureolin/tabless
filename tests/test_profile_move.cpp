@@ -7,6 +7,7 @@
 #include "StateSerializer.h"
 
 #include "profile/ProfileMove.h"
+#include "text/LocaleFormat.h"
 
 #include <QApplication>
 #include <QDir>
@@ -15,6 +16,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRandomGenerator>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 
@@ -429,6 +432,62 @@ TEST(ProfileMoveApp, CaptureReadsTheSigilAndHashStaysALabel) {
 }
 
 // ── A1-17: Today with every profile ──
+
+// F1-new-11: another profile's block is as long seen from here as from its
+// own profile - its estimate, else the focus block length, never a flat hour.
+TEST(ProfileMoveApp, TodayWithEveryProfileDrawsTheirBlocksTheirLength) {
+  const QDate today = QDate::currentDate();
+  const QString at = QDateTime(today, QTime(12, 30)).toString(Qt::ISODate);
+  writeState({profileJson("work", {taskJson("WORK-1", {{"scheduledAt", at}, {"scheduledHasTime", true}})}),
+              profileJson("home",
+                          {taskJson("HOME-1", {{"scheduledAt", at}, {"scheduledHasTime", true}}),
+                           taskJson("HOME-2", {{"scheduledAt", at}, {"scheduledHasTime", true}, {"estimateMinutes", 20}})})},
+             "work");
+  AppController app;
+  const auto lengthOf = [](const QVariantMap& day, const QString& id) {
+    for(const QVariant& v : day.value("blocks").toList()) {
+      const QVariantMap b = v.toMap();
+      if(b.value("id").toString() == id) {
+        return qRound((b.value("end").toDouble() - b.value("start").toDouble()) * 60);
+      }
+    }
+    return -1;
+  };
+  const QVariantMap fromWork = app.todayData(today, true);
+  const int own = lengthOf(fromWork, QStringLiteral("WORK-1"));
+  EXPECT_EQ(own, app.taskBlockMinutes(QStringLiteral("WORK-1")));
+  EXPECT_EQ(lengthOf(fromWork, QStringLiteral("HOME-1")), own) << "no estimate: the same focus block length";
+  EXPECT_EQ(lengthOf(fromWork, QStringLiteral("HOME-2")), 20) << "its own estimate";
+  app.setActiveProfileId(QStringLiteral("home"));
+  const QVariantMap fromHome = app.todayData(today, true);
+  EXPECT_EQ(lengthOf(fromHome, QStringLiteral("HOME-1")), lengthOf(fromWork, QStringLiteral("HOME-1")));
+  EXPECT_EQ(lengthOf(fromHome, QStringLiteral("WORK-1")), own);
+}
+
+// The block-start reminder of another profile's task ends where Today draws
+// it: the focus block length without an estimate, not a flat hour.
+TEST(ProfileMoveApp, AnotherProfilesBlockReminderEndsWhereTodayDrawsIt) {
+  // The sent keys outlive the process: a minute of its own each run.
+  const QDateTime at = QDateTime(QDate(2032, 1, 5), QTime(0, 0)).addSecs(60LL * QRandomGenerator::global()->bounded(5 * 365 * 24 * 60));
+  writeState({profileJson("work", {}),
+              profileJson("home", {taskJson("HOME-9", {{"scheduledAt", at.toString(Qt::ISODate)}, {"scheduledHasTime", true}})})},
+             "work");
+  AppController app;
+  app.setAppSettingsJson(
+      QStringLiteral("{\"notifications\":{\"meetingReminders\":false,\"deadlineReminders\":false,"
+                     "\"standupReminder\":false,\"blockedDailyDigest\":false,\"quietHours\":false,"
+                     "\"taskBlockReminders\":true,\"taskBlockLead\":0},"
+                     "\"calendar\":{\"focusBlockDuration\":45}}"));
+  ASSERT_EQ(app.taskBlockMinutes(QString()), 45);
+  QSignalSpy toasts(&app, &AppController::reminderToast);
+  app.runAutomationAt(at);
+  ASSERT_EQ(toasts.count(), 1);
+  const QString msg = toasts.at(0).at(1).toString();
+  const QDateTime end = at.addSecs(45 * 60);
+  EXPECT_TRUE(msg.contains(heap::text::formatTime(end.time(), false)) || msg.contains(heap::text::formatTime(end.time(), true)))
+      << msg.toStdString();
+  EXPECT_FALSE(msg.contains(heap::text::formatTime(at.addSecs(3600).time(), false))) << msg.toStdString();
+}
 
 TEST(ProfileMoveApp, TodayWithEveryProfileLabelsTheOtherProfilesRows) {
   const QDate today = QDate::currentDate();

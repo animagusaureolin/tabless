@@ -512,6 +512,45 @@ TestCase {
         tryVerify(function () { return tc.win.activeViewItem() && tc.win.activeViewItem().moveCursor; }, 3000);
     }
 
+    // F2-NEW-1, F2-NEW-3: Down / j walk the tray's key stops (S on any of
+    // them asks when), and the "when" field opens under the row.
+    function test_tray_rows_walk_by_keys_and_s_asks_when() {
+        AppController.currentView = "week";
+        tryVerify(function () { return tc.win._trayItem() !== null; }, 3000);
+        const tray = tc.win._trayItem();
+        tryVerify(function () { return tray.count >= 3; }, 2000);
+        tc.win.focusActiveView();
+        for (let i = 0; i < 6 && tc.win._regionOf(tc.win.activeFocusItem) !== "tray"; i++) { keyClick(Qt.Key_F6); wait(30); }
+        compare(tc.win._regionOf(tc.win.activeFocusItem), "tray");
+        const ids = tray.shown.map(function (t) { return t.id; });
+        const at = function () { return String(tc.win.activeFocusItem ? tc.win.activeFocusItem.objectName : ""); };
+        compare(at(), "undated-key-" + ids[0]);
+        keyClick(Qt.Key_Down); wait(30);
+        compare(at(), "undated-key-" + ids[1], "Down lands on the next row's key stop");
+        keyClick(Qt.Key_J); wait(30);
+        compare(at(), "undated-key-" + ids[2], "j too");
+        keyClick(Qt.Key_K); wait(30);
+        compare(at(), "undated-key-" + ids[1], "k goes back");
+        keyClick(Qt.Key_Up); wait(30);
+        compare(at(), "undated-key-" + ids[0], "Up goes back");
+        keyClick(Qt.Key_Up); wait(30);
+        compare(at(), "undated-key-" + ids[0], "Up on the first row stays");
+        keyClick(Qt.Key_Down); wait(30);
+        keyClick(Qt.Key_S); wait(200);
+        const open = popups().filter(function (p) { return p.opened; });
+        const sched = open.filter(function (p) { return typeName(p).indexOf("SchedulePopup") === 0; })[0];
+        verify(sched !== undefined, "S opens the when field: " + open.map(typeName).join(","));
+        verify(open.every(function (p) { return p.objectName !== "go-to-date"; }), "not the calendar's go to date");
+        const row = byName(tray, "undated-" + ids[1]);
+        const rp = row.mapToItem(tc.win.contentItem, 0, 0);
+        verify(sched.x > 0 || sched.y > 0, "not at the window's corner");
+        verify(Math.abs(sched.y - (rp.y + row.height)) < Theme.px(12) || sched.y + sched.height <= rp.y + 1,
+               "under (or over) the row: popup y " + sched.y + ", row y " + rp.y);
+        keyClick(Qt.Key_Escape); wait(100);
+        AppController.currentView = "board";
+        tryVerify(function () { return tc.win.activeViewItem() && tc.win.activeViewItem().moveCursor; }, 3000);
+    }
+
     // A1-15: "потом", "park", "later" name the someday command, not only its
     // label.
     function test_someday_command_answers_to_its_other_names() {

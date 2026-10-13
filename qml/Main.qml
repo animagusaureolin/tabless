@@ -1531,7 +1531,7 @@ ApplicationWindow {
                         onTaskCaptureRequested: (text) => quickCapture.openWithText(text)
                         // A block's "Запланировать…" and s on a tray row
                         // (A1-19): the "when" field.
-                        onScheduleRequested: (id) => schedulePopup.openFor([id], "scheduled")
+                        onScheduleRequested: (id) => win.scheduleFromCalendar(id)
                         onResetFilterRequested: win.resetTaskFilter()
                     }
                 }
@@ -2427,9 +2427,9 @@ ApplicationWindow {
     // "Маленькое поле у карточки" (N-Dlg-Schedule, R3-066): right under the
     // card it was opened from, so its title stays in sight; above it when
     // there is no room below. A selection, or a card out of sight: centred.
-    function _placeUnderCard(pop, id) {
+    function _placeUnderCard(pop, id, item) {
         const host = win.contentItem;
-        const card = win._taskItem(id);
+        const card = item || win._taskItem(id);
         if (!card) {
             pop.x = Math.round((host.width - pop.width) / 2);
             pop.y = Math.round(host.height / 4);
@@ -3255,6 +3255,14 @@ ApplicationWindow {
     property string regionShown: ""
     // The calendar's "Без даты" tray, when the view shows one: a region of
     // its own, so "pick one and press s" needs no 47 Tabs (A1-18).
+    // A block's "Schedule..." and s on a tray row (A1-19): the "when" field,
+    // under the tray row it came from, not at the window's corner (F2-NEW-3).
+    function scheduleFromCalendar(id) {
+        schedulePopup.openFor([id], "scheduled");
+        const tray = win._trayItem();
+        win._placeUnderCard(schedulePopup, id, tray ? tray.rowItem(id) : null);
+    }
+
     function _trayItem() {
         // The calendar lens hands its inner grid to activeViewItem(); the
         // tray sits beside that grid, so look from the lens itself.

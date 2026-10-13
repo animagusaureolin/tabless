@@ -1202,9 +1202,53 @@ Item {
     readonly property var overlapItems: buildOverlapItems()
     readonly property var overlaps: Overlap.computeByDay(root.overlapItems)
     // The narrowest lane drawn; past it the rest fold onto "+N" (A1-7).
-    readonly property int minLaneW: Theme.px(44)
+    // Measured in the title's own font, so it grows with the scale: six
+    // letters and the ellipsis in a slim block's small title ("o" is a
+    // letter of average width: "Design…", "Синхро…" fit), inside its
+    // padding and the gap between lanes. At a fixed 44px a lane showed
+    // "Sta…" or one letter at 150% (F2-REG-2..4).
+    TextMetrics {
+        id: laneSample
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsXs
+        font.weight: Theme.fwHeading
+        text: "oooooo…"
+    }
+    // The same six letters in a block's usual title: narrower than that
+    // with its usual padding, a block goes slim.
+    TextMetrics {
+        id: laneSampleSm
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsSm
+        font.weight: Theme.fwHeading
+        text: laneSample.text
+    }
+    // A block narrower than its usual padding allows keeps to this one.
+    readonly property int slimPadL: Theme.spXs
+    readonly property int slimPadR: Theme.sp2xs
+    // + the bar, the padding and the gap between lanes.
+    readonly property int minLaneW: Math.ceil(laneSample.advanceWidth) + 3 + root.slimPadL + root.slimPadR + 2
+    // A day holds two such lanes side by side: the tray and the rail give
+    // way to the grid before a day gets narrower than that.
+    readonly property int minDayW: Math.max(Theme.px(96), 2 * root.minLaneW + 2 * root.laneInset)
+    readonly property int minGridW: gridHost.gutterW + gridHost.dayCount * root.minDayW
+    // Whether a block `w` wide, with `chrome` px of its usual padding and
+    // icon, would leave its title less than the sample: then it drops the
+    // icon and keeps to the slim padding.
+    function slimBlock(w: real, chrome: int): bool {
+        return !root.dayZoom && w < Math.ceil(laneSampleSm.advanceWidth) + chrome + 2;
+    }
+    // Whether every word of `text` fits `w` px in `fm`: else a wrapped
+    // title would cut a long word at the block's edge, so it keeps to one
+    // line and ends in an ellipsis instead (F3-EYES-8).
+    function wordsFit(text: string, fm: var, w: real): bool {
+        const words = String(text || "").split(/\s+/);
+        for (let i = 0; i < words.length; i++)
+            if (words[i].length > 0 && fm.advanceWidth(words[i]) > w + 0.5) return false;
+        return true;
+    }
     readonly property int laneAvail: gridHost.dayW - 2 * root.laneInset
-    readonly property int laneFit: Overlap.capacity(root.laneAvail, root.minLaneW)
+    readonly property int laneFit: Overlap.capacity(root.laneAvail, root.minLaneW, 1)
     // The "+N" chips: what is folded, per day, from what hour.
     readonly property var foldChips: {
         const out = [];
@@ -1329,7 +1373,7 @@ Item {
             // Narrowest a day column may get before the rail has to give way.
             // Scaled (A6-11): at 150% the rail left 105 px days, every
             // title cut.
-            readonly property int minDayW: Theme.px(96)
+            readonly property int minDayW: root.minDayW
             // The rail takes its width off the grid rather than overlapping it,
             // and folds away whenever keeping it would squeeze the days below
             // minDayW. The old test was a fixed 900px, while dayW refused to go
@@ -2096,7 +2140,7 @@ Item {
                             readonly property int _col:  (dragDx !== 0 || dragDy !== 0) ? 0 : _slot.col
                             // Tiled, or cascaded once lanes would get
                             // narrower than a readable title (VISU-15).
-                            readonly property var _lane: Overlap.lane(weEv._col, weEv._cols, root.laneAvail, root.minLaneW)
+                            readonly property var _lane: Overlap.lane(weEv._col, weEv._cols, root.laneAvail, root.minLaneW, 1)
                             // Folded onto "+N", drawn only under the cursor.
                             readonly property bool _cursorOn: root.cursorVisible && root.cursorKey === root._evKey(weEv.modelData)
                             visible: !weEv._lane.folded || weEv._cursorOn
@@ -2143,10 +2187,13 @@ Item {
                                 color: Theme.meeting
                                 radius: 1
                             }
+                            // Narrow: no icon, slim padding (F2-REG-3).
+                            readonly property bool slim: root.slimBlock(weEv.width,
+                                (Style.fills ? Theme.spMd : Theme.spSm + Theme.px(11) + Theme.spXs) + Theme.spSm)
                             Column {
                                 anchors.fill: parent
-                                anchors.leftMargin: Style.fills ? Theme.spMd : Theme.spSm
-                                anchors.rightMargin: Theme.spSm
+                                anchors.leftMargin: weEv.slim ? (Style.fills ? 3 : 0) + root.slimPadL : (Style.fills ? Theme.spMd : Theme.spSm)
+                                anchors.rightMargin: weEv.slim ? root.slimPadR : Theme.spSm
                                 anchors.topMargin: weEv.compact ? 0 : (root.dayZoom ? Theme.spXs : Theme.sp2xs)
                                 spacing: root.dayZoom ? Theme.sp2xs : 0
                                 clip: true
@@ -2168,7 +2215,7 @@ Item {
                                     // the title does (SCALE-7).
                                     readonly property bool roomy: evLine.width - evTime.implicitWidth - Theme.spXs >= Theme.px(64)
                                     MeetingIcon {
-                                        visible: !Style.fills || root.dayZoom
+                                        visible: (!Style.fills || root.dayZoom) && !weEv.slim
                                         size: Theme.px(11)
                                         ink: Style.fills ? Theme.meeting : Theme.textMuted
                                     }
@@ -2188,7 +2235,7 @@ Item {
                                         text: weEv.modelData.title
                                         color: Theme.text
                                         font.family: Theme.fontUi
-                                        font.pixelSize: root.dayZoom ? Theme.fsMd : Theme.fsSm
+                                        font.pixelSize: root.dayZoom ? Theme.fsMd : (weEv.slim ? Theme.fsXs : Theme.fsSm)
                                         font.weight: Style.fills && !root.dayZoom ? Theme.fwHeading : Theme.fwBody
                                         elide: Text.ElideRight
                                     }
@@ -2405,7 +2452,7 @@ Item {
                             readonly property real effEnd: !isNaN(pendingEndH) ? pendingEndH : modelData.end
                             readonly property var _slot: root.overlaps[wkBlock.modelData.key] || ({ col: 0, cols: 1 })
                             readonly property int _cols: wkBlock.moving ? 1 : Math.max(1, wkBlock._slot.cols)
-                            readonly property var _lane: Overlap.lane(wkBlock.moving ? 0 : wkBlock._slot.col, wkBlock._cols, root.laneAvail, root.minLaneW)
+                            readonly property var _lane: Overlap.lane(wkBlock.moving ? 0 : wkBlock._slot.col, wkBlock._cols, root.laneAvail, root.minLaneW, 1)
                             readonly property bool _cursorOn: root.cursorVisible && root.cursorKey === "task:" + wkBlock.modelData.id
                             visible: !wkBlock._lane.folded || wkBlock._cursorOn
                             x: gridHost.gutterW + wkBlock.effDayIndex * gridHost.dayW + root.laneInset + wkBlock._lane.x
@@ -2462,10 +2509,13 @@ Item {
                             // quiet: the status ring, the title and the range
                             // under it; the day: one row with the range at the
                             // right and the key under it (DG-044, DG-051).
+                            // Narrow: no ring, slim padding (F2-REG-2).
+                            readonly property bool slim: root.slimBlock(wkBlock.width,
+                                2 * Theme.spSm + (Style.fills ? 0 : Theme.px(10) + Theme.spXs))
                             Column {
                                 anchors.fill: parent
-                                anchors.leftMargin: root.dayZoom ? Theme.spLg : Theme.spSm
-                                anchors.rightMargin: root.dayZoom ? Theme.spLg : Theme.spSm
+                                anchors.leftMargin: root.dayZoom ? Theme.spLg : (wkBlock.slim ? root.slimPadL : Theme.spSm)
+                                anchors.rightMargin: root.dayZoom ? Theme.spLg : (wkBlock.slim ? root.slimPadR : Theme.spSm)
                                 anchors.topMargin: wkBlock.oneLine ? 0 : (root.dayZoom ? Theme.spXs : Theme.sp2xs)
                                 spacing: root.dayZoom ? Theme.sp2xs : 0
                                 clip: true
@@ -2484,7 +2534,7 @@ Item {
                                     spacing: Theme.spXs
                                     StatusRing {
                                         id: blkRing
-                                        visible: !Style.fills || root.dayZoom
+                                        visible: (!Style.fills || root.dayZoom) && !wkBlock.slim
                                         Layout.alignment: wkBlock.oneLine || root.dayZoom ? Qt.AlignVCenter : Qt.AlignTop
                                         Layout.topMargin: wkBlock.oneLine || root.dayZoom ? 0 : Theme.sp2xs
                                         category: AppController.statusCategory(wkBlock.modelData.status || "")
@@ -2503,13 +2553,18 @@ Item {
                                               + (wkBlock.modelData.title || "")
                                         color: Theme.text
                                         font.family: Theme.fontUi
-                                        font.pixelSize: root.dayZoom ? Theme.fsMd : Theme.fsSm
+                                        font.pixelSize: root.dayZoom ? Theme.fsMd : (wkBlock.slim ? Theme.fsXs : Theme.fsSm)
                                         font.weight: Style.fills && !root.dayZoom ? Theme.fwHeading : Theme.fwBody
-                                        wrapMode: wkBlock.oneLine || root.dayZoom || !Style.fills ? Text.NoWrap : Text.WordWrap
+                                        // Wrapped at words only while every word fits;
+                                        // a word wider than the lane was cut through
+                                        // with no ellipsis (F3-EYES-8, F2-REG-2).
+                                        readonly property bool oneLine: wkBlock.oneLine || root.dayZoom || !Style.fills
+                                            || !root.wordsFit(blkTitle.text, blkTitleFm, blkTitle.width)
+                                        wrapMode: blkTitle.oneLine ? Text.NoWrap : Text.WordWrap
                                         // As many lines as the block holds whole (up to
                                         // three): a narrow lane wrapped a fourth one
                                         // cut in half by the block's bottom.
-                                        maximumLineCount: wkBlock.oneLine || root.dayZoom || !Style.fills ? 1
+                                        maximumLineCount: blkTitle.oneLine ? 1
                                             : Math.max(1, Math.min(3, Math.floor((wkBlock.height - Theme.sp2xs * 2
                                                 - (blkStart.visible ? blkStart.height : 0)) / blkTitleFm.lineSpacing)))
                                         elide: Text.ElideRight
@@ -2705,7 +2760,7 @@ Item {
                             id: foldChip
                             required property var modelData
                             objectName: "week-fold-" + foldChip.modelData.dayIndex
-                            readonly property var _last: Overlap.lane(root.laneFit - 1, root.laneFit, root.laneAvail, root.minLaneW)
+                            readonly property var _last: Overlap.lane(root.laneFit - 1, root.laneFit, root.laneAvail, root.minLaneW, 1)
                             x: gridHost.gutterW + foldChip.modelData.dayIndex * gridHost.dayW + root.laneInset + foldChip._last.x + foldChip._last.w - width - Theme.sp2xs
                             // Off the title of what the last lane draws there.
                             y: (Overlap.chipStart(foldChip.modelData, (height + Theme.sp2xs) / root.hourH, root.blockTitleH / root.hourH) - root.hoursStart) * root.hourH + Theme.sp2xs

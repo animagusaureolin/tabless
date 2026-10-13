@@ -48,6 +48,19 @@ Item {
         return AppController.sprintMarkers(from, to);
     }
 
+    // The tray takes what the grid leaves once every day holds two
+    // readable lanes side by side (F2-REG-2..4): narrower on a tight
+    // window, in its compact form under 180px, and gone only when not even
+    // 90px (about eight letters of a title) are left: from 1280px windows at
+    // 100-125% and 1366px at 150% up it stays, with its F6 stop and S. Only
+    // a 1280px window at 150% has no room for it beside two lanes a day.
+    readonly property int gridMinW: {
+        const v = root.calendarView;
+        return v && v.minGridW !== undefined ? v.minGridW : 0;
+    }
+    readonly property int trayW: Math.min(Theme.px(260), root.width - root.gridMinW)
+    readonly property bool trayCompact: root.trayW < Theme.px(180)
+
     RowLayout {
         anchors.fill: parent
         spacing: 0
@@ -84,8 +97,9 @@ Item {
         UndatedTray {
             id: tray
             Layout.fillHeight: true
-            Layout.preferredWidth: Theme.px(260)
-            visible: tray.count > 0 && root.width > Theme.px(720)
+            Layout.preferredWidth: root.trayW
+            compact: root.trayCompact
+            visible: tray.count > 0 && root.width > Theme.px(720) && root.trayW >= Theme.px(90)
             searchText: root.searchText
             onTaskOpened: (id) => root.taskClicked(id)
             onScheduleRequested: (id) => root.scheduleRequested(id)

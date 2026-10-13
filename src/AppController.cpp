@@ -4965,6 +4965,10 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
     return s.own ? statusCategory(s.task->status) : heap::board::defaultCategoryFor(s.task->status);
   };
 
+  // Every profile's block is as long as its own profile draws it: its
+  // estimate, else the focus block length (F1-new-11). Another profile's
+  // used to fall back to a flat hour.
+  const int noEstimateMin = taskBlockMinutes(QString());
   QVector<heap::plan::TaskIn> timed;
   for(const Src& s : std::as_const(all)) {
     const Task& t = *s.task;
@@ -4977,7 +4981,7 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
     in.status = t.status;
     in.category = category(s);
     in.scheduledAt = t.scheduledAt;
-    in.minutes = s.own ? taskBlockMinutes(t.id) : (t.estimateMinutes > 0 ? t.estimateMinutes : 60);
+    in.minutes = t.estimateMinutes > 0 ? t.estimateMinutes : noEstimateMin;
     in.profileName = s.profileName;
     in.profileId = s.profileId;
     timed.append(in);
@@ -16996,7 +17000,8 @@ void AppController::runAutomationAt(const QDateTime& now) {
         return;
       }
       markReminderSent(call.key, now);
-      const int minutes = own ? taskBlockMinutes(t.id) : (t.estimateMinutes > 0 ? t.estimateMinutes : 60);
+      // As long as Today draws it, whichever profile it is in (F1-new-11).
+      const int minutes = t.estimateMinutes > 0 ? t.estimateMinutes : taskBlockMinutes(QString());
       const QDateTime end = t.scheduledAt.addSecs(60LL * minutes);
       const QString title =
           call.minutesLeft <= 0 ? tr_("notify.blockNow").arg(t.title) : tr_("notify.blockSoon").arg(t.title).arg(call.minutesLeft);

@@ -426,6 +426,53 @@ TestCase {
         AppController.selectedDate = prev;
     }
 
+    // F3-EYES-9: in a narrow cell "+3 more · 2 meetings" is not cut at the
+    // cell's edge: the meetings part goes, what is left elides.
+    function test_the_more_line_fits_a_narrow_cell() {
+        const prev = AppController.selectedDate;
+        const day = new Date();
+        day.setDate(day.getDate() + 467);
+        day.setHours(0, 0, 0, 0);
+        const taskIds = [], eventIds = [];
+        for (let i = 0; i < 4; i++) {
+            const t = AppController.newTaskDraft("todo");
+            t.title = "month narrow probe " + i;
+            t.scheduledAt = day; t.dueAt = day; t.hasTime = false;
+            AppController.saveTask(t);
+            taskIds.push(t.id);
+        }
+        for (let i = 0; i < 4; i++) {
+            const ev = AppController.newEventDraft(8 + i, day);
+            ev.title = "month narrow probe ev " + i;
+            ev.date = day;
+            AppController.saveEvent(ev);
+            eventIds.push(ev.id);
+        }
+        AppController.selectedDate = day;
+        try {
+            for (const w of [560, 700, 1400]) {
+                const holder = createTemporaryQmlObject('import QtQuick; Item { width: ' + w + '; height: 520 }', host);
+                const mv = createTemporaryQmlObject('import TodoCpp; MonthView { anchors.fill: parent; chrome: false }', holder);
+                wait(0);
+                const cell = _findAll(mv, function (it) {
+                    return it.cell !== undefined && it.cell.date !== undefined && mv.isSameDay(it.cell.date, day);
+                }, [])[0];
+                const more = _findAll(cell, function (it) { return it.objectName === "month-more"; }, [])[0];
+                verify(more.visible, w + ": the busy day says more");
+                const p = more.mapToItem(cell, 0, 0);
+                verify(p.x + more.width <= cell.width + 0.5, w + ": the line ends inside the cell");
+                verify(more.contentWidth <= more.width + 0.5 || more.truncated, w + ": '" + more.text + "' " + more.contentWidth + " > " + more.width);
+                verify(more.text.indexOf(I18n.t("cal.moreN").arg(more._extra)) === 0, more.text);
+                holder.destroy();
+            }
+        } finally {
+            for (const id of taskIds) AppController.deleteTask(id);
+            for (const id of eventIds) AppController.deleteEvent(id);
+            AppController.clearPendingUndo();
+            AppController.selectedDate = prev;
+        }
+    }
+
     // SHELL-17: the grid is one Tab stop; arrows move the selected day by a
     // day / a week, and the cells carry names for a screen reader.
     function test_the_grid_moves_the_day_from_the_keyboard() {
