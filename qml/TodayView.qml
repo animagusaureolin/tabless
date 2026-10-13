@@ -93,7 +93,10 @@ FocusScope {
     // Until the first task (APP-271): the input line, three keys, and the
     // way in for tasks that live elsewhere — instead of a tour. Closed
     // before a task was made, it is here again on the next start.
+    // With "Today shows: all profiles" another profile's day is still a day:
+    // the first-run page hid it while this profile was empty (A1-17).
     readonly property bool firstRun: !AppController.welcomeSeen && root._rev >= 0 && AppController.tasks.rowCount() === 0
+                                     && !(root.allProfiles && (!root.dayEmpty || root.inProgress.length > 0))
     readonly property real nowHour: {
         const n = root._rev >= 0 ? new Date() : new Date();
         return n.getHours() + n.getMinutes() / 60;

@@ -244,6 +244,9 @@ TestCase {
         tryVerify(() => today && today.visible && today.allProfiles);
         const rows = (today.dayData.inProgress || []).filter(r => r.id === d.id);
         compare(rows.length, 1, "another profile's task is in progress on Today");
+        // Other tests leave tasks in progress too; the list shows the first
+        // few and folds the rest under "+N more" - unfold it so the row is drawn.
+        today._ipAll = true;
         const name = tc.nameOf(pB);
         tryVerify(() => {
             const labels = tc.collect(today, "today-inprogress-profile", []).concat(tc.collect(today, "today-lead-profile", []));
