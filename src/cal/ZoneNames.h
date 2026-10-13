@@ -36,6 +36,14 @@ inline const QHash<QString, QByteArray>& zoneCityNames() {
       {QStringLiteral("denver"), "America/Denver"},
       {QStringLiteral("los angeles"), "America/Los_Angeles"},
       {QStringLiteral("san francisco"), "America/Los_Angeles"},
+      {QStringLiteral("sf"), "America/Los_Angeles"},
+      {QStringLiteral("madrid"), "Europe/Madrid"},
+      {QStringLiteral("rome"), "Europe/Rome"},
+      {QStringLiteral("vienna"), "Europe/Vienna"},
+      {QStringLiteral("stockholm"), "Europe/Stockholm"},
+      {QStringLiteral("vilnius"), "Europe/Vilnius"},
+      {QStringLiteral("kyiv"), "Europe/Kyiv"},
+      {QStringLiteral("minsk"), "Europe/Minsk"},
       {QStringLiteral("seattle"), "America/Los_Angeles"},
       {QStringLiteral("london"), "Europe/London"},
       {QStringLiteral("dublin"), "Europe/Dublin"},
@@ -122,8 +130,116 @@ inline const QHash<QString, QByteArray>& zoneCityNames() {
       {QString::fromUtf8("индия"), "Asia/Kolkata"},
       {QString::fromUtf8("индии"), "Asia/Kolkata"},
       {QString::fromUtf8("сиднею"), "Australia/Sydney"},
+      // F1-new-14: the EU capitals said in Russian.
+      {QString::fromUtf8("варшава"), "Europe/Warsaw"},
+      {QString::fromUtf8("варшаве"), "Europe/Warsaw"},
+      {QString::fromUtf8("прага"), "Europe/Prague"},
+      {QString::fromUtf8("праге"), "Europe/Prague"},
+      {QString::fromUtf8("рига"), "Europe/Riga"},
+      {QString::fromUtf8("риге"), "Europe/Riga"},
+      {QString::fromUtf8("таллин"), "Europe/Tallinn"},
+      {QString::fromUtf8("таллинн"), "Europe/Tallinn"},
+      {QString::fromUtf8("таллину"), "Europe/Tallinn"},
+      {QString::fromUtf8("вильнюс"), "Europe/Vilnius"},
+      {QString::fromUtf8("вильнюсу"), "Europe/Vilnius"},
+      {QString::fromUtf8("хельсинки"), "Europe/Helsinki"},
+      {QString::fromUtf8("дублин"), "Europe/Dublin"},
+      {QString::fromUtf8("дублину"), "Europe/Dublin"},
+      {QString::fromUtf8("лиссабон"), "Europe/Lisbon"},
+      {QString::fromUtf8("лиссабону"), "Europe/Lisbon"},
+      {QString::fromUtf8("мадрид"), "Europe/Madrid"},
+      {QString::fromUtf8("мадриду"), "Europe/Madrid"},
+      {QString::fromUtf8("рим"), "Europe/Rome"},
+      {QString::fromUtf8("риму"), "Europe/Rome"},
+      {QString::fromUtf8("вена"), "Europe/Vienna"},
+      {QString::fromUtf8("вене"), "Europe/Vienna"},
+      {QString::fromUtf8("стокгольм"), "Europe/Stockholm"},
+      {QString::fromUtf8("стокгольму"), "Europe/Stockholm"},
+      {QString::fromUtf8("торонто"), "America/Toronto"},
+      {QString::fromUtf8("денвер"), "America/Denver"},
+      {QString::fromUtf8("денверу"), "America/Denver"},
+      {QString::fromUtf8("сиэтл"), "America/Los_Angeles"},
+      {QString::fromUtf8("бостон"), "America/New_York"},
+      {QString::fromUtf8("сеул"), "Asia/Seoul"},
+      {QString::fromUtf8("шанхай"), "Asia/Shanghai"},
+      {QString::fromUtf8("пекин"), "Asia/Shanghai"},
+      {QString::fromUtf8("гонконг"), "Asia/Hong_Kong"},
   };
   return names;
+}
+
+// The name a zone's city is shown by in Russian, and its region's
+// (F3-EYES-16): the picker in a Russian UI said "Berlin Europe". Zones not
+// listed keep their English city.
+inline const QHash<QByteArray, QString>& zoneCityRu() {
+  static const QHash<QByteArray, QString> names = {
+      {"America/New_York", QString::fromUtf8("Нью-Йорк")},
+      {"America/Toronto", QString::fromUtf8("Торонто")},
+      {"America/Chicago", QString::fromUtf8("Чикаго")},
+      {"America/Denver", QString::fromUtf8("Денвер")},
+      {"America/Los_Angeles", QString::fromUtf8("Лос-Анджелес")},
+      {"Europe/London", QString::fromUtf8("Лондон")},
+      {"Europe/Dublin", QString::fromUtf8("Дублин")},
+      {"Europe/Lisbon", QString::fromUtf8("Лиссабон")},
+      {"Europe/Madrid", QString::fromUtf8("Мадрид")},
+      {"Europe/Paris", QString::fromUtf8("Париж")},
+      {"Europe/Amsterdam", QString::fromUtf8("Амстердам")},
+      {"Europe/Berlin", QString::fromUtf8("Берлин")},
+      {"Europe/Rome", QString::fromUtf8("Рим")},
+      {"Europe/Vienna", QString::fromUtf8("Вена")},
+      {"Europe/Prague", QString::fromUtf8("Прага")},
+      {"Europe/Warsaw", QString::fromUtf8("Варшава")},
+      {"Europe/Stockholm", QString::fromUtf8("Стокгольм")},
+      {"Europe/Helsinki", QString::fromUtf8("Хельсинки")},
+      {"Europe/Riga", QString::fromUtf8("Рига")},
+      {"Europe/Tallinn", QString::fromUtf8("Таллин")},
+      {"Europe/Vilnius", QString::fromUtf8("Вильнюс")},
+      {"Europe/Belgrade", QString::fromUtf8("Белград")},
+      {"Europe/Istanbul", QString::fromUtf8("Стамбул")},
+      {"Europe/Minsk", QString::fromUtf8("Минск")},
+      {"Europe/Kyiv", QString::fromUtf8("Киев")},
+      {"Europe/Kiev", QString::fromUtf8("Киев")},
+      {"Europe/Moscow", QString::fromUtf8("Москва")},
+      {"Europe/Kaliningrad", QString::fromUtf8("Калининград")},
+      {"Europe/Samara", QString::fromUtf8("Самара")},
+      {"Asia/Yekaterinburg", QString::fromUtf8("Екатеринбург")},
+      {"Asia/Novosibirsk", QString::fromUtf8("Новосибирск")},
+      {"Asia/Vladivostok", QString::fromUtf8("Владивосток")},
+      {"Asia/Tbilisi", QString::fromUtf8("Тбилиси")},
+      {"Asia/Yerevan", QString::fromUtf8("Ереван")},
+      {"Asia/Dubai", QString::fromUtf8("Дубай")},
+      {"Asia/Almaty", QString::fromUtf8("Алматы")},
+      {"Asia/Tashkent", QString::fromUtf8("Ташкент")},
+      {"Asia/Kolkata", QString::fromUtf8("Калькутта")},
+      {"Asia/Singapore", QString::fromUtf8("Сингапур")},
+      {"Asia/Hong_Kong", QString::fromUtf8("Гонконг")},
+      {"Asia/Shanghai", QString::fromUtf8("Шанхай")},
+      {"Asia/Seoul", QString::fromUtf8("Сеул")},
+      {"Asia/Tokyo", QString::fromUtf8("Токио")},
+      {"Australia/Sydney", QString::fromUtf8("Сидней")},
+  };
+  return names;
+}
+
+inline QString zoneRegionRu(const QString& region) {
+  static const QHash<QString, QString> names = {
+      {QStringLiteral("America"), QString::fromUtf8("Америка")},
+      {QStringLiteral("Europe"), QString::fromUtf8("Европа")},
+      {QStringLiteral("Asia"), QString::fromUtf8("Азия")},
+      {QStringLiteral("Africa"), QString::fromUtf8("Африка")},
+      {QStringLiteral("Australia"), QString::fromUtf8("Австралия")},
+      {QStringLiteral("Pacific"), QString::fromUtf8("Тихий океан")},
+      {QStringLiteral("Atlantic"), QString::fromUtf8("Атлантика")},
+      {QStringLiteral("Indian"), QString::fromUtf8("Индийский океан")},
+      {QStringLiteral("Antarctica"), QString::fromUtf8("Антарктида")},
+      {QStringLiteral("Arctic"), QString::fromUtf8("Арктика")},
+  };
+  const QString top = region.section(QLatin1Char('/'), 0, 0);
+  const auto it = names.constFind(top);
+  if(it == names.cend()) {
+    return region;
+  }
+  return region.contains(QLatin1Char('/')) ? *it + QLatin1Char('/') + region.section(QLatin1Char('/'), 1) : *it;
 }
 
 // Old IANA names to the ones that replaced them. Both are in the database,
@@ -264,6 +380,17 @@ inline QString zoneCity(const QString& id) {
   QString city = id.section(QLatin1Char('/'), -1);
   city.replace(QLatin1Char('_'), QLatin1Char(' '));
   return city;
+}
+
+// zoneCity in the UI's language: "Берлин" in a Russian UI where one is known.
+inline QString zoneCityIn(const QString& id, const QString& language) {
+  if(language == QLatin1String("ru")) {
+    const auto it = zoneCityRu().constFind(canonicalZoneId(id.toUtf8()));
+    if(it != zoneCityRu().cend()) {
+      return *it;
+    }
+  }
+  return zoneCity(id);
 }
 
 struct ZoneMatch {
