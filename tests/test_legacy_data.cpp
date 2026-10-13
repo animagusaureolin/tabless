@@ -157,6 +157,40 @@ TEST_F(LegacyData, FilesThisLaunchAlreadyWroteAreKept) {
   EXPECT_EQ(readFile(newDir_ + "/logs/lowkey.log"), QByteArray("old log"));
 }
 
+// A channel build (APP-309) starts on a copy of the user's own Tabless folder
+// and never writes to it.
+TEST_F(LegacyData, AChannelBuildSitsBesideTheUsersOwnFolder) {
+  using heap::platform::legacy::stableDirFor;
+  EXPECT_EQ(QDir::cleanPath(stableDirFor(root_.filePath(QStringLiteral("Tabless/Tabless-feature")))), QDir::cleanPath(newDir_));
+  EXPECT_TRUE(stableDirFor(newDir_).isEmpty()) << "the user's own folder is not a channel's";
+  EXPECT_TRUE(stableDirFor(root_.filePath(QStringLiteral("somewhere/Tabless-feature"))).isEmpty());
+  EXPECT_TRUE(legacyDirsFor(root_.filePath(QStringLiteral("Tabless/Tabless-feature"))).isEmpty())
+      << "a channel build never moves a lowkey or heap folder";
+}
+
+TEST_F(LegacyData, AChannelBuildCopiesTheUsersFolderOnceAndLeavesItAlone) {
+  using heap::platform::legacy::copyStableData;
+  const QString channelDir = root_.filePath(QStringLiteral("Tabless/Tabless-feature"));
+  makeOldFolder(newDir_, R"({"schemaVersion":14})");
+  writeFile(newDir_ + "/session.open", "2026-10-13T16:00:00");  // the user's Tabless is running
+  writeFile(newDir_ + "/tabless.lock", "lock");
+
+  const auto r = copyStableData(channelDir);
+  ASSERT_EQ(r.kind, MoveKind::Moved) << r.error.toStdString();
+  EXPECT_EQ(readFile(channelDir + "/state.json"), QByteArray(R"({"schemaVersion":14})"));
+  EXPECT_EQ(readFile(channelDir + "/attachments/0123456789abcdef0123456789abcdef.png"), QByteArray("png"));
+  EXPECT_FALSE(QFileInfo::exists(channelDir + "/session.open")) << "the running Tabless's marker would read as a crash";
+  EXPECT_FALSE(QFileInfo::exists(channelDir + "/tabless.lock"));
+  // Nothing written to the user's folder: no marker, the session still open.
+  EXPECT_FALSE(QFileInfo::exists(newDir_ + "/" + QLatin1String(heap::brand::kMovedMarker)));
+  EXPECT_EQ(readFile(newDir_ + "/session.open"), QByteArray("2026-10-13T16:00:00"));
+
+  writeFile(channelDir + "/state.json", R"({"schemaVersion":15})");  // the channel build migrated it
+  EXPECT_EQ(copyStableData(channelDir).kind, MoveKind::NothingToDo);
+  EXPECT_EQ(readFile(channelDir + "/state.json"), QByteArray(R"({"schemaVersion":15})"));
+  EXPECT_EQ(readFile(newDir_ + "/state.json"), QByteArray(R"({"schemaVersion":14})"));
+}
+
 int main(int argc, char** argv) {
   QCoreApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);

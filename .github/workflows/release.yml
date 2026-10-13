@@ -199,7 +199,8 @@ jobs:
         shell: msys2 {0}
         run: |
           MSYS_ROOT=$(cygpath -m "${{ steps.msys2.outputs.msys2-location }}")
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMSYS_ROOT="$MSYS_ROOT"
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMSYS_ROOT="$MSYS_ROOT" \
+            -DHEAP_CHANNEL="${{ needs.meta.outputs.channel }}"
           cmake --build build --target heap --parallel $(nproc)
 
       - name: Assemble portable bundle
@@ -303,8 +304,12 @@ jobs:
 
       - name: Build installer
         shell: pwsh
+        env:
+          CHANNEL: ${{ needs.meta.outputs.channel }}
         run: |
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+          # A channel build installs beside Tabless, not over it (tabless.iss).
+          $channel = @(if ($env:CHANNEL) { "/DChannel=$env:CHANNEL" })
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" @channel `
             /DAppVersion="${{ needs.meta.outputs.tag }}" `
             /DBundleDir="$($PWD.Path)\build\heap-portable" `
             "/Ftabless-${{ needs.meta.outputs.tag }}-windows-setup" `
@@ -421,7 +426,8 @@ jobs:
           HEAP_OAUTH_BITBUCKET_CLIENT_ID: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_ID }}
           HEAP_OAUTH_BITBUCKET_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_SECRET }}
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF \
+            -DHEAP_CHANNEL="${{ needs.meta.outputs.channel }}"
           cmake --build build --parallel --target heap
 
       - name: Build AppImage
@@ -548,7 +554,8 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DHEAP_BUILD_TESTS=OFF \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DHEAP_CHANNEL="${{ needs.meta.outputs.channel }}"
           cmake --build build --parallel --target heap
           test -d build/Tabless.app
 

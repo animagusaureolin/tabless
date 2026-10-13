@@ -282,8 +282,8 @@ int main(int argc, char* argv[]) {
   // lowkey since 0.8.0 (APP-280); a 0.7.x data folder moves over below.
   QApplication::setOrganizationName(QLatin1String(heap::brand::kName));
   QApplication::setOrganizationDomain(QStringLiteral("tabless.local"));
-  QApplication::setApplicationName(QLatin1String(heap::brand::kName));
-  QApplication::setApplicationDisplayName(QLatin1String(heap::brand::kName));
+  QApplication::setApplicationName(heap::brand::appName());
+  QApplication::setApplicationDisplayName(heap::brand::displayName());
   QApplication::setApplicationVersion(QStringLiteral(HEAP_VERSION));
   QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/tabless/tabless-icon.svg")));
 
@@ -333,9 +333,12 @@ int main(int argc, char* argv[]) {
   // lowkey → Tabless (APP-283), heap → lowkey (APP-280): the first launch
   // copies the old data folder into the new one. Only for the user's own
   // folder, never a redirected one.
+  // A channel build starts from a copy of the user's own Tabless folder instead
+  // (APP-309): what it migrates or breaks stays in its own folder.
   heap::platform::legacy::MoveResult legacyMove;
   if(!heap::paths::dataDirOverridden() && !cli.smoke) {
-    legacyMove = heap::platform::legacy::moveLegacyData(heap::paths::dataDir());
+    legacyMove = heap::brand::isChannelBuild() ? heap::platform::legacy::copyStableData(heap::paths::dataDir())
+                                               : heap::platform::legacy::moveLegacyData(heap::paths::dataDir());
     if(legacyMove.kind == heap::platform::legacy::MoveKind::Busy) {
       QMessageBox::information(nullptr,
                                QStringLiteral("Tabless"),
@@ -399,7 +402,7 @@ int main(int argc, char* argv[]) {
   LogCloser logCloser{cli.smoke, smokeLogKeep};
   qInfo("Tabless %s starting", qUtf8Printable(app.applicationVersion()));
   if(legacyMove.kind == heap::platform::legacy::MoveKind::Moved) {
-    qInfo("moved %d file(s) of %s data from %s to %s",
+    qInfo("copied %d file(s) of %s data from %s to %s",
           legacyMove.files,
           qUtf8Printable(legacyMove.legacyName),
           qUtf8Printable(legacyMove.from),

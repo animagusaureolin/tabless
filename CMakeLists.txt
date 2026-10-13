@@ -647,6 +647,14 @@ target_compile_definitions(heap_core PRIVATE
 # PUBLIC so the thin `heap` executable (src/main.cpp) inherits it for
 # setApplicationVersion; AppController exposes it to QML as `appVersion`.
 target_compile_definitions(heap_core PUBLIC HEAP_VERSION="${PROJECT_VERSION}")
+# A channel build (APP-309): "feature" or "unstable" from channels.yml, empty
+# for a release. It gets its own data folder and leaves the user's own
+# Tabless's login item, updates and registrations alone (platform/Brand.h).
+set(HEAP_CHANNEL "" CACHE STRING "Channel build name (feature, unstable) or empty for a release")
+if (NOT HEAP_CHANNEL STREQUAL "" AND NOT HEAP_CHANNEL MATCHES "^(feature|unstable)$")
+    message(FATAL_ERROR "HEAP_CHANNEL must be empty, feature or unstable (got '${HEAP_CHANNEL}')")
+endif()
+target_compile_definitions(heap_core PUBLIC HEAP_CHANNEL="${HEAP_CHANNEL}")
 if (TARGET Qt6::Svg)
     target_link_libraries(heap_core PUBLIC Qt6::Svg)
     target_compile_definitions(heap_core PRIVATE HEAP_HAS_SVG=1)
@@ -760,7 +768,7 @@ if(WIN32)
     )
     set_target_properties(heap-cli PROPERTIES AUTOMOC ON)
     target_include_directories(heap-cli PRIVATE src src/markdown)
-    target_compile_definitions(heap-cli PRIVATE HEAP_VERSION="${PROJECT_VERSION}")
+    target_compile_definitions(heap-cli PRIVATE HEAP_VERSION="${PROJECT_VERSION}" HEAP_CHANNEL="${HEAP_CHANNEL}")
     target_link_libraries(heap-cli PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Network heap_markdown shell32)
     target_compile_options(heap-cli PRIVATE "${HEAP_WARNING_OPTIONS}")
     set_target_properties(heap-cli PROPERTIES OUTPUT_NAME tabless-cli)

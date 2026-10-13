@@ -88,6 +88,51 @@ bool copyTree(const QString& from, const QString& to, int* files, QString* error
   return true;
 }
 
+// Copy beside the new folder, then move each top-level entry in: a copy
+// that stops half-way leaves the new folder without a state.json, so the
+// next launch simply tries again. False (and r->kind = Failed) on an error.
+bool copyInto(const QString& newDir, const QString& fromDir, MoveResult* r) {
+  const QString staging = QDir::cleanPath(newDir) + QStringLiteral(".moving");
+  QDir(staging).removeRecursively();
+  if(!copyTree(fromDir, staging, &r->files, &r->error)) {
+    QDir(staging).removeRecursively();
+    r->kind = MoveKind::Failed;
+    return false;
+  }
+  QDir().mkpath(newDir);
+  const QDir in(staging);
+  // state.json last: until it is there, the move has not happened.
+  QStringList entries = in.entryList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot);
+  entries.removeAll(kState);
+  entries.append(kState);
+  for(const QString& name : entries) {
+    const QString target = QDir(newDir).filePath(name);
+    if(QFileInfo::exists(target)) {
+      if(QFileInfo(target).isDir() && QFileInfo(in.filePath(name)).isDir()) {
+        // A folder this launch already made (logs): merge file by file.
+        QDirIterator files(in.filePath(name), QDir::Files | QDir::Hidden | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+        while(files.hasNext()) {
+          const QString f = files.next();
+          const QString to = QDir(target).filePath(QDir(in.filePath(name)).relativeFilePath(f));
+          QDir().mkpath(QFileInfo(to).absolutePath());
+          if(!QFileInfo::exists(to)) {
+            QFile::rename(f, to);
+          }
+        }
+      }
+      continue;  // what this launch wrote stays
+    }
+    if(!QFile::rename(in.filePath(name), target) && !QDir().rename(in.filePath(name), target)) {
+      r->kind = MoveKind::Failed;
+      r->error = QStringLiteral("could not move %1 into %2").arg(name, QDir::toNativeSeparators(newDir));
+      QDir(staging).removeRecursively();
+      return false;
+    }
+  }
+  QDir(staging).removeRecursively();
+  return true;
+}
+
 }  // namespace
 
 QStringList legacyDirsFor(const QString& newDir) {
@@ -123,47 +168,9 @@ MoveResult moveLegacyData(const QString& newDir, const QString& legacyDir) {
     return r;
   }
 
-  // Copy beside the new folder, then move each top-level entry in: a copy
-  // that stops half-way leaves the new folder without a state.json, so the
-  // next launch simply tries again.
-  const QString staging = QDir::cleanPath(newDir) + QStringLiteral(".moving");
-  QDir(staging).removeRecursively();
-  if(!copyTree(legacyDir, staging, &r.files, &r.error)) {
-    QDir(staging).removeRecursively();
-    r.kind = MoveKind::Failed;
+  if(!copyInto(newDir, legacyDir, &r)) {
     return r;
   }
-  QDir().mkpath(newDir);
-  const QDir in(staging);
-  // state.json last: until it is there, the move has not happened.
-  QStringList entries = in.entryList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot);
-  entries.removeAll(kState);
-  entries.append(kState);
-  for(const QString& name : entries) {
-    const QString target = QDir(newDir).filePath(name);
-    if(QFileInfo::exists(target)) {
-      if(QFileInfo(target).isDir() && QFileInfo(in.filePath(name)).isDir()) {
-        // A folder this launch already made (logs): merge file by file.
-        QDirIterator files(in.filePath(name), QDir::Files | QDir::Hidden | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
-        while(files.hasNext()) {
-          const QString f = files.next();
-          const QString to = QDir(target).filePath(QDir(in.filePath(name)).relativeFilePath(f));
-          QDir().mkpath(QFileInfo(to).absolutePath());
-          if(!QFileInfo::exists(to)) {
-            QFile::rename(f, to);
-          }
-        }
-      }
-      continue;  // what this launch wrote stays
-    }
-    if(!QFile::rename(in.filePath(name), target) && !QDir().rename(in.filePath(name), target)) {
-      r.kind = MoveKind::Failed;
-      r.error = QStringLiteral("could not move %1 into %2").arg(name, QDir::toNativeSeparators(newDir));
-      QDir(staging).removeRecursively();
-      return r;
-    }
-  }
-  QDir(staging).removeRecursively();
 
   QSaveFile marker(QDir(legacyDir).filePath(QLatin1String(heap::brand::kMovedMarker)));
   if(marker.open(QIODevice::WriteOnly)) {
@@ -188,6 +195,34 @@ MoveResult moveLegacyData(const QString& newDir) {
   MoveResult none;
   none.to = newDir;
   return none;
+}
+
+QString stableDirFor(const QString& channelDir) {
+  QStringList parts = QDir::cleanPath(QDir(channelDir).absolutePath()).split(QLatin1Char('/'));
+  const QString prefix = QLatin1String(heap::brand::kName) + QLatin1Char('-');
+  if(parts.size() < 3 || !parts.at(parts.size() - 1).startsWith(prefix, Qt::CaseInsensitive) ||
+     parts.at(parts.size() - 2).compare(QLatin1String(heap::brand::kName), Qt::CaseInsensitive) != 0) {
+    return {};
+  }
+  parts[parts.size() - 1] = QLatin1String(heap::brand::kName);
+  return parts.join(QLatin1Char('/'));
+}
+
+MoveResult copyStableData(const QString& channelDir) {
+  MoveResult r;
+  r.from = stableDirFor(channelDir);
+  r.to = channelDir;
+  r.legacyName = QLatin1String(heap::brand::kName);
+  if(r.from.isEmpty() || QFileInfo::exists(QDir(channelDir).filePath(kState)) || !QFileInfo::exists(QDir(r.from).filePath(kState))) {
+    return r;
+  }
+  if(!copyInto(channelDir, r.from, &r)) {
+    return r;
+  }
+  // Left by the user's Tabless while it runs; here it would read as a crash.
+  QFile::remove(QDir(channelDir).filePath(QStringLiteral("session.open")));
+  r.kind = MoveKind::Moved;
+  return r;
 }
 
 }  // namespace heap::platform::legacy

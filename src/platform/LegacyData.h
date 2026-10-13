@@ -43,4 +43,16 @@ MoveResult moveLegacyData(const QString& newDir, const QString& legacyDir);
 // has anything to move (a lowkey folder before a heap one), or NothingToDo.
 MoveResult moveLegacyData(const QString& newDir);
 
+// The folder of the user's own Tabless beside a channel build's
+// (<base>/Tabless/Tabless-feature → <base>/Tabless/Tabless); empty when
+// `channelDir` is not one.
+QString stableDirFor(const QString& channelDir);
+
+// A channel build's first launch (APP-309): copies the user's own Tabless
+// folder into `channelDir`, so the test build starts on real data while the
+// real folder is never written to. No marker is left there, and it may be
+// running: every save in it is atomic (QSaveFile), so a copy catches whole
+// files. Once `channelDir` has a state.json, NothingToDo.
+MoveResult copyStableData(const QString& channelDir);
+
 }  // namespace heap::platform::legacy

@@ -50,6 +50,18 @@ workflow refuses to publish if the two disagree.
   ignores it), and the builds are unsigned — so testers get a download link
   without a release per push.
 
+  A channel build (CMake `-DHEAP_CHANNEL=feature|unstable`) lives beside the
+  user's own Tabless and never touches it:
+  - its own data folder, `<AppData>/Tabless/Tabless-<channel>`, filled on
+    first launch with a **copy** of `<AppData>/Tabless/Tabless` — whatever it
+    migrates or breaks stays in the copy;
+  - the installer has its own AppId, folder and Start-menu name ("Tabless
+    feature") and leaves the URL schemes and login item alone, so installing
+    or uninstalling it does not affect the real install;
+  - no start-at-login, no background update check, and it never repoints the
+    toast/URL registrations at itself;
+  - the OS keychain is shared, so integrations stay signed in.
+
 ## Artifacts
 
 | Platform | Format | How it is built |
