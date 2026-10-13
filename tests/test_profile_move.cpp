@@ -160,6 +160,38 @@ TEST(ProfileMovePure, AClashingIdIsRenumberedAndWhatPointedAtItFollows) {
   EXPECT_EQ(events.at(1).taskId, QStringLiteral("X-5")) << "the target's meeting names its own task";
 }
 
+// F1-new-9: a meeting of the source's linked to the moved task goes with it,
+// and the undo (a move back) brings it back. A global meeting stays global;
+// another profile's meeting is not touched.
+TEST(ProfileMovePure, ALinkedMeetingGoesWithItsTaskAndComesBack) {
+  QVector<Profile> ps{profile("a", {task("BE-4"), task("BE-5")}), profile("b", {task("B-1")})};
+  CalEvent mine;
+  mine.id = QStringLiteral("e1");
+  mine.taskId = QStringLiteral("BE-4");
+  mine.profileId = QStringLiteral("a");
+  CalEvent global;
+  global.id = QStringLiteral("e2");
+  global.taskId = QStringLiteral("BE-4");
+  CalEvent other;
+  other.id = QStringLiteral("e3");
+  other.taskId = QStringLiteral("BE-5");
+  other.profileId = QStringLiteral("a");
+  QVector<CalEvent> events{mine, global, other};
+  int n = 0;
+  const pm::Result r = pm::moveTasks(ps, 0, 1, {"BE-4"}, events, nullptr, minting(&n));
+  ASSERT_EQ(r.moved, QStringList{"BE-4"});
+  EXPECT_EQ(events.at(0).profileId, QStringLiteral("b"));
+  EXPECT_EQ(events.at(0).taskId, QStringLiteral("BE-4"));
+  EXPECT_TRUE(events.at(1).profileId.isEmpty()) << "a global meeting stays global";
+  EXPECT_EQ(events.at(2).profileId, QStringLiteral("a")) << "a meeting of a task that stayed stays";
+
+  pm::Options back = minting(&n);
+  back.rows.insert("BE-4", r.rows.value("BE-4"));
+  pm::moveTasks(ps, 1, 0, {"BE-4"}, events, nullptr, back);
+  EXPECT_EQ(events.at(0).profileId, QStringLiteral("a"));
+  EXPECT_EQ(events.at(0).taskId, QStringLiteral("BE-4"));
+}
+
 TEST(ProfileMovePure, AColumnTheTargetLacksBecomesItsFirstAndTheUndoGivesItBack) {
   QVector<Profile> ps{profile("a", {task("A-1", "waiting")}), profile("b", {})};
   ps[0].statuses = columns({"waiting", "todo"});

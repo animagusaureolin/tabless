@@ -283,8 +283,24 @@ Result moveTasks(QVector<Profile>& profiles,
     }
   }
 
+  // A meeting of the source's linked to a moved task goes with it, so its
+  // Task row does not point at a task that is no longer there (F1-new-9).
+  // The undo, a move back, brings it back the same way.
+  QSet<int> wentAlong;
+  for(int i = 0; i < events.size(); ++i) {
+    CalEvent& e = events[i];
+    if(e.profileId == from.id && !e.taskId.isEmpty() && movedSet.contains(e.taskId)) {
+      e.profileId = to.id;
+      e.taskId = newId(e.taskId);
+      wentAlong.insert(i);
+    }
+  }
   // Meetings linked to a renumbered task.
-  for(CalEvent& e : events) {
+  for(int i = 0; i < events.size(); ++i) {
+    if(wentAlong.contains(i)) {
+      continue;
+    }
+    CalEvent& e = events[i];
     const auto hit = r.renamed.constFind(e.taskId);
     if(hit == r.renamed.constEnd()) {
       continue;
