@@ -265,6 +265,7 @@ Item {
                     text: I18n.t("settings.title")
                     color: Theme.text
                     font.weight: Theme.fwScreenTitle
+                    font.family: Theme.fontDisplay
                     font.pixelSize: Theme.fsScreenTitle
                 }
 
@@ -1241,12 +1242,26 @@ Item {
                     hint: (Theme._appearance.uiScale === undefined && Theme.systemScale() > Theme.defaultScale
                           ? I18n.t("settings.appearance.scale.system")
                           : I18n.t("settings.appearance.scale.hint"))
+                          + " " + I18n.t("settings.appearance.scale.default").arg(Math.round(AppController.defaultUiScale(Theme.scaleSteps) * 100))
                           + " " + I18n.t("settings.appearance.scale.keys")
                               .arg(AppController.keyText(AppController.shortcutFor("zoom.in")))
                               .arg(AppController.keyText(AppController.shortcutFor("zoom.out")))
                     value: String(Math.round(Theme.scale * 100))
                     options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
                     onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
+                }
+                // The text's face (APP-314): three bundled, one x-height.
+                SegRow {
+                    objectName: "settings-font-face"
+                    label: I18n.t("settings.appearance.font")
+                    hint: I18n.t("settings.appearance.font.hint")
+                    value: Theme.fontFace
+                    options: [
+                        { value: "inter", label: "Inter" },
+                        { value: "golos", label: "Golos" },
+                        { value: "onest", label: "Onest" }
+                    ]
+                    onSelected: (value) => root.set("appearance", "fontFace", value)
                 }
                 SegRow {
                     objectName: "settings-contrast"
@@ -2913,6 +2928,7 @@ Item {
                                 Text {
                                     text: intCard.modelData.name
                                     color: Theme.text
+                                    font.family: Theme.fontDisplay
                                     font.pixelSize: Theme.fsXl
                                     font.weight: root.quiet ? Theme.fwTitle : Theme.fwHeading
                                 }
@@ -3193,6 +3209,17 @@ Item {
                                     value: intCard.conf.writeStatus === true ? "on" : "off"
                                     options: [ ({ value: "off", label: I18n.t("settings.trk.writeOff") }), ({ value: "on", label: I18n.t("settings.trk.writeOn") }) ]
                                     onSelected: (v) => AppController.setTrackerWriteEnabled(intCard.intKey, v === "on")
+                                }
+                                // Jira Server / Data Center wiki markup: shown
+                                // as markdown or as it is (APP-313).
+                                SegRow {
+                                    objectName: "int-wiki-" + intCard.intKey
+                                    visible: intCard.intKey === "jira"
+                                    label: I18n.t("settings.trk.wiki")
+                                    hint: I18n.t("settings.trk.wiki.hint")
+                                    value: intCard.conf.wikiToMarkdown === false ? "raw" : "md"
+                                    options: [ ({ value: "md", label: I18n.t("settings.trk.wikiMd") }), ({ value: "raw", label: I18n.t("settings.trk.wikiRaw") }) ]
+                                    onSelected: (v) => AppController.setTrackerWikiToMarkdown(intCard.intKey, v === "md")
                                 }
                                 // Cards a filter change left behind: kept as
                                 // "only here" until the user says otherwise.

@@ -614,7 +614,16 @@ class AppController : public QObject {
   // Opens a stored file in its default application. Returns "opened",
   // "confirm" (a type that runs something: ask, then call again with
   // confirmed), "missing" or "invalid".
+  // A table or a text file (.csv .tsv .xlsx .txt .log) returns "view": the
+  // app shows it itself (attachmentPreview, APP-315).
   Q_INVOKABLE QString openAttachment(const QString& id, bool confirmed = false);
+  // The same file in its own application, for the viewer's "open outside".
+  Q_INVOKABLE bool openAttachmentExternally(const QString& id);
+  // What the in-app viewer shows (APP-315): { kind: "table" | "text" | "none",
+  // name, sheets: [{ name, rows: [[cell…]…], total, columns }], text,
+  // language ("log" for a log), truncated, error }. At most a few thousand
+  // rows and a few MB of text; the rest is the file's, opened outside.
+  Q_INVOKABLE QVariantMap attachmentPreview(const QString& id) const;
   // Shows the file in the system file manager.
   Q_INVOKABLE bool revealAttachment(const QString& id);
   // The file:// URL of a stored file, for a preview; empty when missing.
@@ -766,6 +775,13 @@ class AppController : public QObject {
   // ask again for <tracker>". On by default.
   Q_INVOKABLE bool trackerAskBeforeWrite(const QString& providerId) const;
   Q_INVOKABLE void setTrackerAskBeforeWrite(const QString& providerId, bool ask);
+  // Jira Server / Data Center wiki markup shown as markdown, or as it is: the
+  // user's choice per tracker, on by default (APP-313). Display only.
+  Q_INVOKABLE bool trackerWikiToMarkdown(const QString& providerId) const;
+  Q_INVOKABLE void setTrackerWikiToMarkdown(const QString& providerId, bool convert);
+  // A tracker card's description as it is shown: the wiki markup converted
+  // when that is on; the stored text is left as the tracker sent it.
+  Q_INVOKABLE QString trackerDescription(const QString& taskId) const;
   QStringList trackerWriteProviders() const;
   // Once per install after the update that made writes opt-in: the sentence
   // naming the connected trackers whose status heap no longer changes, or an
@@ -1945,10 +1961,13 @@ class AppController : public QObject {
   // How much the system already scales the primary screen (1 at 100 %,
   // 1.25 at 125 %): the default interface scale is not stacked on top.
   Q_INVOKABLE double systemPixelRatio() const;
+  // What the primary screen's size asks for (heap::ui::screenDefaultScale):
+  // 125 % on a desktop monitor with small pixels (27" 2560×1440), 110 % on
+  // another unscaled screen, 100 % where the system scales.
+  Q_INVOKABLE double screenUiScale() const;
   // The scale the app is drawn at while the user has not picked one — what
-  // Theme.scale shows and what the zoom keys step from (SHELL-3): 110 % on a
-  // screen that does not scale itself, 100 % where it does, or the system's
-  // text size when that is larger.
+  // Theme.scale shows and what the zoom keys step from (SHELL-3): the
+  // screen's (screenUiScale), or the system's text size when that is larger.
   Q_INVOKABLE double defaultUiScale(const QVariantList& steps) const;
   // Paints a window's own title bar dark or light to match the theme; the
   // OS otherwise follows its own app mode (a white bar over a dark heap).

@@ -171,6 +171,69 @@ TEST(MdHighlighterLive, HidesTheDelimitersNotTheText) {
   EXPECT_EQ(hiddenOf(QStringLiteral("run `a **b**` now")), QStringLiteral("`|`")) << "nothing inside code is markup";
   EXPECT_EQ(hiddenOf(QStringLiteral("2 * 3 * 4")), QString()) << "loose asterisks are not emphasis";
   EXPECT_EQ(hiddenOf(QStringLiteral("snake_case_name")), QString());
+  EXPECT_EQ(hiddenOf(QStringLiteral("an escaped \\$x$ costs")), QStringLiteral("\\")) << "the backslash of an escape goes";
+  EXPECT_EQ(hiddenOf(QStringLiteral("`a \\$ b`")), QStringLiteral("`|`"));
+  EXPECT_EQ(hiddenOf(QStringLiteral("#")), QStringLiteral("#")) << "an empty heading's # is markup";
+  EXPECT_EQ(hiddenOf(QStringLiteral("1. #")), QStringLiteral("#"));
+  EXPECT_EQ(hiddenOf(QStringLiteral("- ## Title")), QStringLiteral("## "));
+  EXPECT_EQ(hiddenOf(QStringLiteral("#tag here")), QString()) << "a tag is not a heading";
+  EXPECT_EQ(hiddenOf(QStringLiteral("see ![shot.png](shot.png)")), QStringLiteral("![|](shot.png)"));
+  EXPECT_EQ(hiddenOf(QStringLiteral("a footnote[^1] here")), QString()) << "ghosted whole; a raised 1 is drawn over it";
+  ASSERT_EQ(heap::md::MdHighlighter::footnoteSpans(QStringLiteral("a[^1] b[^note] `[^x]`")).size(), 2);
+  EXPECT_TRUE(heap::md::MdHighlighter::footnoteSpans(QStringLiteral("[^1]: the body")).isEmpty());
+  EXPECT_EQ(hiddenOf(QStringLiteral("[^1]: The body")), QStringLiteral("[^|]:"));
+  EXPECT_EQ(hiddenOf(QStringLiteral("press <kbd>Ctrl</kbd> now")), QStringLiteral("<kbd>|</kbd>"));
+  EXPECT_EQ(hiddenOf(QStringLiteral("> [!note] A callout")), QStringLiteral("[!note] "));
+}
+
+TEST(MdHighlighterLive, ACalloutCarriesItsKindDownTheQuote) {
+  QStringList kinds;
+  for(const QVariant& v : heap::md::MdHighlighter::decorations(QStringLiteral("> [!Warning] Title\n> body\n\n> plain quote\n"))) {
+    const QVariantMap d = v.toMap();
+    if(d.value(QStringLiteral("kind")).toString() == QStringLiteral("quote")) {
+      kinds << d.value(QStringLiteral("callout")).toString();
+    }
+  }
+  EXPECT_EQ(kinds, (QStringList{QStringLiteral("warning"), QStringLiteral("warning"), QString()}));
+}
+
+TEST(MdHighlighterLive, LinkAtSaysWhatAClickOpens) {
+  using heap::md::MdHighlighter;
+  const QVariantMap titles{{QStringLiteral("jira-TEL-1"), QStringLiteral("Fix it")}, {QStringLiteral("APP-2"), QStringLiteral("Two")}};
+  const QString line =
+      QStringLiteral("see [docs](https://x.test/a) and [[Note|alias]] and #jira-TEL-1 and #APP-2 and #tag, @ann[^1] `#jira-TEL-1`");
+  const auto at = [&](const QString& piece) {
+    return MdHighlighter::linkAt(line, static_cast<int>(line.indexOf(piece)) + 1, titles);
+  };
+  EXPECT_EQ(at(QStringLiteral("docs")), QStringLiteral("https://x.test/a"));
+  EXPECT_EQ(at(QStringLiteral("Note|")), QStringLiteral("heap://note/Note"));
+  EXPECT_EQ(at(QStringLiteral("#jira")), QStringLiteral("heap://task/jira-TEL-1"));
+  EXPECT_EQ(at(QStringLiteral("#APP")), QStringLiteral("heap://task/APP-2"));
+  EXPECT_EQ(at(QStringLiteral("#tag")), QStringLiteral("heap://tag/tag"));
+  EXPECT_EQ(at(QStringLiteral("@ann")), QStringLiteral("heap://person/ann"));
+  EXPECT_EQ(at(QStringLiteral("[^1]")), QStringLiteral("heap://fn/1"));
+  EXPECT_EQ(at(QStringLiteral("`#jira")), QString()) << "nothing in code is a link";
+  EXPECT_EQ(MdHighlighter::linkAt(QStringLiteral("go https://x.test now"), 6, {}), QStringLiteral("https://x.test"));
+  EXPECT_EQ(MdHighlighter::linkAt(QStringLiteral("plain words"), 3, {}), QString());
+}
+
+TEST(MdHighlighterLive, AKnownTaskIsDrawnAsItsTitle) {
+  using heap::md::MdHighlighter;
+  const QVariantMap titles{{QStringLiteral("jira-TEL-1"), QStringLiteral("Fix the  thing")}};
+  const auto spans = MdHighlighter::ticketSpans(QStringLiteral("ref #jira-TEL-1, #other and `#jira-TEL-1`"), titles);
+  ASSERT_EQ(spans.size(), 1);
+  EXPECT_EQ(spans.at(0).start, 4);
+  EXPECT_EQ(spans.at(0).title, QStringLiteral("Fix the thing"));
+  int tickets = 0;
+  for(const QVariant& v : MdHighlighter::decorations(QStringLiteral("ref #jira-TEL-1\n"), titles)) {
+    const QVariantMap d = v.toMap();
+    if(d.value(QStringLiteral("kind")).toString() == QStringLiteral("ticket")) {
+      ++tickets;
+      EXPECT_EQ(d.value(QStringLiteral("at")).toInt(), 4);
+      EXPECT_EQ(d.value(QStringLiteral("label")).toString(), QStringLiteral("Fix the thing"));
+    }
+  }
+  EXPECT_EQ(tickets, 1);
 }
 
 TEST(MdHighlighterLive, TheCaretLineShowsItsSource) {
@@ -232,6 +295,65 @@ TEST(MdHighlighterLive, DecorationsNameWhatIsDrawn) {
   EXPECT_EQ(rows.at(2).toMap().value(QStringLiteral("cells")).toStringList(), (QStringList{QStringLiteral("1"), QStringLiteral("2")}));
   // A "---" under a line of text is a setext heading, not a rule.
   EXPECT_TRUE(heap::md::MdHighlighter::decorations(QStringLiteral("Title\n---\n")).isEmpty());
+}
+
+// ── Maths in live preview (APP-312) ───────────────────────────────────
+
+TEST(MdHighlighterLive, MathSpansReadDollarsAsMd4cDoes) {
+  using heap::md::MdHighlighter;
+  const auto texs = [](const QString& line) {
+    QStringList out;
+    for(const auto& s : MdHighlighter::mathSpans(line)) {
+      out << (s.display ? QStringLiteral("D:") : QString()) + s.tex;
+    }
+    return out;
+  };
+  EXPECT_EQ(texs(QStringLiteral("so $x^2$ and $\\alpha$")), (QStringList{QStringLiteral("x^2"), QStringLiteral("\\alpha")}));
+  EXPECT_TRUE(texs(QStringLiteral("costs $5 and $10 a month")).isEmpty());
+  EXPECT_TRUE(texs(QStringLiteral("price $20, tax $3.50")).isEmpty());
+  EXPECT_TRUE(texs(QStringLiteral("between $5 and 6$7")).isEmpty());
+  EXPECT_TRUE(texs(QStringLiteral("an escaped \\$x$ dollar")).isEmpty());
+  EXPECT_TRUE(texs(QStringLiteral("tax $3.50. An escaped \\$x$ is a dollar.")).isEmpty());
+  EXPECT_TRUE(texs(QStringLiteral("code `$x$` here")).isEmpty());
+  EXPECT_EQ(texs(QStringLiteral("$$E = mc^2$$")), QStringList{QStringLiteral("D:E = mc^2")});
+}
+
+TEST(MdHighlighterLive, DecorationsDrawMaths) {
+  const QString text = QStringLiteral("so $x^2$ here\n\n$$\n\\frac{a}{b}\n$$\n\n$\\begin{x}$\n");
+  QVariantList maths;
+  for(const QVariant& v : heap::md::MdHighlighter::decorations(text)) {
+    if(v.toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("math")) {
+      maths << v;
+    }
+  }
+  ASSERT_EQ(maths.size(), 2) << "the unknown \\begin stays source, not drawn";
+  const QVariantMap inl = maths.at(0).toMap();
+  EXPECT_FALSE(inl.value(QStringLiteral("display")).toBool());
+  EXPECT_EQ(inl.value(QStringLiteral("at")).toInt(), 3);
+  EXPECT_EQ(inl.value(QStringLiteral("html")).toString(), QStringLiteral("<i>x</i><sup>2</sup>"));
+  const QVariantMap block = maths.at(1).toMap();
+  EXPECT_TRUE(block.value(QStringLiteral("display")).toBool());
+  EXPECT_EQ(text.mid(block.value(QStringLiteral("start")).toInt(), 2), QStringLiteral("$$"));
+  EXPECT_EQ(block.value(QStringLiteral("end")).toInt(), static_cast<int>(text.indexOf(QStringLiteral("$$\n\n$"))) + 2);
+}
+
+TEST(MdHighlighterLive, AFormulaKeepsItsDrawnWidthHidden) {
+  QTextDocument doc;
+  heap::md::MdHighlighter hl;
+  hl.setDocument(&doc);
+  doc.setPlainText(QStringLiteral("so $\\alpha^2$ here\n\nnext\n"));
+  doc.documentLayout();
+  hl.setLivePreview(true);
+  hl.setRevealStart(doc.findBlockByNumber(2).position());
+  hl.setRevealEnd(doc.findBlockByNumber(2).position());
+  const QTextBlock block = doc.findBlockByNumber(0);
+  bool spaced = false;
+  for(const QTextLayout::FormatRange& r : block.layout()->formats()) {
+    if(r.start == 3 && r.format.foreground().color().alpha() == 0) {
+      spaced = r.format.fontLetterSpacingType() == QFont::AbsoluteSpacing && r.format.fontLetterSpacing() < 0;
+    }
+  }
+  EXPECT_TRUE(spaced) << "the hidden source is squeezed to the drawn formula's width";
 }
 
 int main(int argc, char** argv) {

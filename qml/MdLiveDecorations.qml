@@ -22,6 +22,8 @@ Item {
     property int revealStart: -1
     property int revealEnd: -1
     property bool under: false
+    // Off for read-only text: a box is drawn, a click does not tick it.
+    property bool tasksClickable: true
 
     x: editor.x
     y: editor.y
@@ -50,15 +52,27 @@ Item {
     }
 
     FontMetrics { id: fm; font: root.editor.font }
+    // A header cell is drawn bold, so it is measured bold.
+    FontMetrics {
+        id: fmHead
+        font.family: root.editor.font.family
+        font.pixelSize: root.editor.font.pixelSize
+        font.weight: Theme.fwTitle
+    }
+    // Off-screen, only to reach the clipboard (as MdView's code blocks do).
+    TextEdit { id: clipboardHelper; visible: false }
 
     Repeater {
         model: root.decorations
         delegate: Loader {
             id: deco
             required property var modelData
-            active: root._shown(modelData)
-                    && (root.under ? modelData.kind === "code" : modelData.kind !== "code")
+            // Code: the box under the text, its language and Copy over it.
+            active: root._shown(modelData) && (!root.under || modelData.kind === "code"
+                                               || (modelData.kind === "quote" && String(modelData.callout || "").length > 0))
             sourceComponent: {
+                if (deco.modelData.kind === "code" && !root.under) return codeHeader;
+                if (deco.modelData.kind === "quote" && root.under) return calloutBg;
                 switch (deco.modelData.kind) {
                 case "bullet": return bullet;
                 case "task": return task;
@@ -66,6 +80,9 @@ Item {
                 case "rule": return rule;
                 case "code": return code;
                 case "table": return table;
+                case "math": return deco.modelData.display ? mathBlock : mathInline;
+                case "ticket": return ticketRef;
+                case "footnote": return footnoteRef;
                 }
                 return null;
             }
@@ -109,6 +126,7 @@ Item {
                     // and a handler destroyed inside its own tap kept the
                     // pointer, so later clicks never reached the editor.
                     MouseArea {
+                        enabled: root.tasksClickable
                         anchors.fill: parent
                         anchors.margins: -Theme.spXs
                         cursorShape: Qt.PointingHandCursor
@@ -125,7 +143,100 @@ Item {
                     width: Theme.px(3)
                     height: root._rect(deco.modelData.end).y + r.height - r.y
                     radius: width / 2
-                    color: Theme.border
+                    color: String(deco.modelData.callout || "").length > 0 ? root.calloutColor(deco.modelData.callout) : Theme.border
+                }
+            }
+            // A callout's tint, under its lines ("> [!note]" and the quote under it).
+            Component {
+                id: calloutBg
+                Rectangle {
+                    objectName: "md-live-callout"
+                    readonly property rect r: root._rect(deco.modelData.start)
+                    x: -Theme.spSm
+                    y: r.y
+                    width: root.width + 2 * Theme.spSm
+                    height: root._rect(deco.modelData.end).y + r.height - r.y
+                    color: Theme.withAlpha(root.calloutColor(deco.modelData.callout), 0.08)
+                }
+            }
+            // A formula (MdMath, APP-312) over its hidden source, which the
+            // highlighter squeezed to the drawn width so the line stays put.
+            Component {
+                id: mathInline
+                Text {
+                    objectName: "md-live-math"
+                    readonly property rect r: root._rect(deco.modelData.at)
+                    x: r.x
+                    y: r.y
+                    height: r.height
+                    verticalAlignment: Text.AlignVCenter
+                    textFormat: Text.RichText
+                    text: deco.modelData.html
+                    color: Theme.accent
+                    font: root.editor.font
+                }
+            }
+            // A footnote's number, small and raised, over its hidden "[^1]".
+            Component {
+                id: footnoteRef
+                Text {
+                    objectName: "md-live-footnote"
+                    readonly property rect r: root._rect(deco.modelData.at)
+                    x: r.x + 1
+                    y: r.y
+                    text: deco.modelData.label
+                    textFormat: Text.PlainText
+                    color: Theme.accent
+                    font.family: root.editor.font.family
+                    font.pixelSize: Math.max(1, Math.round(root.editor.font.pixelSize * 0.7))
+                }
+            }
+            // A known task's title over its "#jira-APP-1" (hidden, as wide as
+            // the title), as the drawn note reads it. Ctrl+click opens it.
+            Component {
+                id: ticketRef
+                Text {
+                    objectName: "md-live-ticket"
+                    readonly property rect r: root._rect(deco.modelData.at)
+                    x: r.x
+                    y: r.y
+                    height: r.height
+                    verticalAlignment: Text.AlignVCenter
+                    text: deco.modelData.label
+                    textFormat: Text.PlainText
+                    color: Theme.ticket
+                    font: root.editor.font
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: Theme.px(3)
+                        height: 1
+                        color: Theme.ticket
+                    }
+                }
+            }
+            // $$ … $$: centred over its lines.
+            Component {
+                id: mathBlock
+                Item {
+                    readonly property rect a: root._rect(deco.modelData.start)
+                    readonly property rect b: root._rect(deco.modelData.end)
+                    x: 0
+                    y: a.y
+                    width: root.width
+                    height: b.y + b.height - a.y
+                    Text {
+                        objectName: "md-live-math-block"
+                        anchors.centerIn: parent
+                        width: Math.min(implicitWidth, parent.width)
+                        wrapMode: Text.Wrap
+                        horizontalAlignment: Text.AlignHCenter
+                        textFormat: Text.RichText
+                        text: deco.modelData.html
+                        color: Theme.accent
+                        font: root.editor.font
+                    }
                 }
             }
             Component {
@@ -154,6 +265,53 @@ Item {
                     border.color: Theme.border
                 }
             }
+            // On the hidden ``` line (or the box's first line, for indented
+            // code): the language, "not closed" for a fence that runs to the
+            // end of the note, and Copy, which takes the code without fences.
+            Component {
+                id: codeHeader
+                Item {
+                    readonly property rect a: root._rect(deco.modelData.start)
+                    x: 0
+                    y: a.y
+                    width: root.width
+                    height: a.height
+                    Text {
+                        objectName: "md-live-code-language"
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: deco.modelData.fenced
+                        text: !deco.modelData.closed ? I18n.t("notes.code.unclosed")
+                            : String(deco.modelData.language || "")
+                        color: deco.modelData.closed ? Theme.textDim : Theme.warning
+                        font.family: Theme.fontMono
+                        font.pixelSize: Theme.fsXs
+                    }
+                    Text {
+                        id: copyText
+                        objectName: "md-live-code-copy"
+                        property bool copied: false
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: copied ? I18n.t("notes.code.copied") : I18n.t("notes.code.copy")
+                        color: copyArea.hovered ? Theme.text : Theme.textDim
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsXs
+                        ClickArea {
+                            id: copyArea
+                            label: I18n.t("notes.code.copy")
+                            onActivated: {
+                                clipboardHelper.text = deco.modelData.code;
+                                clipboardHelper.selectAll();
+                                clipboardHelper.copy();
+                                copyText.copied = true;
+                                copiedReset.restart();
+                            }
+                        }
+                        Timer { id: copiedReset; interval: 1200; onTriggered: copyText.copied = false }
+                    }
+                }
+            }
             Component {
                 id: table
                 Item {
@@ -166,7 +324,7 @@ Item {
                         for (const row of grid.rows) {
                             if (row.separator) continue;
                             for (let c = 0; c < row.cells.length; c++)
-                                w[c] = Math.max(w[c] || 0, fm.advanceWidth(root.plain(row.cells[c])) + 2 * Theme.spMd);
+                                w[c] = Math.max(w[c] || 0, Math.ceil((row.header ? fmHead : fm).advanceWidth(root.plain(row.cells[c]))) + 2 * Theme.spLg + Theme.spSm);
                         }
                         return w;
                     }
@@ -203,8 +361,8 @@ Item {
                                         border.color: Theme.border
                                         Text {
                                             anchors.fill: parent
-                                            anchors.leftMargin: Theme.spMd
-                                            anchors.rightMargin: Theme.spMd
+                                            anchors.leftMargin: Theme.spLg
+                                            anchors.rightMargin: Theme.spLg
                                             verticalAlignment: Text.AlignVCenter
                                             horizontalAlignment: grid.align[parent.index] === "r" ? Text.AlignRight
                                                                : grid.align[parent.index] === "c" ? Text.AlignHCenter : Text.AlignLeft
@@ -233,6 +391,17 @@ Item {
         root.editor.insert(p, checked ? " " : "x");
         root.editor.cursorPosition = c;
         root.editor.forceActiveFocus();
+    }
+
+    // A callout's colour by its kind, as MdView draws it: the priority and
+    // status colours the app already speaks; anything else the accent.
+    function calloutColor(kind: string): color {
+        switch (String(kind).toLowerCase()) {
+        case "warning": case "caution": case "attention": return Theme.warning;
+        case "danger": case "error": case "bug": return Theme.danger;
+        case "tip": case "success": case "done": case "check": return Theme.success;
+        default: return Theme.accent;
+        }
     }
 
     // A cell's text without its inline markup.

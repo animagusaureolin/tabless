@@ -67,7 +67,9 @@ ListView {
     clip: true
     spacing: 0
     boundsBehavior: Flickable.StopAtBounds
-    ScrollBar.vertical: ThinScrollBar {}
+    // The bar shows at rest while the text runs past the box (ThinScrollBar.cue).
+    property bool scrollCue: false
+    ScrollBar.vertical: ThinScrollBar { cue: view.scrollCue }
 
     // Row types, mirroring MdBlockModel::RowType. QML has no access to the
     // C++ enum without registering it, and these never change independently.
@@ -525,7 +527,9 @@ ListView {
                     textFormat: TextEdit.RichText
                     text: rowItem.model.html
                     color: Theme.text
-                    font.family: Theme.fontUi
+                    // The top three levels in the headings' face (Golos), the
+                    // small ones in the text's.
+                    font.family: rowItem.model.level <= 3 ? Theme.fontDisplay : Theme.fontUi
                     // A note: the title and "##" on the sheet's sizes, 600 in
                     // bold and 500 in quiet (R3-084); deeper levels a step down.
                     font.weight: view.noteType ? (rowItem.model.level <= 2 ? Theme.fwScreenTitle : Theme.fwTitle)
@@ -907,11 +911,13 @@ ListView {
                     anchors.margins: Theme.spLg
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
-                    // Nothing typesets maths in this build, so the source is shown
-                    // rather than dropped or drawn wrongly.
-                    text: rowItem.model.code
+                    // Typeset (MdMath, APP-312); a formula it cannot set is
+                    // shown as its source, in mono, rather than drawn wrongly.
+                    readonly property bool typeset: String(rowItem.model.html || "").length > 0
+                    textFormat: typeset ? Text.RichText : Text.PlainText
+                    text: typeset ? rowItem.model.html : rowItem.model.code
                     color: Theme.text
-                    font.family: Theme.fontMono
+                    font.family: typeset ? Theme.fontUi : Theme.fontMono
                     font.pixelSize: Theme.fsMd
                 }
             }
