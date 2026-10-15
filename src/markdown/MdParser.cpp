@@ -251,6 +251,7 @@ class Builder {
   // pointers to its own storage for anything it synthesized.
   void anchor(int byteStart, int byteEnd);
   void anchorPointer(const MD_CHAR* text, MD_SIZE size);
+  void placeUnanchored();
   void anchorAttribute(const MD_ATTRIBUTE& attr);
 
   // Parse the body of each footnote definition and hang it on its block. The
@@ -500,9 +501,25 @@ int Builder::onEnterSpan(MD_SPANTYPE type, void* detail) {
   return 0;
 }
 
-int Builder::onLeaveSpan(MD_SPANTYPE /*type*/) {
-  if(!m_spanStack.isEmpty()) {
-    m_spanStack.removeLast();
+int Builder::onLeaveSpan(MD_SPANTYPE type) {
+  if(m_spanStack.isEmpty()) {
+    return 0;
+  }
+  const int index = m_spanStack.takeLast();
+  // "tax $3.50. An escaped \$x$" is maths to md4c (as to pandoc): the escaped
+  // dollar inside is what says it was money. Such a span stays text, which is
+  // also what the editor's highlighter reads (APP-312).
+  if(type == MD_SPAN_LATEXMATH) {
+    MdInline& node = m_ast.inlines[index];
+    QString body;
+    for(const int child : node.children) {
+      body += m_ast.inlines.at(child).text;
+    }
+    if(body.contains(QLatin1String("\\$"))) {
+      node.type = InlineType::Text;
+      node.text = QLatin1Char('$') + QString(body).replace(QLatin1String("\\$"), QLatin1String("$")) + QLatin1Char('$');
+      node.children.clear();
+    }
   }
   return 0;
 }
@@ -564,7 +581,61 @@ void Builder::assignSpans() {
       block.span.lastLine = m_src.lineOfByte(std::max(block.span.byteEnd - 1, block.span.byteStart));
     }
   }
+  placeUnanchored();
   partitionTopLevel();
+}
+
+void Builder::placeUnanchored() {
+  // A nested block with no source text of its own — "3. #", an empty heading
+  // in a list item — got no anchor. Without this it fell back to line 0 and
+  // a click on the item above opened the note's title. Blocks are stored in
+  // document order: the block's line is after whatever came before it
+  // (ancestors aside: they wrap it). A list item's line is the first one
+  // after that with a list marker — a $$ block's closing "$$" is outside its
+  // paragraph's span and was taken for the item — and a block inside an item
+  // that has its line sits on that line.
+  static const QRegularExpression kMarker(QStringLiteral("^\\s*(?:>\\s*)*(?:[-+*]|\\d{1,9}[.)])(?:\\s|$)"));
+  const int lines = m_src.lineCount();
+  for(int i = 0; i < m_ast.blocks.size(); ++i) {
+    MdBlock& block = m_ast.blocks[i];
+    if(block.type == BlockType::Document || block.span.isValid() || block.parent == m_ast.root || block.parent < 0) {
+      continue;
+    }
+    const MdBlock& parent = m_ast.blocks.at(block.parent);
+    if(parent.type == BlockType::ListItem && parent.span.isValid()) {
+      block.span = spanForLines(parent.span.firstLine, parent.span.firstLine);
+      continue;
+    }
+    auto isAncestor = [&](int candidate) {
+      for(int p = block.parent; p >= 0; p = m_ast.blocks.at(p).parent) {
+        if(p == candidate) {
+          return true;
+        }
+      }
+      return false;
+    };
+    int after = -1;
+    for(int j = 0; j < i; ++j) {
+      const MdSpan& span = m_ast.blocks.at(j).span;
+      if(span.isValid() && !isAncestor(j)) {
+        after = std::max(after, span.lastLine);
+      }
+    }
+    int line = after + 1;
+    if(block.type == BlockType::ListItem) {
+      while(line < lines && !kMarker.match(m_src.lineText(line)).hasMatch()) {
+        ++line;
+      }
+    } else {
+      while(line < lines && m_src.isBlankLine(line)) {
+        ++line;
+      }
+    }
+    if(line >= lines) {
+      line = std::max(after, 0);
+    }
+    block.span = spanForLines(line, line);
+  }
 }
 
 void Builder::partitionTopLevel() {

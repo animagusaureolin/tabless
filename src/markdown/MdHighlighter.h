@@ -3,7 +3,9 @@
 #include <qqmlregistration.h>
 #include <QQuickTextDocument>
 #include <QSyntaxHighlighter>
+#include <QTextBlock>
 #include <QTextCharFormat>
+#include <QVariantList>
 #include <QVariantMap>
 
 namespace heap::md {
@@ -36,6 +38,24 @@ class MdHighlighter : public QSyntaxHighlighter {
   // Relative size of an H1, with the levels below it scaled down toward 1.0.
   // 1.0 turns the effect off for anyone who would rather have an even page.
   Q_PROPERTY(qreal headingScale READ headingScale WRITE setHeadingScale NOTIFY headingScaleChanged)
+  // Live preview (the notes editor, as Obsidian has it): the markup of a line
+  // the caret is not on is hidden - "**", "# ", "[", "](url)", "[[" - so the
+  // note reads as drawn while staying one plain text to select, copy and edit
+  // across lines. The lines between revealStart and revealEnd (the caret, or
+  // the selection) show their source.
+  Q_PROPERTY(bool livePreview READ livePreview WRITE setLivePreview NOTIFY livePreviewChanged)
+  Q_PROPERTY(int revealStart READ revealStart WRITE setRevealStart NOTIFY revealChanged)
+  Q_PROPERTY(int revealEnd READ revealEnd WRITE setRevealEnd NOTIFY revealChanged)
+  // The font code is set in (fences and spans): the editor's own face is
+  // the UI font in rich mode, where code in it read as prose ("<<" as a «).
+  Q_PROPERTY(QString monoFamily READ monoFamily WRITE setMonoFamily NOTIFY monoFamilyChanged)
+  // The headings' face (Theme.fontDisplay) for the top three levels in rich
+  // mode, as the drawn note sets them; empty keeps the editor's own.
+  Q_PROPERTY(QString displayFamily READ displayFamily WRITE setDisplayFamily NOTIFY displayFamilyChanged)
+  // Task id -> title (AppController.taskTitles): a "#jira-APP-1" or "#APP-1"
+  // that names a known task is drawn as its title in rich mode, as the
+  // drawn note has it.
+  Q_PROPERTY(QVariantMap ticketTitles READ ticketTitles WRITE setTicketTitles NOTIFY ticketTitlesChanged)
 
  public:
   explicit MdHighlighter(QObject* parent = nullptr);
@@ -58,10 +78,99 @@ class MdHighlighter : public QSyntaxHighlighter {
 
   void setHeadingScale(qreal scale);
 
+  bool livePreview() const {
+    return m_livePreview;
+  }
+
+  void setLivePreview(bool on);
+
+  int revealStart() const {
+    return m_revealStart;
+  }
+
+  void setRevealStart(int position);
+
+  int revealEnd() const {
+    return m_revealEnd;
+  }
+
+  void setRevealEnd(int position);
+
+  QString monoFamily() const {
+    return m_monoFamily;
+  }
+
+  void setMonoFamily(const QString& family);
+
+  QString displayFamily() const {
+    return m_displayFamily;
+  }
+
+  void setDisplayFamily(const QString& family);
+
+  QVariantMap ticketTitles() const {
+    return m_ticketTitles;
+  }
+
+  void setTicketTitles(const QVariantMap& titles);
+
+  // The markup ranges of one line that live preview hides, as (start, length)
+  // pairs. Public for the tests; the highlighter applies them itself.
+  static QList<QPair<int, int>> hiddenMarkup(const QString& line);
+
+  // What live preview draws over the hidden source, one map per element:
+  // {kind, start, end} with start/end the document positions of the lines
+  // it covers (a reveal range touching them shows the source instead), and
+  //   bullet: at (the marker)            task: at (the "["), checked
+  //   quote: depth                       rule: -
+  //   code: language                     table: rows [{start, cells, header}],
+  //                                             align ["l"|"c"|"r"|""]
+  // Fenced code and tables are revealed as a whole, the rest line by line.
+  //   ticket: at, length, label (a known task's title, drawn over its id)
+  //   footnote: at, length, label (the id, drawn small and raised)
+  Q_INVOKABLE static QVariantList decorations(const QString& text, const QVariantMap& ticketTitles = {});
+
+  // What a click at pos opens, in MdView's link form: "heap://task/<id>",
+  // "heap://note/<target>", "heap://fn/<id>", "heap://tag/<t>",
+  // "heap://person/<p>", an address, or "" when it is on none.
+  Q_INVOKABLE static QString linkAt(const QString& text, int pos, const QVariantMap& ticketTitles = {});
+
+  // References to known tasks in one line (APP-313): "#jira-TEL-1" by its
+  // id, "#TEL-1" by its key; not inside code.
+  struct TicketSpan {
+    int start = 0;
+    int length = 0;
+    QString id;
+    QString title;
+  };
+
+  static QList<TicketSpan> ticketSpans(const QString& line, const QVariantMap& ticketTitles);
+  // Footnote references ("[^1]", not the "[^1]:" that defines one), drawn as
+  // a small raised number; `title` is the id.
+  static QList<TicketSpan> footnoteSpans(const QString& line);
+
+  // The maths spans of one line, as md4c reads them (APP-312): $ opens
+  // only before a non-space, closes only after one and not before a digit,
+  // so "$5 and $10" is money; \$ is a dollar; nothing inside `code` counts.
+  // $$ … $$ on one line is display maths.
+  struct MathSpan {
+    int start = 0;   // the opening $
+    int length = 0;  // through the closing $
+    QString tex;
+    bool display = false;
+  };
+
+  static QList<MathSpan> mathSpans(const QString& line);
+
  signals:
   void targetChanged();
   void paletteChanged();
   void headingScaleChanged();
+  void livePreviewChanged();
+  void revealChanged();
+  void monoFamilyChanged();
+  void displayFamilyChanged();
+  void ticketTitlesChanged();
 
  protected:
   void highlightBlock(const QString& text) override;
@@ -73,15 +182,43 @@ class MdHighlighter : public QSyntaxHighlighter {
     InFence,
     InFrontmatter,
     InMathBlock,
+    InIndentedCode,
   };
 
   void rebuildFormats();
   void highlightInline(const QString& text);
   void highlightCodeLine(const QString& text, const QString& language);
+  // Whether the line holds the caret or part of the selection.
+  bool revealed(const QTextBlock& block) const;
+  // Re-highlights the lines whose revealed state changes when the reveal
+  // range moves from [oldStart, oldEnd] to the current one.
+  void revealMoved(int oldStart, int oldEnd);
+  void hideMarkup(const QString& text);
+  // A table row's (or a ```csv record's) line under its drawn grid.
+  void ghostTableRow(int length, bool separator);
+  void ghost(int start, int length);
+  // Invisible like ghost(), with the letter spacing that makes the span as
+  // wide as `width`: a formula drawn over its source takes its own room,
+  // and the line does not jump when it is drawn or shown.
+  void ghostTo(int start, int length, qreal width);
+  // Formulas and task references: invisible, as wide as what is drawn over them.
+  void hideDrawn(const QString& text);
+  // The first and last line of the table or fence a line belongs to; the
+  // line itself when it is in neither.
+  QPair<QTextBlock, QTextBlock> revealUnit(const QTextBlock& block) const;
+  bool hides() const;
 
   QQuickTextDocument* m_target = nullptr;
   QVariantMap m_palette;
   qreal m_headingScale = 1.45;
+  bool m_livePreview = false;
+  int m_revealStart = -1;
+  int m_revealEnd = -1;
+  QString m_monoFamily;
+  QString m_displayFamily;
+  QVariantMap m_ticketTitles;
+  QTextCharFormat m_hidden;  // collapsed: "## ", "**", "[", "](url)"
+  QTextCharFormat m_ghost;   // invisible, keeping its width: what a drawn element sits on
 
   QTextCharFormat m_heading[6];
   QTextCharFormat m_code;
@@ -102,6 +239,7 @@ class MdHighlighter : public QSyntaxHighlighter {
   QTextCharFormat m_frontmatter;
   QTextCharFormat m_rule;
   QTextCharFormat m_table;
+  QTextCharFormat m_codeInline;
 
   // Language rules for whatever fence is currently open. The language itself
   // is not a member: it travels per block (see kCommentStyleFor in the .cpp),
@@ -111,6 +249,8 @@ class MdHighlighter : public QSyntaxHighlighter {
   QTextCharFormat m_codeString;
   QTextCharFormat m_codeComment;
   QTextCharFormat m_codeNumber;
+  QTextCharFormat m_logError;
+  QTextCharFormat m_logWarn;
 };
 
 }  // namespace heap::md

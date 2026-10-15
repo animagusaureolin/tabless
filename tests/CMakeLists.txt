@@ -116,7 +116,7 @@ add_test(NAME heap_md4c_smoke_tests COMMAND heap_md4c_smoke_tests)
 
 # Markdown engine — source map and parser. Links heap_markdown rather than
 # re-compiling sources, so adding a case costs nothing in build time.
-add_executable(heap_md_tests test_md_parser.cpp test_md_outline.cpp test_md_render.cpp test_md_model.cpp test_md_editops.cpp)
+add_executable(heap_md_tests test_md_parser.cpp test_md_outline.cpp test_md_render.cpp test_md_model.cpp test_md_editops.cpp test_jira_wiki.cpp test_table_files.cpp)
 # QAbstractItemModelTester lives in the Test module; the model itself needs no GUI.
 target_link_libraries(heap_md_tests PRIVATE Qt6::Test)
 target_link_libraries(heap_md_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
@@ -750,6 +750,8 @@ add_executable(heap_update_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/UpdateInstall.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/UpdateInstall.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/FeatureBuild.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/FeatureBuild.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/updater/BundleSwap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/updater/BundleSwap.h
 )
@@ -757,6 +759,7 @@ set_target_properties(heap_update_tests PROPERTIES AUTOMOC ON)
 target_include_directories(heap_update_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_update_tests PRIVATE
         Qt6::Core
+        Qt6::Qml
         Qt6::Network
         Qt6::NetworkAuth
         heap_markdown

@@ -205,6 +205,16 @@ TEST(MdBlockModelTest, FlattensATableRowMajor) {
   EXPECT_EQ(align.at(1).toInt(), static_cast<int>(ColumnAlign::Right));
 }
 
+TEST(MdBlockModelTest, DrawsACsvFenceAsItsTable) {
+  Doc doc(QStringLiteral("```csv\nname;note\nA;\"x; <y>\"\nB\n```\n\n```js\na,b\n```\n"));
+  ASSERT_EQ(doc.rows(), 2);
+  EXPECT_EQ(doc.type(0), static_cast<int>(MdBlockModel::Table));
+  EXPECT_EQ(doc.at(0, MdBlockModel::TableColumnsRole).toInt(), 2);
+  const QStringList cells = doc.at(0, MdBlockModel::TableCellsRole).toStringList();
+  EXPECT_EQ(cells, (QStringList{"name", "note", "A", "x; &lt;y&gt;", "B", ""})) << "escaped, padded";
+  EXPECT_EQ(doc.type(1), static_cast<int>(MdBlockModel::Code)) << "only csv and tsv are tables";
+}
+
 TEST(MdBlockModelTest, PromotesAParagraphThatIsOnlyAnImage) {
   Doc doc(QStringLiteral("![alt text](attachments/x.png)\n\ntext with ![inline](y.png) in it\n"));
   ASSERT_EQ(doc.rows(), 2);
@@ -253,6 +263,36 @@ TEST(MdBlockModelTest, MapsRowsBackToSourceLines) {
   // A blank line belongs to the row above it, so scroll sync never lands in
   // a gap between rows.
   EXPECT_EQ(doc.model().rowForLine(3), 1);
+}
+
+TEST(MdBlockModelTest, TextlessNestedBlockKeepsItsOwnLine) {
+  // "3. #" is an empty heading inside a list item: no text, so no anchor.
+  // It used to map to line 0, and a click on item 2 opened the title.
+  Doc doc(QStringLiteral("# Title\n\n1. one\n2. two\n3. #\n4. four\n"));
+  QVector<int> firsts;
+  for(int row = 0; row < doc.rows(); ++row) {
+    firsts.append(doc.model().firstLineOfRow(row));
+  }
+  for(int row = 1; row < firsts.size(); ++row) {
+    EXPECT_GE(firsts.at(row), firsts.at(row - 1)) << "row " << row;
+  }
+  EXPECT_EQ(doc.model().firstLineOfRow(doc.model().rowForLine(3)), 3);
+  EXPECT_EQ(doc.model().firstLineOfRow(doc.model().rowForLine(4)), 4);
+  EXPECT_EQ(doc.model().firstLineOfRow(doc.model().rowForLine(5)), 5);
+}
+
+TEST(MdBlockModelTest, TextlessNestedBlockSkipsAMathBlockAboveIt) {
+  // $$ math is a reserved region with no md4c block: "1. #" under it took
+  // the math's first line, and a click on the item opened "$$".
+  Doc doc(QStringLiteral("para\n\n$$\nE = mc^2\n$$\n\n1. #\n2. two\n"));
+  int itemRow = -1;
+  for(int row = 0; row < doc.rows(); ++row) {
+    if(doc.at(row, MdBlockModel::MarkerRole).toString() == QStringLiteral("1.")) {
+      itemRow = row;
+    }
+  }
+  ASSERT_GE(itemRow, 0);
+  EXPECT_EQ(doc.model().firstLineOfRow(itemRow), 6);
 }
 
 // ── The diff ────────────────────────────────────────────────────────

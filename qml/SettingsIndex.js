@@ -52,6 +52,7 @@ var ITEMS = [
     ["appearance", "row", "style.flag.todayExtras"],
     ["appearance", "row", "style.flag.icons"],
     ["appearance", "row", "settings.appearance.scale"],
+    ["appearance", "row", "settings.appearance.font"],
     ["appearance", "row", "settings.appearance.contrast"],
     ["appearance", "group", "settings.appearance.group.window"],
     ["appearance", "row", "settings.system.closeToTray"],
@@ -111,6 +112,7 @@ var ITEMS = [
     ["integrations", "row", "settings.trk.often"],
     // The row names its tracker ("%1"); search shows it with a generic word.
     ["integrations", "row", "settings.integrations.writeStatus", "settings.integrations.writeStatus.any"],
+    ["integrations", "row", "settings.trk.wiki"],
     ["integrations", "row", "settings.trk.outside"],
     ["integrations", "row", "settings.int.review.pull"],
     ["integrations", "row", "settings.int.review.roles"],
@@ -137,6 +139,7 @@ var ITEMS = [
     ["help", "row", "settings.help.start"],
     ["help", "row", "settings.help.report"],
     ["about", "row", "settings.about.updates"],
+    ["about", "row", "settings.about.feature"],
     ["about", "row", "settings.about.whatsNew"],
     ["about", "row", "settings.about.licenses"],
     ["about", "row", "settings.about.storage"],

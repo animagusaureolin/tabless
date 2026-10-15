@@ -45,6 +45,7 @@
 #include "keys/KeyNames.h"
 #include "local/Effective.h"
 #include "local/Sessions.h"
+#include "markdown/JiraWiki.h"
 #include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
 #include "notes/ChecklistItems.h"
@@ -57,6 +58,7 @@
 #include "plan/DayPlan.h"
 #include "plan/FreeWindow.h"
 #include "platform/Accessibility.h"
+#include "platform/Brand.h"
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
 #include "platform/Sound.h"
@@ -1360,6 +1362,7 @@ AppController::AppController(QObject* parent) :
   }  // !s_headless
 
   // ---- Auto-update (HEAP-63) ----
+  m_featureBuild = new heap::update::FeatureBuild(this);
   m_updater = std::make_unique<heap::update::Updater>(appVersion(), this);
   connect(m_updater.get(), &heap::update::Updater::updateAvailable, this, [this](const QString& version, const QString& url) {
     m_latestReleaseUrl = url;
@@ -1439,7 +1442,8 @@ AppController::AppController(QObject* parent) :
     // Opt-out background check shortly after startup (never auto-downloads). The
     // delay lets settings load and the QML toast bar come up first.
     QTimer::singleShot(3000, this, [this]() {
-      if(settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
+      // A channel build is replaced by the next one, not updated (APP-309).
+      if(!heap::brand::isChannelBuild() && settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
         checkForUpdates();
       }
     });
@@ -3187,6 +3191,60 @@ void AppController::setTrackerWriteEnabled(const QString& providerId, bool enabl
     return;
   }
   setIntegrationField(providerId, QStringLiteral("writeStatus"), enabled);
+}
+
+bool AppController::trackerWikiToMarkdown(const QString& providerId) const {
+  // On unless the user chose to see the wiki markup as it is (APP-313).
+  const QVariant v =
+      settingsMap().value(QStringLiteral("integrations")).toMap().value(providerId).toMap().value(QStringLiteral("wikiToMarkdown"));
+  return !v.isValid() || v.toBool();
+}
+
+void AppController::setTrackerWikiToMarkdown(const QString& providerId, bool convert) {
+  if(trackerWikiToMarkdown(providerId) == convert) {
+    return;
+  }
+  setIntegrationField(providerId, QStringLiteral("wikiToMarkdown"), convert);
+}
+
+QString AppController::trackerDescription(const QString& taskId) const {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return {};
+  }
+  const Task& t = m_tasks.items().at(row);
+  // Only Jira Server / Data Center writes wiki markup; Cloud's ADF arrives
+  // as markdown already. The card's own address says which it came from
+  // (only Atlassian runs *.atlassian.net) - the settings may point at
+  // another Jira since; else the connected provider, else the settings'
+  // address; with none of them, the text itself.
+  if(t.externalProvider != QLatin1String("jira") || !trackerWikiToMarkdown(t.externalProvider)) {
+    return t.desc;
+  }
+  using heap::integrations::JiraDeployment;
+  JiraDeployment deployment = JiraDeployment::Unknown;
+  if(!t.externalUrl.trimmed().isEmpty()) {
+    deployment = heap::integrations::guessJiraDeployment(t.externalUrl.trimmed());
+  }
+  for(const auto& provider : m_syncProviders) {
+    const auto* jira = dynamic_cast<const heap::integrations::JiraProvider*>(provider.get());
+    if(jira != nullptr && deployment == JiraDeployment::Unknown) {
+      deployment = jira->deployment();
+    }
+  }
+  if(deployment == JiraDeployment::Unknown) {
+    const QString base = integrationConfig(t.externalProvider).value(QStringLiteral("baseUrl")).toString().trimmed();
+    if(!base.isEmpty()) {
+      deployment = heap::integrations::guessJiraDeployment(base);
+    }
+  }
+  if(deployment == JiraDeployment::Cloud) {
+    return t.desc;
+  }
+  if(deployment == JiraDeployment::Server || heap::md::looksLikeJiraWiki(t.desc)) {
+    return heap::md::jiraWikiToMarkdown(t.desc);
+  }
+  return t.desc;
 }
 
 QStringList AppController::trackerWriteProviders() const {
@@ -15963,9 +16021,19 @@ double AppController::systemUiScale(const QVariantList& steps) const {
   return heap::ui::uiScaleForTextScale(m_systemTextScale, uiScaleSteps(steps));
 }
 
+double AppController::screenUiScale() const {
+  const QScreen* screen = QGuiApplication::primaryScreen();
+  if(screen == nullptr) {
+    return 1.1;
+  }
+  // A test run reads the same layout on every machine: no screen size.
+  const QSizeF mm = QStandardPaths::isTestModeEnabled() ? QSizeF() : screen->physicalSize();
+  const double inches = std::hypot(mm.width(), mm.height()) / 25.4;
+  return heap::ui::screenDefaultScale(screen->size().width(), screen->size().height(), inches, screen->devicePixelRatio());
+}
+
 double AppController::defaultUiScale(const QVariantList& steps) const {
-  const double byScreen = systemPixelRatio() > 1.05 ? 1.0 : 1.1;
-  return std::max(byScreen, systemUiScale(steps));
+  return std::max(screenUiScale(), systemUiScale(steps));
 }
 
 double AppController::stepUiScale(int direction, const QVariantList& steps) {

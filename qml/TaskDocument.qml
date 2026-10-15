@@ -58,6 +58,9 @@ FocusScope {
     readonly property var _ticket: root._exists && root.task.ticket ? root.task.ticket : ({})
     readonly property bool _isTicket: !!root._ticket.provider
     readonly property var _badge: root._isTicket ? (AppController.providerBadges[root._ticket.provider] || ({})) : ({})
+    // The tracker's text as shown: Jira Server wiki markup as markdown when
+    // that is on (APP-313); the stored text stays as the tracker sent it.
+    readonly property string _trackerText: root._isTicket && root._rev >= 0 ? AppController.trackerDescription(root.taskId) : ""
     // A field changed both here and in the tracker since the last sync: the
     // tracker's side of each, as the editor shows it (A3-8). The document
     // said nothing; only the card carried a small "решить".
@@ -776,7 +779,7 @@ FocusScope {
                 textFormat: TextEdit.PlainText
                 selectByMouse: true
                 color: Theme.text
-                font.family: Theme.fontUi
+                font.family: Theme.fontDisplay
                 // 32 px bold, 28 px quiet (H2-Task / Q-Task); a step or two
                 // down for a title of more than three lines at that size: one
                 // of seven lines took most of a 720 px panel (F3-EYES-10).
@@ -1051,7 +1054,7 @@ FocusScope {
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.bottomMargin: Theme.spLg
-                visible: root._isTicket && String(root.task.desc || "").length > 0
+                visible: root._isTicket && root._trackerText.length > 0
                 spacing: Theme.spXs
                 Text {
                     text: I18n.t("taskdoc.fromTracker").arg(root._badge.name || root._ticket.provider || "")
@@ -1059,31 +1062,41 @@ FocusScope {
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
                 }
-                // Drawn by md4c like a note (APP-292): Qt's own Markdown
-                // gave the tracker's text a default look of its own.
-                MdDocument {
-                    id: trackerDoc
-                    text: String(root.task.desc || "")
-                    allowRemoteImages: false
-                    imageBaseDir: AppController.dataDir + "/attachments"
-                    palette: Theme.mdPalette
-                    ticketTitles: AppController.taskTitles
+                // Why the text does not take typing (APP-313).
+                Text {
+                    objectName: "task-doc-tracker-readonly"
+                    Layout.fillWidth: true
+                    text: I18n.t("taskdoc.fromTracker.readOnly").arg(root._badge.name || root._ticket.provider || "")
+                    wrapMode: Text.WordWrap
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
                 }
-                MdView {
+                // Drawn as a note is in rich (APP-313), and only read: the
+                // text can be selected and copied across its lines, a box is
+                // not ticked, nothing goes back to the tracker.
+                MdBlockEditor {
+                    id: trackerBody
                     objectName: "task-doc-tracker-body"
                     Layout.fillWidth: true
                     Layout.leftMargin: -Theme.px(24)
                     Layout.rightMargin: -Theme.px(24)
-                    Layout.preferredHeight: Math.min(Theme.px(220), contentHeight)
+                    // Half the document at most (a long ticket scrolls inside),
+                    // never shorter than a screenful of a few paragraphs.
+                    Layout.preferredHeight: Math.min(Math.max(Theme.px(320), root.height * 0.45), trackerBody.contentHeight)
                     clip: true
-                    interactive: contentHeight > height
-                    document: trackerDoc
+                    text: root._trackerText
+                    readOnly: true
                     noteType: true
                     headingRules: false
+                    wholeDocument: true
+                    rich: true
+                    tailRoom: false
+                    scrollCue: true
+                    menuTitle: I18n.t("taskdoc.fromTracker").arg(root._badge.name || root._ticket.provider || "")
                     onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
                 }
-            }
-            // My notes on a tracker card: never sent, never pulled over.
+            }            // My notes on a tracker card: never sent, never pulled over.
             RowLayout {
                 visible: root._isTicket
                 spacing: Theme.spMd
@@ -1147,6 +1160,8 @@ FocusScope {
                 headingRules: false
                 wikiTargets: AppController.wikiTargets(body.source.text)
                 wholeDocument: true
+                // Drawn as the note is in rich (APP-313): one text across its lines.
+                rich: true
                 onEdited: if (!root._loading) { root._dirtyBody = true; saveTimer.restart(); }
                 onEscaped: root.close()
                 onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)

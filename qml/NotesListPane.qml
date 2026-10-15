@@ -519,6 +519,7 @@ Rectangle {
                 objectName: "knowledge-title"
                 text: I18n.t(root.docs ? "siderail.docs" : "siderail.notes")
                 color: Theme.text
+                font.family: Theme.fontDisplay
                 font.pixelSize: Style.quiet ? Theme.fsXl : Theme.px(18)  // sheet H2-Knowledge: 18px (R4-066)
                 font.weight: Theme.fwHeading
                 Layout.fillWidth: true
@@ -791,6 +792,7 @@ Rectangle {
                             }
                         }
                         Text {
+                            id: drowTitle
                             Layout.fillWidth: true
                             text: drow.shownTitle
                             color: Theme.text
@@ -811,6 +813,9 @@ Rectangle {
                     ClickArea {
                         id: drowCA
                         label: drow.rowData.title || ""
+                        // The name is written on the row: a tip only when it is
+                        // cut. It hung over "Pinned" on arrival (EYE-19).
+                        showTip: drowTitle.truncated
                         role: Accessible.Link
                         onActivated: {
                             const r = drow.rowData;

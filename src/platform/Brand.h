@@ -1,6 +1,14 @@
 #pragma once
 
+#include <QString>
+
 #include <array>
+
+// A channel build (APP-309) is configured with -DHEAP_CHANNEL=feature or
+// unstable; a release leaves it empty.
+#ifndef HEAP_CHANNEL
+#define HEAP_CHANNEL ""
+#endif
 
 // The product's name in every place the OS or another program sees it.
 // heap → lowkey (APP-280, 0.8.0) → Tabless (APP-283, owner's call
@@ -12,6 +20,35 @@ namespace heap::brand {
 
 // Application and organisation name: the data folder is <AppData>/Tabless/Tabless.
 inline constexpr char kName[] = "Tabless";
+// "feature" / "unstable" in a channel build, empty in a release. A channel
+// build is a test build living beside the user's own Tabless: its own data
+// folder (a copy of the real one on first launch), no login item, no update
+// check, and it never takes over the toast and URL registrations.
+inline constexpr char kChannel[] = HEAP_CHANNEL;
+
+inline constexpr bool isChannelBuild() {
+  return sizeof(kChannel) > 1;
+}
+
+// The application name Qt derives the data folder from: <AppData>/Tabless/Tabless,
+// or <AppData>/Tabless/Tabless-feature in a channel build.
+inline QString appName() {
+  QString name = QString::fromLatin1(kName);
+  if(isChannelBuild()) {
+    name += QLatin1Char('-') + QString::fromLatin1(kChannel);
+  }
+  return name;
+}
+
+// What the title bar and the OS show: "Tabless", or "Tabless feature".
+inline QString displayName() {
+  QString name = QString::fromLatin1(kName);
+  if(isChannelBuild()) {
+    name += QLatin1Char(' ') + QString::fromLatin1(kChannel);
+  }
+  return name;
+}
+
 // The binary and the CLI command.
 inline constexpr char kCommand[] = "tabless";
 

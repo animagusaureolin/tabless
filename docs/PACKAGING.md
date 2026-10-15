@@ -6,13 +6,13 @@ native artifacts for Windows, Linux and macOS and attaches them to a GitHub
 Release.
 
 
-> **Old file names (APP-280, APP-283).** Release files are `tabless-<tag>-…`. The
-> same files are also published as `lowkey-<tag>-…`, because a lowkey 0.8
-> install's updater looks for those names; it then installs Tabless in place
-> (same installer AppId) and restarts `lowkey.exe`, which in a Tabless install is
-> a small launcher that starts `tabless.exe`. (0.8.0 did the same for heap 0.7
-> with `heap-<tag>-…` copies and a `heap.exe` launcher.) Stop publishing the
-> `lowkey-` copies once 0.8 is no longer worth carrying.
+> **Old file names (APP-280, APP-283).** Release files are `tabless-<tag>-…`.
+> Up to v0.9.1 the same files were also published as `lowkey-<tag>-…`, the
+> names a lowkey 0.8 install's updater looks for; since APP-309 they are not.
+> A 0.8 install that has not updated yet is still told about the new release
+> but finds no file of its name to install, so it updates by hand (or first to
+> v0.9.1, which still carries the copies). Its data folder, keychain entries
+> and `lowkey.exe` launcher are still taken over as before.
 
 ## Triggering a release
 
@@ -39,6 +39,28 @@ workflow refuses to publish if the two disagree.
   (`workflow_dispatch`). It builds a `vX.Y.Z-dev.<short-sha>` bundle and
   attaches the artifacts to the workflow run — **nothing is tagged or
   published**. Use it to smoke-test packaging without cutting a release.
+
+- **Channel builds** ([`channels.yml`](../.github/workflows/channels.yml)):
+  two rolling pre-releases, `channel-feature` and `channel-unstable`, each
+  with the newest `vX.Y.Z-<channel>.<short-sha>` bundle. Every push to
+  `feature` replaces the files of `channel-feature`; running *Channel builds*
+  from the Actions tab on any branch replaces `channel-unstable` (so does
+  *Release* run by hand with the `channel` input set). The tag
+  moves to the built commit, the release is never the latest (the updater
+  ignores it), and the builds are unsigned — so testers get a download link
+  without a release per push.
+
+  A channel build (CMake `-DHEAP_CHANNEL=feature|unstable`) lives beside the
+  user's own Tabless and never touches it:
+  - its own data folder, `<AppData>/Tabless/Tabless-<channel>`, filled on
+    first launch with a **copy** of `<AppData>/Tabless/Tabless` — whatever it
+    migrates or breaks stays in the copy;
+  - the installer has its own AppId, folder and Start-menu name ("Tabless
+    feature") and leaves the URL schemes and login item alone, so installing
+    or uninstalling it does not affect the real install;
+  - no start-at-login, no background update check, and it never repoints the
+    toast/URL registrations at itself;
+  - the OS keychain is shared, so integrations stay signed in.
 
 ## Artifacts
 

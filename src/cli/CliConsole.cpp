@@ -77,7 +77,7 @@ void quietMessages(QtMsgType, const QMessageLogContext&, const QString&) {
 void setApplicationIdentity() {
   QCoreApplication::setOrganizationName(QLatin1String(heap::brand::kName));
   QCoreApplication::setOrganizationDomain(QStringLiteral("tabless.local"));
-  QCoreApplication::setApplicationName(QLatin1String(heap::brand::kName));
+  QCoreApplication::setApplicationName(heap::brand::appName());
   QCoreApplication::setApplicationVersion(QStringLiteral(HEAP_VERSION));
 }
 

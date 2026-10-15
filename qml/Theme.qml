@@ -272,7 +272,9 @@ QtObject {
     // drift from the theme by wiring its own mix of tokens.
     readonly property var codePalette: ({
         keyword: synKeyword, string: synString, comment: synComment,
-        number: synNumber, type: synType, builtin: synBuiltin
+        number: synNumber, type: synType, builtin: synBuiltin,
+        // A log's levels (APP-315).
+        error: danger, warn: warning
     })
     readonly property var mdPalette: ({
         "text": text, "dim": textDim, "link": mdLink, "code": mdCode,
@@ -327,13 +329,13 @@ QtObject {
     // Until the user picks one, the system's text size picks it (APP-183):
     // Windows "Make text bigger" at 150 % starts heap at 150 %.
     readonly property var scaleSteps: [0.9, 1, 1.1, 1.25, 1.5]
-    // Unset: 110 % where the system does not scale (100 %, e.g. a 2560 px
-    // monitor), so body text is ~14 px — the sheets' 13 px read as small
-    // there (owner, 0.8.3). Where the system already scales (125 % on a
-    // laptop, 150-200 % on 4K) it stays 100 %: on top of that it doubled up
-    // and the board no longer fit.
+    // Unset: what the screen's size asks for (APP-314) — 125 % on a desktop
+    // monitor with small pixels (27" 2560×1440 at 100 %, where 110 % still
+    // tired the eyes), 110 % on other unscaled screens, 100 % where the
+    // system already scales (a laptop at 125 %): on top of that it doubled
+    // up and the board no longer fit.
     readonly property real systemPixelRatio: AppController.systemPixelRatio()
-    readonly property real defaultScale: systemPixelRatio > 1.05 ? 1 : 1.1
+    readonly property real defaultScale: AppController.screenUiScale()
     // A function, not a property: the system is asked only when needed.
     function systemScale() { return AppController.systemUiScale(scaleSteps); }
     readonly property real scale: {
@@ -481,11 +483,19 @@ QtObject {
     // and a half; on the scale the headings sit two and four steps above
     // the dialog title. The floor is 11px at any scale: nothing the user
     // has to read is smaller. A screen uses at most four of these.
-    readonly property int typeBase: 13
+    // A desktop reading scale (owner, 0.9.3): body 14, meta 13, the smallest
+    // label 12 at 100 % - 15 / 14 / 13 at the 110 % a 2K screen starts at.
+    // Below 12 the section labels, hints and empty states read as jagged
+    // specks; 13 / 11 was the old scale.
+    readonly property int typeBase: 14
     readonly property real typeRatio: 1.125
     function typeStep(n) { return Math.round(typeBase * Math.pow(typeRatio, n) * scale); }
-    readonly property int fsXs:  Math.max(11, typeStep(-2))  // chips, badges, counts
-    readonly property int fsSm:  typeStep(-1)  // meta, descriptions, section labels
+    readonly property int fsXs:  Math.max(px(12), typeStep(-2))  // chips, badges, counts
+    readonly property int fsSm:  Math.max(px(13), typeStep(-1))  // meta, descriptions, section labels
+    // A slim calendar block's title - the one size left on the old scale's
+    // smallest step (11 px at 100-110 %): a day of the week grid holds two
+    // lanes side by side and keeps the tray beside it in a 1280 px window.
+    readonly property int fsBlock: Math.max(11, Math.round(13 * Math.pow(typeRatio, -2) * scale))
     readonly property int fsMd:  typeStep(0)   // body, card titles, inputs
     readonly property int fsLg:  typeStep(1)   // dialog and section titles
     readonly property int fsXl:  typeStep(3)   // page headings
@@ -558,13 +568,29 @@ QtObject {
     // upstream "Golos Text" / "JetBrains Mono" that 0.6.0 seeded. The bundled
     // faces are "Tabless ..." now ("heap ..." until 0.8.0, "lowkey ..." until
     // APP-283, which a pick in Appearance may still name), and the upstream name may be an installed copy.
-    readonly property var legacyDefaultFontsUi: ["IBM Plex Sans", "Golos Text", "heap Golos Text", "lowkey Golos Text"]
+    // The defaults saved by earlier builds; "Tabless Golos Text" was the text's face until 0.9.3.
+    readonly property var legacyDefaultFontsUi: ["IBM Plex Sans", "Golos Text", "heap Golos Text", "lowkey Golos Text", "Tabless Golos Text"]
     readonly property var legacyDefaultFontsMono: ["JetBrains Mono", "heap JetBrains Mono", "lowkey JetBrains Mono"]
     function _installedFont(family, fallback) {
         return family && Qt.fontFamilies().indexOf(family) >= 0 ? family : fallback;
     }
-    readonly property string fontUi: legacyDefaultFontsUi.indexOf(_appearance.fontUI) < 0
-                                     ? _installedFont(_appearance.fontUI, Brand.fontSans) : Brand.fontSans
+    // Settings → Appearance → Font (APP-314): the text in Inter (default),
+    // Golos Text or Onest, all three bundled and cut to one x-height, so the
+    // sizes read the same in each.
+    readonly property var fontFaces: ["inter", "golos", "onest"]
+    readonly property string fontFace: fontFaces.indexOf(_appearance.fontFace) >= 0 ? _appearance.fontFace : "inter"
+    readonly property string _faceFamily: fontFace === "golos" ? Brand.fontDisplay
+                                          : fontFace === "onest" ? Brand.fontOnest : Brand.fontSans
+    // A family typed into state.json as fontUI (an installed font) still wins.
+    readonly property bool _customFontUi: !!_appearance.fontUI && legacyDefaultFontsUi.indexOf(_appearance.fontUI) < 0
+                                          && _appearance.fontUI !== Brand.fontSans
+                                          && Qt.fontFamilies().indexOf(_appearance.fontUI) >= 0
+    readonly property string fontUi: _customFontUi ? _appearance.fontUI : _faceFamily
+    // Headings - a screen's, a note's, a dialog's - and the wordmark: Golos
+    // Text, the brand's face, under Inter text (0.9.3, owner: Golos kept
+    // where it is large enough to stay sharp); Golos or Onest picked for the
+    // text sets the headings too, and so does a custom fontUI.
+    readonly property string fontDisplay: _customFontUi || fontFace !== "inter" ? fontUi : Brand.fontDisplay
     readonly property string fontMono: legacyDefaultFontsMono.indexOf(_appearance.fontMono) < 0
                                        ? _installedFont(_appearance.fontMono, Brand.fontMono) : Brand.fontMono
     // Mono is for what is typed or copied: ticket ids, branches, keys, code,

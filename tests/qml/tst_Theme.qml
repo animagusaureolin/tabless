@@ -40,6 +40,21 @@ TestCase {
     // still carries an old seeded default ("IBM Plex Sans", or the upstream
     // "Golos Text" / "JetBrains Mono" of 0.6.0) gets the bundled "Tabless ..."
     // faces; a font the user picked stays in front.
+    // 0.9.3 (owner): Inter for the text, Golos Text kept for headings. A
+    // 0.9.x install saved "Tabless Golos Text" as its UI font: it gets Inter
+    // too. A face the user picked is used for the headings as well.
+    function test_headings_keep_golos() {
+        const saved = AppController.appSettingsJson;
+        try {
+            AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "Tabless Golos Text" } });
+            compare(Theme.fontUi, "Tabless Inter");
+            compare(Theme.fontDisplay, "Tabless Golos Text");
+            AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "Tabless JetBrains Mono" } });
+            compare(Theme.fontDisplay, "Tabless JetBrains Mono");
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
+    }
     function test_fontui_defaults_to_bundled_golos() {
         const saved = AppController.appSettingsJson;
         AppController.appSettingsJson = JSON.stringify({});
@@ -67,16 +82,16 @@ TestCase {
 
         // One family each: Qt reads font.family as a single name, so a
         // "A, B, sans-serif" list matched nothing and drew in the system font.
-        compare(fresh, "Tabless Golos Text");
+        compare(fresh, "Tabless Inter");
         compare(freshMono, "Tabless JetBrains Mono");
-        compare(seeded, "Tabless Golos Text");
-        compare(seeded060, "Tabless Golos Text");
+        compare(seeded, "Tabless Inter");
+        compare(seeded060, "Tabless Inter");
         compare(seeded060Mono, "Tabless JetBrains Mono");
-        compare(legacy, "Tabless Golos Text");
-        compare(seeded080, "Tabless Golos Text");
+        compare(legacy, "Tabless Inter");
+        compare(seeded080, "Tabless Inter");
         compare(seeded080Mono, "Tabless JetBrains Mono");
         compare(custom, "Tabless JetBrains Mono");
-        compare(missing, "Tabless Golos Text");
+        compare(missing, "Tabless Inter");
         compare(missingMono, "Tabless JetBrains Mono");
     }
 
@@ -88,11 +103,11 @@ TestCase {
     Text { id: monoProbe; text: "0"; font.family: Theme.fontMono; font.weight: Font.Medium }
     Text { id: plainProbe; text: "a" }
     function test_bundled_fonts_resolve() {
-        compare(uiProbe.fontInfo.family, "Tabless Golos Text");
+        compare(uiProbe.fontInfo.family, "Tabless Inter");
         compare(uiProbe.fontInfo.weight, Font.DemiBold);
         compare(monoProbe.fontInfo.family, "Tabless JetBrains Mono");
         compare(monoProbe.fontInfo.weight, Font.Medium);
-        compare(plainProbe.fontInfo.family, "Tabless Golos Text");
+        compare(plainProbe.fontInfo.family, "Tabless Inter");
     }
 
     // ── Weights (APP-193): three, one job each, and only the heading at 600 ──
@@ -420,8 +435,8 @@ TestCase {
         for (let i = 1; i < s.length; i++) verify(s[i] > s[i - 1], "type scale step " + i + " does not ascend");
     }
 
-    // Every size sits on the 1.125 scale from 13px (APP-181), not on the
-    // old 11/12/13/15/20/28 list.
+    // Every size sits on the 1.125 scale from 14px (APP-181; 13px until
+    // 0.9.3), with a reading floor: meta 13, the smallest label 12.
     function test_type_scale_is_modular() {
         const saved = AppController.appSettingsJson;
         try {
@@ -429,11 +444,13 @@ TestCase {
             o.appearance = Object.assign({}, o.appearance || {}, { uiScale: 1 });
             AppController.appSettingsJson = JSON.stringify(o);
             compare(Theme.scale, 1);
-            const steps = { fsSm: -1, fsMd: 0, fsLg: 1, fsXl: 3, fs2xl: 5 };
+            const steps = { fsMd: 0, fsLg: 1, fsXl: 3, fs2xl: 5 };
             for (const k in steps)
-                compare(Theme[k], Math.round(13 * Math.pow(1.125, steps[k])), k);
-            compare(Theme.fsXs, 11, "the floor");
-            compare([Theme.fsXl, Theme.fs2xl], [19, 23]);
+                compare(Theme[k], Math.round(14 * Math.pow(1.125, steps[k])), k);
+            compare(Theme.fsSm, 13, "the meta floor");
+            compare(Theme.fsXs, 12, "the floor");
+            compare(Theme.fsBlock, 11, "a slim calendar block keeps the old step");
+            compare([Theme.fsMd, Theme.fsLg, Theme.fsXl, Theme.fs2xl], [14, 16, 20, 25]);
         } finally {
             AppController.appSettingsJson = saved;
         }

@@ -1,4 +1,5 @@
 #include "platform/Autostart.h"
+#include "platform/Brand.h"
 
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -154,7 +155,8 @@ QString testRoot() {
 
 bool supported() {
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
-  return true;
+  // The login item is the user's own Tabless's; a channel build has none.
+  return !heap::brand::isChannelBuild();
 #else
   return false;
 #endif

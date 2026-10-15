@@ -1279,8 +1279,12 @@ ApplicationWindow {
                     // Under the filters the bar itself shows (TASKS-20): the
                     // counts used to include archived tasks and ignore the
                     // search and the priority chips.
-                    readonly property var _fc: AppController.filteredCounts(win.searchText, win._activePriorities,
-                        win.tasksShowArchived, false, win._counts)
+                    // The board keeps done cards in its folded Done column under the
+                    // default "not done", so its count includes them: "0 tasks"
+                    // over a Done column of 42 (EYE-27).
+                    readonly property var _fc: AppController.filteredCounts(
+                        AppController.currentView === "board" ? win.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim() : win.searchText,
+                        win._activePriorities, win.tasksShowArchived, false, win._counts)
                     totalCount: _fc.total
                     activeCount: _fc.active
                     blockedCount: _fc.blocked
@@ -1365,6 +1369,14 @@ ApplicationWindow {
                     Binding { when: win._listOn; target: viewLoader.item; property: "prioritiesFilter"; value: win.prioritiesFilter }
                     Binding { when: win._listOn; target: viewLoader.item; property: "showArchived"; value: win.tasksShowArchived }
                     Binding { when: win._listOn; target: viewLoader.item; property: "groupBy"; value: win.listGroupEffective }
+                    // "show them" under an all-done list (EYE-27): the default
+                    // "not done" lets go. Wired here, not in listComp, where
+                    // win is out of qmllint's sight.
+                    Connections {
+                        target: win._listOn ? viewLoader.item : null
+                        ignoreUnknownSignals: true
+                        function onShowDoneRequested() { win.searchText = win.searchText.replace(/(^|\s)is:open(?=\s|$)/gi, " ").trim(); }
+                    }
                     Connections {
                         target: viewLoader.item as TaskListView
                         ignoreUnknownSignals: true
@@ -1428,6 +1440,9 @@ ApplicationWindow {
                         MouseArea {
                             anchors.fill: parent
                             enabled: panelScrim.shown
+                            // The view under it is not live: its cards lit up
+                            // and opened their details under the pointer.
+                            hoverEnabled: true
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                             onClicked: {
                                 if (eventEditor.opened) eventEditor.close();
@@ -1585,6 +1600,8 @@ ApplicationWindow {
         id: taskEditor
         objectName: "task-editor"
         onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
+        // Ctrl+click on a note, a task, a tag in the description.
+        onDescLinkActivated: (kind, target) => win.followMdLink(kind, target)
     }
     PeopleDialog {
         id: peopleDialog

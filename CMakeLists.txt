@@ -166,6 +166,11 @@ qt_add_library(heap_markdown STATIC
     src/markdown/MdOutline.cpp
     src/markdown/MdExtensions.cpp
     src/markdown/MdHtml.cpp
+    src/markdown/MdMath.cpp
+    src/markdown/JiraWiki.cpp
+    src/markdown/TableText.cpp
+    src/markdown/LogSyntax.cpp
+    src/markdown/Xlsx.cpp
     src/markdown/MdBlockModel.cpp
     src/markdown/MdEditOps.cpp
     src/notes/NoteLinks.cpp
@@ -173,7 +178,10 @@ qt_add_library(heap_markdown STATIC
 target_include_directories(heap_markdown PUBLIC ${CMAKE_SOURCE_DIR}/src)
 # Gui, not just Core: MdEditOps works on a QTextDocument, which is the same
 # document the editor owns — that is what puts each operation on its undo stack.
-target_link_libraries(heap_markdown PUBLIC heap_md4c Qt6::Core Qt6::Gui)
+# zlib inflates an .xlsx (a zip) for the viewer and paste (APP-315); every
+# platform's Qt already depends on it.
+find_package(ZLIB REQUIRED)
+target_link_libraries(heap_markdown PUBLIC heap_md4c Qt6::Core Qt6::Gui PRIVATE ZLIB::ZLIB)
 # MdBlockModel is a QAbstractListModel, so this one does need moc.
 set_target_properties(heap_markdown PROPERTIES AUTOMOC ON)
 target_compile_options(heap_markdown PRIVATE "${HEAP_WARNING_OPTIONS}")
@@ -303,6 +311,7 @@ qt_add_library(heap_core STATIC
     src/sync/SyncSerializer.cpp
     src/sync/JsonMerger.cpp
     src/update/Updater.cpp
+    src/update/FeatureBuild.cpp
     src/update/UpdateInstall.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         # Notifications with buttons (APP-155): WinRT toasts, UNUserNotificationCenter.
@@ -438,6 +447,9 @@ qt_add_qml_module(heap_core
         qml/TaskSessions.qml
         qml/TaskCardLocal.qml
         qml/MdBlockEditor.qml
+        qml/MdLiveDecorations.qml
+        qml/MdLivePreview.qml
+        qml/FileViewerDialog.qml
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml
@@ -582,6 +594,7 @@ qt_add_qml_module(heap_core
         src/sync/SyncSerializer.h
         src/sync/JsonMerger.h
         src/update/Updater.h
+        src/update/FeatureBuild.h
         src/update/UpdateInstall.h
 )
 
@@ -647,6 +660,14 @@ target_compile_definitions(heap_core PRIVATE
 # PUBLIC so the thin `heap` executable (src/main.cpp) inherits it for
 # setApplicationVersion; AppController exposes it to QML as `appVersion`.
 target_compile_definitions(heap_core PUBLIC HEAP_VERSION="${PROJECT_VERSION}")
+# A channel build (APP-309): "feature" or "unstable" from channels.yml, empty
+# for a release. It gets its own data folder and leaves the user's own
+# Tabless's login item, updates and registrations alone (platform/Brand.h).
+set(HEAP_CHANNEL "" CACHE STRING "Channel build name (feature, unstable) or empty for a release")
+if (NOT HEAP_CHANNEL STREQUAL "" AND NOT HEAP_CHANNEL MATCHES "^(feature|unstable)$")
+    message(FATAL_ERROR "HEAP_CHANNEL must be empty, feature or unstable (got '${HEAP_CHANNEL}')")
+endif()
+target_compile_definitions(heap_core PUBLIC HEAP_CHANNEL="${HEAP_CHANNEL}")
 if (TARGET Qt6::Svg)
     target_link_libraries(heap_core PUBLIC Qt6::Svg)
     target_compile_definitions(heap_core PRIVATE HEAP_HAS_SVG=1)
@@ -760,7 +781,7 @@ if(WIN32)
     )
     set_target_properties(heap-cli PROPERTIES AUTOMOC ON)
     target_include_directories(heap-cli PRIVATE src src/markdown)
-    target_compile_definitions(heap-cli PRIVATE HEAP_VERSION="${PROJECT_VERSION}")
+    target_compile_definitions(heap-cli PRIVATE HEAP_VERSION="${PROJECT_VERSION}" HEAP_CHANNEL="${HEAP_CHANNEL}")
     target_link_libraries(heap-cli PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Network heap_markdown shell32)
     target_compile_options(heap-cli PRIVATE "${HEAP_WARNING_OPTIONS}")
     set_target_properties(heap-cli PROPERTIES OUTPUT_NAME tabless-cli)
@@ -793,8 +814,14 @@ qt_add_resources(heap_core "fonts"
         resources/fonts/GolosText-Regular.ttf
         resources/fonts/GolosText-Medium.ttf
         resources/fonts/GolosText-SemiBold.ttf
+        resources/fonts/Inter-Regular.ttf
+        resources/fonts/Inter-Medium.ttf
+        resources/fonts/Inter-SemiBold.ttf
         resources/fonts/JetBrainsMono-Regular.ttf
         resources/fonts/JetBrainsMono-Medium.ttf
+        resources/fonts/Onest-Regular.ttf
+        resources/fonts/Onest-Medium.ttf
+        resources/fonts/Onest-SemiBold.ttf
 )
 
 # ── Brand assets (Tabless logo + app icon, design/brand-export/tabless — APP-283) ──
