@@ -118,4 +118,91 @@ TestCase {
         doc.close();
         compare(doc.toastLift, 0);
     }
+
+    // 0.9.4: a long ticket on a short panel (a 720p screen at 125 %). The
+    // tracker text took its preferred height and the rest ran off the panel:
+    // my notes, the comments and Done could not be reached. Now the text gives
+    // way and scrolls, my notes keep a floor, Done stays on the panel.
+    function test_a_long_ticket_leaves_my_notes_and_done_on_a_short_panel_data() {
+        return [ { tag: "480", h: 480 }, { tag: "560", h: 560 }, { tag: "760", h: 760 } ];
+    }
+    function test_a_long_ticket_leaves_my_notes_and_done_on_a_short_panel(d) {
+        const home = AppController.activeProfileId;
+        let desc = "";
+        for (let i = 1; i <= 40; i++) desc += i + ". A long tracker line that wraps on a narrow panel, number " + i + "
+
+";
+        AppController.importProfileFromJson(JSON.stringify({ profile: {
+            id: "b4-long-" + d.tag, name: "B4 long " + d.tag, color: "#5cc2dd",
+            statuses: [{ id: "todo", name: "To Do", color: "#888888" }, { id: "done", name: "Done", color: "#888888" }],
+            tasks: [{ id: "TL-7", title: "long ticket " + d.tag, status: "todo", priority: "P2", desc: desc,
+                      externalId: "PLAT-707", externalProvider: "jira",
+                      externalUrl: "https://jira.example.invalid/browse/PLAT-707" }] } }), true);
+        const imported = AppController.activeProfileId;
+        verify(imported !== home, "the import did not open its profile");
+        const m = AppController.tasks;
+        let id = "";
+        for (let i = 0; i < m.rowCount(); i++)
+            if (m.data(m.index(i, 0), m.roleOf("title")) === "long ticket " + d.tag) id = m.data(m.index(i, 0), m.roleOf("id"));
+        verify(id.length > 0, "the ticket was not imported");
+
+        host.height = d.h;
+        const doc = make();
+        doc.open(id);
+        const tracker = findChild(doc, "task-doc-tracker-body");
+        const body = findChild(doc, "task-doc-body");
+        const done = findChild(doc, "task-doc-done-bottom");
+        tryVerify(() => tracker.height > 0 && body.height > 0, 2000);
+        const bottom = (item) => item.mapToItem(doc, 0, item.height).y;
+        verify(done.visible, "Done is folded away");
+        verify(bottom(done) <= doc.height + 0.5, "Done ran off a " + d.h + " px panel: " + bottom(done));
+        verify(body.height >= Theme.px(90), "my notes got " + body.height + " px at " + d.h);
+        verify(tracker.height <= doc.height * 0.62 + 0.5, "the tracker text took " + tracker.height + " of " + doc.height);
+
+        doc.close();
+        host.height = 760;
+        AppController.activeProfileId = home;
+        AppController.deleteProfile(imported);
+    }
+
+    // 0.9.4 owner: scrolled to its end by the scroll bar, a very long tracker
+    // text shrank its box to nothing (the list's content height is an
+    // estimate), and reopening kept it so.
+    function test_a_scrolled_tracker_text_keeps_its_box() {
+        const home = AppController.activeProfileId;
+        let desc = "";
+        for (let i = 1; i <= 400; i++) desc += i + ". A long tracker paragraph that wraps on the panel and goes on, number " + i + "
+
+";
+        AppController.importProfileFromJson(JSON.stringify({ profile: {
+            id: "b4-scroll", name: "B4 scroll", color: "#5cc2dd",
+            statuses: [{ id: "todo", name: "To Do", color: "#888888" }],
+            tasks: [{ id: "TL-8", title: "scrolled ticket", status: "todo", priority: "P2", desc: desc,
+                      externalId: "PLAT-808", externalProvider: "jira",
+                      externalUrl: "https://jira.example.invalid/browse/PLAT-808" }] } }), true);
+        const imported = AppController.activeProfileId;
+        const m = AppController.tasks;
+        let id = "";
+        for (let i = 0; i < m.rowCount(); i++)
+            if (m.data(m.index(i, 0), m.roleOf("title")) === "scrolled ticket") id = m.data(m.index(i, 0), m.roleOf("id"));
+        verify(id.length > 0);
+        host.height = 760;
+        const doc = make();
+        doc.open(id);
+        const tracker = findChild(doc, "task-doc-tracker-body");
+        tryVerify(() => tracker.height > Theme.px(100), 2000, "box " + tracker.height);
+        const before = tracker.height;
+        const list = findChild(tracker, "md-block-view");
+        for (let k = 0; k < 6; k++) { list.positionViewAtEnd(); wait(60); }
+        wait(200);
+        verify(tracker.height >= before - 1, "the box shrank to " + tracker.height + " from " + before);
+        doc.close();
+        doc.open(id);
+        wait(200);
+        verify(tracker.height >= before - 1, "reopened, the box is " + tracker.height);
+        compare(list.contentY, list.originY, "reopened at its top");
+        doc.close();
+        AppController.activeProfileId = home;
+        AppController.deleteProfile(imported);
+    }
 }

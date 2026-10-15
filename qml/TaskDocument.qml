@@ -60,6 +60,24 @@ FocusScope {
     readonly property var _badge: root._isTicket ? (AppController.providerBadges[root._ticket.provider] || ({})) : ({})
     // The tracker's text as shown: Jira Server wiki markup as markdown when
     // that is on (APP-313); the stored text stays as the tracker sent it.
+    // A fence right under a line of text (Jira writes them so) drew its
+    // header over that line (APP-314): a blank line around each fence, for
+    // the read-only tracker text only; nothing is written back.
+    function _spacedFences(t) {
+        const lines = String(t || "").split("\n");
+        const out = [];
+        let inFence = false;
+        for (let i = 0; i < lines.length; i++) {
+            const fence = /^\s*(```|~~~)/.test(lines[i]);
+            if (fence && !inFence && out.length > 0 && out[out.length - 1].trim().length > 0) out.push("");
+            out.push(lines[i]);
+            if (fence) {
+                inFence = !inFence;
+                if (!inFence && i + 1 < lines.length && lines[i + 1].trim().length > 0) out.push("");
+            }
+        }
+        return out.join("\n");
+    }
     readonly property string _trackerText: root._isTicket && root._rev >= 0 ? AppController.trackerDescription(root.taskId) : ""
     // A field changed both here and in the tracker since the last sync: the
     // tracker's side of each, as the editor shows it (A3-8). The document
@@ -105,8 +123,15 @@ FocusScope {
         root._profileId = AppController.activeProfileId;
         root.taskId = id;
         root._load();
+        // The tracker text from its top, measured afresh: it kept the place
+        // it was scrolled to, and the height it had shrunk to (0.9.4).
+        trackerBody.scrollToTop();
+        root._trackerFullH = trackerBody.contentHeight;
         if (intoTitle === true) root.focusTitle();
         else root.takeFocus();
+        // The first tracker text opened says whose it is, once (coach mark).
+        if (root._isTicket && root._trackerText.length > 0)
+            AppController.offerCoachMark("trackerText", { taskId: id, tracker: String(root._badge.name || root._ticket.provider || "") });
     }
     // Where the keyboard goes in the document: a task with no title yet into
     // its title; any other onto the document, where its keys work at once —
@@ -504,7 +529,7 @@ FocusScope {
         if (w <= 0) return 0;
         // A word wrapped whole leaves the end of each line short: a fifth.
         const lines = Math.ceil(titleMetrics.advanceWidth * 1.2 / w);
-        return lines > 6 ? 3 : (lines > 3 ? 2 : 0);
+        return lines > 6 ? 3 : (lines > 3 ? 2 : (lines > 2 ? 1 : 0));
     }
     // Where Tab in the text indents rather than moves on: lines selected, a
     // list item, inside a ``` fence; Shift+Tab only where there is an indent
@@ -600,7 +625,20 @@ FocusScope {
 
     // The sheets' column: 780 px of text (760 quiet), then the meta column.
     readonly property int _docMax: root._quiet ? Theme.px(760) : Theme.px(780)
-    readonly property int _padX: root._quiet ? Theme.px(48) : Theme.px(40)
+    // A narrow panel (a 1280 px window with the board beside it) keeps its
+    // width for the text: smaller margins, and the meta column only where
+    // the text still gets 600 px (APP-314: 440 px of text beside a column
+    // of mostly empty space).
+    readonly property bool _narrow: root.width < Theme.px(1000)
+    readonly property int _padX: root._narrow ? Theme.px(28) : root._quiet ? Theme.px(48) : Theme.px(40)
+    readonly property int _sideW: root._quiet ? Theme.px(280) : Theme.px(300)
+    // A short panel (a 720p screen at 125 %): tighter margins and smaller
+    // floors for the tracker text and my notes, so a long ticket still leaves
+    // my notes, the comments and Done on the panel (0.9.4).
+    readonly property bool _short: root.height < Theme.px(640)
+    // The tracker text's full height, as tall as it has measured (see the
+    // tracker box): reset when its text changes or the document opens.
+    property real _trackerFullH: 0
 
     RowLayout {
         anchors.fill: parent
@@ -614,13 +652,13 @@ FocusScope {
             Layout.fillHeight: true
             Layout.leftMargin: root._padX
             Layout.rightMargin: root._padX
-            Layout.topMargin: root._quiet ? Theme.px(40) : Theme.px(22)
+            Layout.topMargin: root._short ? Theme.spMd : root._quiet ? Theme.px(40) : Theme.px(22)
             spacing: 0
 
             // Задачи / В работе / APP-101          Сохранено  Esc назад  ⤢
             RowLayout {
                 Layout.fillWidth: true
-                Layout.bottomMargin: Theme.px(26)
+                Layout.bottomMargin: root._short ? Theme.spMd : Theme.px(26)
                 Layout.preferredHeight: Theme.chipHSmall
                 spacing: Theme.spMd
                 Text {
@@ -1051,26 +1089,79 @@ FocusScope {
             }
 
             // The tracker's text, read-only, above my notes (APP-237).
+            // Both this block and my notes fill the height: a Layout keeps an
+            // item that does not fill at its preferred height and never
+            // shrinks it, so a long ticket on a small screen pushed my notes,
+            // the comments and Done off the panel (0.9.4).
             ColumnLayout {
                 Layout.fillWidth: true
-                Layout.bottomMargin: Theme.spLg
+                Layout.fillHeight: root._isTicket && root._trackerText.length > 0
+                Layout.verticalStretchFactor: 3
+                Layout.bottomMargin: root._short ? Theme.spSm : Theme.spLg
                 visible: root._isTicket && root._trackerText.length > 0
-                spacing: Theme.spXs
-                Text {
-                    text: I18n.t("taskdoc.fromTracker").arg(root._badge.name || root._ticket.provider || "")
-                    color: Theme.textDim
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsXs
-                }
-                // Why the text does not take typing (APP-313).
-                Text {
+                spacing: 0
+                // One line over the text, why it takes no typing (APP-313)
+                // in the tip of the mark beside it (APP-314: two lines of
+                // explanation sat on the description and read as part of it).
+                RowLayout {
+                    id: trackerHead
                     objectName: "task-doc-tracker-readonly"
-                    Layout.fillWidth: true
-                    text: I18n.t("taskdoc.fromTracker.readOnly").arg(root._badge.name || root._ticket.provider || "")
-                    wrapMode: Text.WordWrap
-                    color: Theme.textDim
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsXs
+                    Layout.bottomMargin: root._short ? Theme.spXs : Theme.spLg
+                    spacing: Theme.spSm
+                    Text {
+                        text: I18n.t("taskdoc.fromTracker.short").arg(root._badge.name || root._ticket.provider || "")
+                        color: Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSm
+                        font.weight: Theme.fwTitle
+
+                        // The first tracker text opened (coach mark): whose
+                        // text this is, then where the user's own goes.
+                        CoachMarkHost {
+                            markId: "trackerText"
+                            inPanel: true
+                            when: root.opened && trackerHead.visible
+                                  && String(AppController.coachMark.taskId || "") === root.taskId
+                            sourceComponent: TrackerTextCoachmark {
+                                hint: AppController.coachMark
+                                headAnchor: trackerHead
+                                notesAnchor: myNotesHead
+                            }
+                        }
+                    }
+                    Rectangle {
+                        objectName: "task-doc-tracker-why"
+                        Layout.preferredWidth: Theme.px(15)
+                        Layout.preferredHeight: Theme.px(15)
+                        radius: width / 2
+                        color: "transparent"
+                        border.width: 1
+                        border.color: whyCA.hovered ? Theme.textMuted : Theme.borderStrong
+                        // The "i" drawn, not set: a glyph sits on the font's
+                        // baseline and came out low and to one side.
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: Math.max(1, Math.round(parent.height * 0.08))
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: Math.max(2, Math.round(parent.parent.width * 0.14))
+                                height: width
+                                radius: width / 2
+                                color: whyCA.hovered ? Theme.text : Theme.textDim
+                            }
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: Math.max(2, Math.round(parent.parent.width * 0.12))
+                                height: Math.round(parent.parent.height * 0.36)
+                                radius: width / 2
+                                color: whyCA.hovered ? Theme.text : Theme.textDim
+                            }
+                        }
+                        ClickArea {
+                            id: whyCA
+                            label: I18n.t("taskdoc.fromTracker.readOnly").arg(root._badge.name || root._ticket.provider || "")
+                        }
+                    }
                 }
                 // Drawn as a note is in rich (APP-313), and only read: the
                 // text can be selected and copied across its lines, a box is
@@ -1081,11 +1172,25 @@ FocusScope {
                     Layout.fillWidth: true
                     Layout.leftMargin: -Theme.px(24)
                     Layout.rightMargin: -Theme.px(24)
-                    // Half the document at most (a long ticket scrolls inside),
-                    // never shorter than a screenful of a few paragraphs.
-                    Layout.preferredHeight: Math.min(Math.max(Theme.px(320), root.height * 0.45), trackerBody.contentHeight)
+                    // Half the document at most (a long ticket scrolls inside);
+                    // with nothing in my notes yet it takes most of the page
+                    // (APP-314: the text scrolled in a box over empty space).
+                    // It grows to that cap from a few lines, taking the room
+                    // first; on a small screen it gives way down to them and
+                    // scrolls, my notes and Done stay on the panel (0.9.4).
+                    Layout.fillHeight: true
+                    Layout.verticalStretchFactor: 3
+                    Layout.maximumHeight: Math.min(Math.max(Theme.px(320),
+                        root.height * (body.text.trim().length > 0 ? 0.45 : 0.62)), root._trackerFullH)
+                    Layout.preferredHeight: Math.min(root._short ? Theme.px(64) : Theme.px(96), root._trackerFullH)
+                    Layout.minimumHeight: Math.min(root._short ? Theme.px(64) : Theme.px(96), root._trackerFullH)
+                    // The list's content height is an estimate that shrinks
+                    // as a long text is scrolled: the box followed it down to
+                    // nothing (0.9.4). The tallest seen for this text holds.
+                    onContentHeightChanged: root._trackerFullH = Math.max(root._trackerFullH, trackerBody.contentHeight)
+                    onTextChanged: root._trackerFullH = trackerBody.contentHeight
                     clip: true
-                    text: root._trackerText
+                    text: root._spacedFences(root._trackerText)
                     readOnly: true
                     noteType: true
                     headingRules: false
@@ -1096,15 +1201,21 @@ FocusScope {
                     menuTitle: I18n.t("taskdoc.fromTracker").arg(root._badge.name || root._ticket.provider || "")
                     onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
                 }
-            }            // My notes on a tracker card: never sent, never pulled over.
+            }
+            // My notes on a tracker card: never sent, never pulled over.
+            // Its own section, labelled like the tracker's (APP-314).
             RowLayout {
+                id: myNotesHead
+                objectName: "task-doc-mynotes-head"
                 visible: root._isTicket
+                Layout.topMargin: root._trackerText.length > 0 ? Theme.spSm : 0
                 spacing: Theme.spMd
                 Text {
                     text: I18n.t("taskdoc.myNotes")
-                    color: Theme.textDim
+                    color: Theme.textMuted
                     font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsXs
+                    font.pixelSize: Theme.fsSm
+                    font.weight: Theme.fwTitle
                 }
                 // A long notepad copied into Knowledge, naming the task.
                 Text {
@@ -1148,6 +1259,14 @@ FocusScope {
                 objectName: "task-doc-body"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                // Under a long tracker text my notes kept no height at all,
+                // and Done sat right under their label (0.9.4): the tracker
+                // box gives way first.
+                Layout.minimumHeight: root._isTicket ? (root._short ? Theme.px(96) : Theme.px(160)) : 0
+                // Its own text does not claim the room: the tracker box above
+                // takes it first, up to its cap, and the rest is my notes'.
+                Layout.preferredHeight: root._isTicket && root._trackerText.length > 0 ? (root._short ? Theme.px(96) : Theme.px(160)) : -1
+                Layout.verticalStretchFactor: 1
                 Layout.leftMargin: -Theme.px(24)
                 Layout.rightMargin: -Theme.px(24)
                 // The text ends above Done: it ran on beneath the button, with
@@ -1191,7 +1310,7 @@ FocusScope {
                 id: doneBottom
                 objectName: "task-doc-done-bottom"
                 visible: !sideCol.visible
-                Layout.bottomMargin: Theme.sp2xl
+                Layout.bottomMargin: root._short ? Theme.spMd : Theme.sp2xl
                 Layout.fillWidth: !root._quiet
             }
         }
@@ -1201,8 +1320,11 @@ FocusScope {
             id: sideCol
             objectName: "task-doc-side"
             Layout.fillHeight: true
-            Layout.preferredWidth: root._quiet ? Theme.px(280) : Theme.px(300)
-            visible: root.width >= Theme.px(820)
+            Layout.preferredWidth: root._sideW
+            // Folded away only where the text would get less than 440 px:
+            // at 600 the panel lost the column on most screens, and with it
+            // the code, the time and Done (0.9.4).
+            visible: root.width >= 2 * root._padX + Theme.px(440) + root._sideW
             color: Theme.bg
             Rectangle {
                 visible: !root._quiet

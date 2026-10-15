@@ -21,6 +21,7 @@
 #include <QObject>
 #include <QPointF>
 #include <qqmlregistration.h>
+#include <QStandardPaths>
 #include <QStringList>
 #include <QTimer>
 #include <QUrl>
@@ -95,6 +96,12 @@ class AppController : public QObject {
   // task id → title for every task in the profile, archived included. The
   // rendered markdown shows a "#APP-12" mention as its title (APP-121).
   Q_PROPERTY(QVariantMap taskTitles READ taskTitles NOTIFY taskTitlesChanged)
+  // task id -> the key a card shows (displayKey) and -> its column's stage
+  // (statusCategory): the rich editor draws a "#APP-12" as a pill with the
+  // status ring and the key (a-05). Apart from the titles so a status drag
+  // redraws only the rings, not every open note's text.
+  Q_PROPERTY(QVariantMap taskKeys READ taskKeys NOTIFY taskKeysChanged)
+  Q_PROPERTY(QVariantMap taskStages READ taskStages NOTIFY taskStagesChanged)
   // The active profile's saved views, in sidebar order: [{id, name, query,
   // priorities, sort, archived, showDone, view, problems}] — `problems` is what
   // the search box would flag in the query (a deleted column, a typo).
@@ -219,6 +226,9 @@ class AppController : public QObject {
   // Settings → Git → "Show whose move" (APP-156). On by default: it is a fact
   // read off the PR, not a nudge.
   Q_PROPERTY(bool showWhoseMove READ showWhoseMove NOTIFY showWhoseMoveChanged)
+  // The one-time coach mark waiting for its anchor (src/hints/CoachMarks.h):
+  // {id, …what that one needs, e.g. taskId}; empty when there is none.
+  Q_PROPERTY(QVariantMap coachMark READ coachMark NOTIFY coachMarkChanged)
 
   // ---- Storage health (PLAT-1/4/5) ----
   // "ok", "unreadable" (state.json exists but could not be opened: read-only
@@ -1168,6 +1178,10 @@ class AppController : public QObject {
   // `goneCandidates`, when given, collects the external ids that would be
   // marked gone instead of marking them: the provider can look them up first
   // (INT-6, audit 2026-09-30).
+  // A merge / pull request card whose Jira issue is here goes to the archive,
+  // its facts onto the issue's card (APP-293); the count of cards folded.
+  // With `archive` false only the facts are put back (a profile loading).
+  int foldReviewCardsIntoIssues(bool archive = true);
   MergeStats mergeExternalTasks(const QString& providerId,
                                 const QString& idPrefix,
                                 const QVector<heap::integrations::ExternalTask>& issues,
@@ -1242,7 +1256,10 @@ class AppController : public QObject {
 
   // Pull issues from every connected tracker and mirror them as tasks in the
   // active profile. No-op (with a toast) when no provider is configured.
-  Q_INVOKABLE void syncNow();
+  // By hand (`here`) it is "sync everything, here": each tracker is bound to
+  // the active profile first, as one card's "Sync now" binds its own; the
+  // auto-sync timer passes false and never moves a tracker.
+  Q_INVOKABLE void syncNow(bool here = true);
   // Pull from a single connected provider (the per-card "Sync now" button).
   Q_INVOKABLE void syncProvider(const QString& providerId);
   // Validate the current credentials for one provider and toast the result.
@@ -1640,6 +1657,14 @@ class AppController : public QObject {
 
   QVariantMap taskTitles() const {
     return m_taskTitles;
+  }
+
+  QVariantMap taskKeys() const {
+    return m_taskKeys;
+  }
+
+  QVariantMap taskStages() const {
+    return m_taskStages;
   }
 
   // ---- Saved views (src/AppControllerSavedViews.cpp) ----
@@ -2040,6 +2065,36 @@ class AppController : public QObject {
     return m_focusedRepoState;
   }
 
+  QVariantMap coachMark() const {
+    return m_coachMark;
+  }
+
+  // Integration setting "reviewFold" (on by default): a merge / pull
+  // request about a Jira issue shows on the issue's card instead of a card
+  // of its own (APP-293). Off brings the folded cards back.
+  Q_INVOKABLE bool reviewFoldOn(const QString& providerId) const;
+  Q_INVOKABLE void setReviewFold(const QString& providerId, bool on);
+  // ---- Coach marks (src/hints/CoachMarks.h) ----
+  // Puts coach mark `id` on offer for its anchor, with what it needs to say
+  // (`payload`, merged with {id}). Refused — false — for an unknown or
+  // already read id, while another waits, or once one was shown this session.
+  Q_INVOKABLE bool offerCoachMark(const QString& id, const QVariantMap& payload = {});
+  // The anchor put it on screen: no other coach mark this session.
+  Q_INVOKABLE void coachMarkShown(const QString& id);
+  // Read (any button, Esc, a press outside, the settings it points to):
+  // never offered again.
+  Q_INVOKABLE void dismissCoachMark(const QString& id);
+  // Its anchor went away before it could show: off offer, still unread.
+  Q_INVOKABLE void dropCoachMark(const QString& id);
+  Q_INVOKABLE bool coachMarkSeen(const QString& id) const;
+  // One more go at what coach mark `id` is about, this session (the week
+  // arrows clicked: weekKeys); the count so far. Not saved.
+  Q_INVOKABLE int noteCoachMarkUse(const QString& id);
+  // Unread again (`id`, or all when empty), nothing on offer, a fresh session.
+  Q_INVOKABLE void forgetCoachMarks(const QString& id = {});
+  // Off under QStandardPaths test mode, so a coach mark never takes the
+  // keyboard in another suite's flow; the coach mark tests turn them on.
+  Q_INVOKABLE void setCoachMarksEnabled(bool on);
   bool showWhoseMove() const {
     return m_showWhoseMove;
   }
@@ -2119,6 +2174,8 @@ class AppController : public QObject {
   void blockedStuckChanged();
   void statusCountsChanged();
   void taskTitlesChanged();
+  void taskKeysChanged();
+  void taskStagesChanged();
   void savedViewsChanged();
   void savedViewCountsChanged();
   void strictQueryChanged();
@@ -2208,6 +2265,7 @@ class AppController : public QObject {
   void trackerWriteNotice(const QString& message);
   void focusedGitChanged();
   void showWhoseMoveChanged();
+  void coachMarkChanged();
   // `profileId` is the profile the task lives in; the window switches there
   // only once the editor's unsaved edits are settled (PRES-1).
   void openTaskRequested(const QString& id, const QString& profileId);
@@ -2245,6 +2303,16 @@ class AppController : public QObject {
   // can want the same id (the same number from two repos), and upsert on a
   // colliding id replaces the other task rather than adding one.
   QString uniqueTaskId(const QString& base) const;
+  QHash<QString, QString> jiraIssuesByKey() const;
+  // A review's card folded into `issueId`: archived, and marked so turning
+  // folding off can bring back exactly these cards.
+  void markReviewFolded(const QString& cardId, const QString& issueId);
+  void offerReviewFoldHint(const QString& issueId, const Task& review);
+  QVariantMap m_coachMark;
+  bool m_coachMarkShownThisSession = false;
+  bool m_coachMarksEnabled = !QStandardPaths::isTestModeEnabled();
+  QHash<QString, int> m_coachMarkUses;
+  static QVariantMap reviewGitFacts(const QJsonObject& details, const QString& externalId, const QString& url);
 
   TaskModel m_tasks;
   EventModel m_events;
@@ -2429,6 +2497,8 @@ class AppController : public QObject {
   // changes, and announced only when a title or id really changed, so a
   // status drag does not re-render every open note.
   QVariantMap m_taskTitles;
+  QVariantMap m_taskKeys;
+  QVariantMap m_taskStages;
   bool m_taskTitlesQueued = false;
   void refreshTaskTitles();
   // The active profile's saved views and savedViewCounts()' cache. The count
@@ -3056,6 +3126,9 @@ class AppController : public QObject {
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name
+  // Repos whose branch the watcher has reported since launch (the first
+  // report is the launch itself, not a switch).
+  QSet<QString> m_gitReposReported;
   bool m_showWhoseMove = true;        // settings.git.showWhoseMove, cached for the cards
   void applyGitSettingsFromMap(const QVariantMap& git);
   // Re-derive the focused branch's task id under the current id-prefix and

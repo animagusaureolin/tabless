@@ -15,6 +15,7 @@
 #include "integrations/IntegrationTypes.h"
 #include "local/Effective.h"
 #include "recur/RecurrenceEngine.h"
+#include "text/LocaleFormat.h"
 #include "views/UiScale.h"
 
 #include <QApplication>
@@ -947,6 +948,28 @@ TEST_F(AppControllerTest, DateLabelsFollowTheUiLanguage) {
   EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("longDayYear")), QString::fromUtf8("6 октября 2026"));
   EXPECT_EQ(app_->datePattern(QStringLiteral("dayMonth"), QStringLiteral("en")), QStringLiteral("MMM d"));
   EXPECT_EQ(app_->dateLabel(QDate(), QStringLiteral("dayMonth")), QString());
+}
+
+// a-31 (DG-031): a meeting found in the command line reads "15 окт 2026",
+// without the locale's dot.
+TEST_F(AppControllerTest, PaletteMeetingDateHasNoMonthDot) {
+  QVariantMap draft = app_->newEventDraft(11.5, QDate(2026, 10, 15));
+  draft["title"] = QStringLiteral("Palette dot probe");
+  app_->saveEvent(draft);
+  app_->setLanguage(QStringLiteral("ru"));
+  QString sub;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    if(m.value("kind").toString() == QLatin1String("event") && m.value("label").toString() == QLatin1String("Palette dot probe")) {
+      sub = m.value("sub").toString();
+    }
+  }
+  app_->setLanguage(QStringLiteral("en"));
+  EXPECT_TRUE(sub.contains(QString::fromUtf8("15 окт 2026"))) << sub.toStdString();
+  EXPECT_FALSE(sub.contains(QString::fromUtf8("окт."))) << sub.toStdString();
+  EXPECT_EQ(heap::text::withoutMonthDot(QString::fromUtf8("вт, 6 окт., 15:15"), QStringLiteral("ru")),
+            QString::fromUtf8("вт, 6 окт, 15:15"));
+  EXPECT_EQ(heap::text::withoutMonthDot(QStringLiteral("Oct. 6"), QStringLiteral("en")), QStringLiteral("Oct. 6"));
 }
 
 TEST_F(AppControllerTest, DateTimeLabelUsesTheClockSetting) {
@@ -1982,6 +2005,31 @@ TEST_F(AppControllerTest, AManualSyncRebindsTheProviderToTheOpenProfile) {
   app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
 
   app_->syncProvider(QStringLiteral("gitea"));
+  EXPECT_EQ(readIntegrationConfig(QStringLiteral("gitea")).value(QStringLiteral("profileId")).toString(), app_->activeProfileId());
+
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
+// "Sync everything" by hand binds every tracker here, as each card's own
+// Sync now does: a GitLab bound to another profile had its MRs dropped
+// unmerged, so they never folded into the Jira issues open here (0.9.4).
+// The auto-sync tick moves nothing.
+TEST_F(AppControllerTest, SyncEverythingRebindsEveryTracker_TheTimerDoesNot) {
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("host"), QStringLiteral("http://127.0.0.1:1")},  // never contacted
+                             {QStringLiteral("repo"), QStringLiteral("acme/web")},
+                             {QStringLiteral("profileId"), QStringLiteral("some-other-profile")},
+                         });
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+
+  app_->syncNow(/*here=*/false);
+  EXPECT_EQ(readIntegrationConfig(QStringLiteral("gitea")).value(QStringLiteral("profileId")).toString(),
+            QStringLiteral("some-other-profile"));
+
+  app_->syncNow();
   EXPECT_EQ(readIntegrationConfig(QStringLiteral("gitea")).value(QStringLiteral("profileId")).toString(), app_->activeProfileId());
 
   writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});

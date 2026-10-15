@@ -1021,7 +1021,9 @@ Item {
         Rectangle {
             id: switchTrack
             Layout.preferredWidth: Theme.px(34); Layout.preferredHeight: Theme.px(20); radius: height / 2
-            color: switchRow.checked ? (root.quiet ? Theme.switchOn : Theme.info) : "transparent"
+            // The accent, as every other "on" in the app (0.9.4: it was the
+            // meeting blue); quiet keeps its neutral fill (DG-004).
+            color: switchRow.checked ? (root.quiet ? Theme.switchOn : Theme.accent) : "transparent"
             border.color: switchRow.checked ? "transparent" : Theme.switchOffLine
             border.width: 1
             FocusRing { target: switchRow; radius: 13 }
@@ -1100,17 +1102,40 @@ Item {
         default property alias content: moreCol.data
         Layout.fillWidth: true
         spacing: 0
-        Text {
+        // A control, not a footnote: a chevron that turns and the row's
+        // own text colour, so the fold reads as something to open (0.9.4:
+        // the dim line was missed).
+        RowLayout {
+            id: moreHead
             objectName: "settings-more-toggle"
+            readonly property alias text: moreText.text
             Layout.topMargin: Theme.spLg
             Layout.bottomMargin: Theme.spSm
-            text: root.opt(I18n.t(more.open ? "settings.more.close" : "settings.more.open"))
-            color: moreMA.hovered ? Theme.text : Theme.textDim
-            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
-            font.pixelSize: Theme.fsSm
+            spacing: Theme.spXs
+            Icon {
+                name: "chevron-right"
+                size: Theme.iconSize - 2
+                color: moreText.color
+                rotation: more.open ? 90 : 0
+                Behavior on rotation { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+            }
+            Text {
+                id: moreText
+                objectName: "settings-more-text"
+                text: root.opt(I18n.t(more.open ? "settings.more.close" : "settings.more.open"))
+                color: moreMA.hovered ? Theme.text : Theme.textMuted
+                Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                font.weight: Theme.fwTitle
+            }
             ClickArea {
                 id: moreMA
-                label: parent.text
+                objectName: "settings-more-click"
+                // The whole row: the chevron and the words.
+                parent: moreHead
+                anchors.fill: moreHead
+                label: moreText.text
                 showTip: false
                 role: Accessible.CheckBox
                 checkable: true
@@ -1176,7 +1201,15 @@ Item {
         color: linkMA.hovered ? Theme.text : Theme.textMuted
         Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
         font.pixelSize: Theme.fsSm
-        font.underline: true
+        // A dim rule a little under the baseline, not the text's own
+        // underline tight to the glyphs (b-25, H2-Board / Q-Settings).
+        Rectangle {
+            objectName: link.objectName.length > 0 ? link.objectName + "-underline" : ""
+            y: link.baselineOffset + Theme.px(3)
+            width: link.contentWidth
+            height: 1
+            color: Theme.borderStrong
+        }
         ClickArea {
             id: linkMA
             objectName: link.objectName.length > 0 ? link.objectName + "-click" : ""
@@ -1233,23 +1266,6 @@ Item {
                                ({ value: "spacious", label: I18n.t("common.density.spacious") }) ]
                     onSelected: (value) => AppController.density = value
                 }
-                // Scale and contrast are what a low-vision user looks for
-                // first: on the sheet, not under "more" (A6-16).
-                SegRow {
-                    objectName: "settings-ui-scale"
-                    label: I18n.t("settings.appearance.scale")
-                    // Unset, the scale is the system's text size (APP-183).
-                    hint: (Theme._appearance.uiScale === undefined && Theme.systemScale() > Theme.defaultScale
-                          ? I18n.t("settings.appearance.scale.system")
-                          : I18n.t("settings.appearance.scale.hint"))
-                          + " " + I18n.t("settings.appearance.scale.default").arg(Math.round(AppController.defaultUiScale(Theme.scaleSteps) * 100))
-                          + " " + I18n.t("settings.appearance.scale.keys")
-                              .arg(AppController.keyText(AppController.shortcutFor("zoom.in")))
-                              .arg(AppController.keyText(AppController.shortcutFor("zoom.out")))
-                    value: String(Math.round(Theme.scale * 100))
-                    options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
-                    onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
-                }
                 // The text's face (APP-314): three bundled, one x-height.
                 SegRow {
                     objectName: "settings-font-face"
@@ -1262,21 +1278,6 @@ Item {
                         { value: "onest", label: "Onest" }
                     ]
                     onSelected: (value) => root.set("appearance", "fontFace", value)
-                }
-                SegRow {
-                    objectName: "settings-contrast"
-                    label: I18n.t("settings.appearance.contrast")
-                    hint: I18n.t("settings.appearance.contrast.hint")
-                    value: Theme.contrast
-                    options: [
-                        ({ value: "soft",   label: I18n.t("settings.appearance.contrast.soft") }),
-                        ({ value: "normal", label: I18n.t("settings.appearance.contrast.normal") }),
-                        ({ value: "high",   label: I18n.t("settings.appearance.contrast.high") })
-                    ]
-                    onSelected: (value) => {
-                        root.set("appearance", "contrast", value);
-                        root.set("appearance", "highContrast", value === "high");
-                    }
                 }
                 SegRow {
                     objectName: "settings-motion"
@@ -1426,7 +1427,44 @@ Item {
                 }
             }
             MoreBlock {
-                // The finer knobs: a cursor colour of its own, the themes.
+                // The finer knobs: scale and contrast, a cursor colour of its
+                // own, the themes. Scale and contrast went under "more" with
+                // DG-090 — the sheet shows four rows at rest; the face stays
+                // there (APP-314). Ctrl +/- still scale from anywhere (b-11).
+                SettingsGroup {
+                    objectName: "settings-appearance-more"
+                    Layout.bottomMargin: Theme.spLg
+                    SegRow {
+                        objectName: "settings-ui-scale"
+                        label: I18n.t("settings.appearance.scale")
+                        // Unset, the scale is the system's text size (APP-183).
+                        hint: (Theme._appearance.uiScale === undefined && Theme.systemScale() > Theme.defaultScale
+                              ? I18n.t("settings.appearance.scale.system")
+                              : I18n.t("settings.appearance.scale.hint"))
+                              + " " + I18n.t("settings.appearance.scale.default").arg(Math.round(AppController.defaultUiScale(Theme.scaleSteps) * 100))
+                              + " " + I18n.t("settings.appearance.scale.keys")
+                                  .arg(AppController.keyText(AppController.shortcutFor("zoom.in")))
+                                  .arg(AppController.keyText(AppController.shortcutFor("zoom.out")))
+                        value: String(Math.round(Theme.scale * 100))
+                        options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
+                        onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
+                    }
+                    SegRow {
+                        objectName: "settings-contrast"
+                        label: I18n.t("settings.appearance.contrast")
+                        hint: I18n.t("settings.appearance.contrast.hint")
+                        value: Theme.contrast
+                        options: [
+                            ({ value: "soft",   label: I18n.t("settings.appearance.contrast.soft") }),
+                            ({ value: "normal", label: I18n.t("settings.appearance.contrast.normal") }),
+                            ({ value: "high",   label: I18n.t("settings.appearance.contrast.high") })
+                        ]
+                        onSelected: (value) => {
+                            root.set("appearance", "contrast", value);
+                            root.set("appearance", "highContrast", value === "high");
+                        }
+                    }
+                }
                 // "Your own" accent (APP-174): the cursor colour from the swatches.
                 CursorColorRow {
                     objectName: "settings-cursor-color"
@@ -3291,6 +3329,17 @@ Item {
                                     hint: I18n.t("settings.int.review.movable.hint")
                                     checked: intCard.conf.reviewMovable === true
                                     onToggled: (checked) => root.setNested("integrations", intCard.intKey, "reviewMovable", checked)
+                                }
+                                // A review that closes a Jira issue shows on the
+                                // issue's card (APP-293); off, it is a card of its
+                                // own and the folded ones come back (0.9.4).
+                                SwitchRow {
+                                    objectName: "int-review-fold-" + intCard.intKey
+                                    visible: intCard.hasReviews && intCard.reviewsOn
+                                    label: I18n.t("settings.int.review.fold")
+                                    hint: I18n.t(checked ? "settings.int.review.fold.hint" : "settings.int.review.fold.hintOff")
+                                    checked: intCard.conf.reviewFold !== false
+                                    onToggled: (checked) => AppController.setReviewFold(intCard.intKey, checked)
                                 }
                             }
                             Text {

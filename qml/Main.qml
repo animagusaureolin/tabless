@@ -789,6 +789,20 @@ ApplicationWindow {
         // The crash card waits for an answer over the whole window (A7-2).
         || splash.waiting
     readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
+    // A coach mark (CoachMarkHost) opens only now: nobody typing, no focus
+    // mode, no modal or menu up. One already open stays. One about the view
+    // also waits while a side panel covers it; one in the panel does not.
+    readonly property bool coachMarksQuietInPanel: coachMarksAwake && !_typing && !AppController.immersion && !_modalOpen
+                                                   && !_overlayOpen && !hotkeys.isCapturing && !splash.waiting
+    // Never on startup: what the first pull or the start view brings waits
+    // until the app has been up a while.
+    property bool coachMarksAwake: false
+    Timer {
+        interval: 10000
+        running: !win.coachMarksAwake
+        onTriggered: win.coachMarksAwake = true
+    }
+    readonly property bool coachMarksQuiet: coachMarksQuietInPanel && !_panelOpen
 
     // Esc in the header search with nothing left to clear hands the keyboard
     // back to the view, so J/K and Return work again without the mouse.
@@ -1431,6 +1445,10 @@ ApplicationWindow {
                         id: panelScrim
                         objectName: "panel-scrim"
                         readonly property bool shown: (taskDoc.opened && !taskDoc.full) || eventEditor.opened
+                        // Over the whole content area, the header and the
+                        // query row too, as the panel now is (APP-314): they
+                        // stayed live beside it.
+                        parent: mainColumn
                         anchors.fill: parent
                         z: 59
                         color: Theme.withAlpha(Theme.scrim, Theme.dark ? 0.5 : 0.28)
@@ -1461,17 +1479,20 @@ ApplicationWindow {
                         easing.type: Theme.easeEnter
                     }
                     // The task document (APP-265): a panel over the right
-                    // of the view, or the whole width.
-                    // Full, it replaces the whole content area, the Tasks
-                    // header and the query row included (DG-060).
+                    // half of the content area, or the whole width.
+                    // Either way it runs the content area's full height, the
+                    // Tasks header and the query row included (DG-060; the
+                    // panel too since APP-314: on a small screen those rows
+                    // took the height the description needed).
                     TaskDocument {
                         id: taskDoc
-                        parent: taskDoc.full ? mainColumn : viewArea
+                        parent: mainColumn
                         anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
+                        // Never so narrow the meta column folds away (0.9.4).
                         width: taskDoc.full ? parent.width
-                             : Math.min(parent.width, Math.max(Theme.px(560), parent.width * 0.68))
+                             : Math.min(parent.width, Math.max(Theme.px(820), parent.width * 0.5))
                         z: 60
                         onClosed: Qt.callLater(win.focusActiveView)
                         onInternalLinkActivated: (kind, target) => win.followMdLink(kind, target)
@@ -1480,6 +1501,8 @@ ApplicationWindow {
                     // A meeting (DG-120): the same panel, saving on its own.
                     EventEditor {
                         id: eventEditor
+                        // Over the scrim, which covers the content area.
+                        parent: mainColumn
                         anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
@@ -2194,7 +2217,7 @@ ApplicationWindow {
         "profile.weeklyReport", "sync.all", "focus.immersion", "timeMachine.open", "standup.draft", "recap.open",
         "endOfDay.open", "welcome.replay", "example.open", "zoom.in", "zoom.out", "zoom.reset", "tweaks.open", "log.open",
         "hotkeys.open", "undo", "redo", "search.focus", "selection.selectAll", "selection.clearSel",
-        "selection.deleteSel", "cal.today", "cal.prevDay", "cal.nextDay", "cal.newEvent", "cal.prev", "cal.next",
+        "selection.deleteSel", "cal.today", "cal.prevDay", "cal.nextDay", "cal.newEvent", "cal.prev", "cal.next", "cal.prev.alt", "cal.next.alt",
         "cal.goToDate", "cal.taskEarlier", "cal.taskLater", "cal.taskEarlierWeek", "cal.taskLaterWeek",
         "cal.taskTimeEarlier", "cal.taskTimeLater", "board.cursorDown", "board.cursorUp", "board.cursorLeft",
         "board.cursorRight", "board.open", "board.toggleSelect", "board.moveDown", "board.moveUp",
@@ -3109,6 +3132,15 @@ ApplicationWindow {
         sequences: [_kbd("cal.next")]
         onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
     }
+    // n / p, the next and the previous period, beside ] and [ (0.9.4).
+    CalKey {
+        sequences: [win._kbd("cal.prev.alt")]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(-1); }
+    }
+    CalKey {
+        sequences: [win._kbd("cal.next.alt")]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
+    }
     // The calendar lens' own keys (keymap.md, APP-264): [ ] a period, 0
     // today, z d / z w / z m the zoom. Fixed until the catalogue takes them
     // (APP-272); they stand down like every other view key.
@@ -3759,6 +3791,8 @@ ApplicationWindow {
     Toast {
         id: toast
         objectName: "toast"
+        // "Журнал" on a burst of notices (a-27).
+        onLogRequested: eventLog.showNow()
         x: mainColumn.x
         width: mainColumn.width
         areaWidth: mainColumn.width
@@ -3768,6 +3802,21 @@ ApplicationWindow {
         anchors.bottomMargin: 24 + win._selectionBarSpace + taskDoc.toastLift
                               + (keyPendingBar.visible ? keyPendingBar.height + Theme.spMd : 0)
         z: 100
+    }
+    // Five or more tasks deleted at once (coach mark), over the "Tasks
+    // deleted" toast: Undo now, the Time Machine later. It takes no keys, so
+    // the toast's Undo works by key and by click while it is up.
+    CoachMarkHost {
+        id: timeMachineMark
+        markId: "timeMachine"
+        when: toast.count > 0
+        anchorItem: toast.cardsItem
+        sourceComponent: TimeMachineCoachmark {}
+    }
+    Connections {
+        target: timeMachineMark._card
+        ignoreUnknownSignals: true
+        function onOpenTimeMachine() { timeMachine.showNow(); }
     }
 
     // Launch splash (R3-017, Review 2): leaves as soon as the window has
