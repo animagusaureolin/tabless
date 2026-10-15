@@ -101,6 +101,14 @@ double measureAgainstBudget(const std::string& name,
                             int runs,
                             const std::function<void(int)>& body,
                             const std::function<void(int)>& prepare = {}) {
+  // Report-only (a sanitized or unoptimised build): one timing, no medians
+  // and no over-budget retries. Under ASan every run is over budget, so the
+  // retries tripled the work for a number nothing checks; the suite sat at
+  // 116 of its 120 s and timed out on the 0.9.4 release run. The 10k-task
+  // path still runs once, so the sanitizer still sees it.
+  if(!gateArmed()) {
+    return medianMs(1, body, prepare);
+  }
   const double budget = budgetFor(name).budgetMs;
   double best = medianMs(runs, body, prepare);
   for(int retry = 0; retry < kOverBudgetRetries && best > budget; ++retry) {
