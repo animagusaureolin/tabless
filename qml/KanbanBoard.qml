@@ -105,6 +105,16 @@ Item {
     function dragTaskId(src) {
         return src && src.taskId ? String(src.taskId) : "";
     }
+    // A tracker card whose tracker is not written to changes its column
+    // here only; the target says so while the card is over it (a-30).
+    function dropStaysLocal(src, statusId) {
+        const id = root.dragTaskId(src);
+        return id.length > 0 && root.moveStaysLocal(AppController.taskById(id), statusId);
+    }
+    function moveStaysLocal(t, statusId) {
+        const provider = t && t.ticket ? String(t.ticket.provider || "") : "";
+        return provider.length > 0 && String(t.status) !== statusId && !AppController.trackerWriteEnabled(provider);
+    }
     // An empty column folds to a strip by itself (APP-314): six empty
     // columns spread across a 2K screen squeezed the one with cards and sent
     // the eye over a screen of "Nothing here yet". It stays a drop target and
@@ -263,7 +273,31 @@ Item {
     readonly property int minColumnWidth: Theme.px(130)
     readonly property int maxColumnWidth: Theme.px(360)
     readonly property int foldedWidth: 44
-    readonly property int doneFoldedWidth: Theme.px(88)
+    // A folded Done is 88 px on the sheet, and wider when its own header
+    // needs it: "Готово 2" read "Гото… 2" at 100 % in Inter (b-04).
+    readonly property int doneFoldedWidth: Math.max(Theme.px(88),
+        Math.ceil(doneNameFm.advanceWidth + doneCountFm.advanceWidth) + Theme.statusRingSize
+        + 2 * Theme.spXs + 2 * Theme.spMd + 2)
+    readonly property string _doneName: {
+        const sts = AppController.statuses;
+        for (let i = 0; i < sts.length; i++)
+            if (root.isDoneColumn(sts[i].id)) return String(sts[i].name || "");
+        return "";
+    }
+    TextMetrics {
+        id: doneNameFm
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsMd
+        font.weight: Theme.fwHeading
+        text: root._doneName
+    }
+    TextMetrics {
+        id: doneCountFm
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsMd
+        font.features: Theme.tabularNums
+        text: "00"
+    }
     readonly property int columnGap: Theme.sp2xl
     readonly property int columnWidth: {
         const sts = AppController.statuses;
@@ -908,6 +942,8 @@ Item {
                     readonly property alias taskList: bodyFlick
                     readonly property alias taskFilter: colFilter
                     property bool dragOver: false
+                    // The card over it is a tracker card with writes off (a-30).
+                    property bool dropLocalOnly: false
                     readonly property int visibleCount: colFilter.count
                     // Set by colRepeater: a search or filter is on / it hides
                     // every card on the board / the board has no cards at all.
@@ -971,7 +1007,7 @@ Item {
                         }
                     }
 
-                    width: col.folded ? (col.isDone ? Theme.px(88) : root.foldedWidth) : root.columnWidth
+                    width: col.folded ? (col.isDone ? root.doneFoldedWidth : root.foldedWidth) : root.columnWidth
                     height: rowL.height
                     radius: Theme.radius
                     // No frame and no fill (APP-262): a drop target is marked
@@ -1026,6 +1062,15 @@ Item {
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsSm
                         }
+                        Text {
+                            objectName: "column-done-drop-local-only"
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            visible: col.dropLocalOnly
+                            text: I18n.t("kanban.drop.localOnly")
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsXs
+                        }
                     }
 
                     // Folded: the name runs down the strip, with the count; a
@@ -1050,11 +1095,19 @@ Item {
                                     visible: Style.chipFill
                                     category: "done"
                                 }
+                                // Measured, not the Text's own implicitWidth: an
+                                // elided Text redoes that when its width changes.
+                                TextMetrics {
+                                    id: doneNameText
+                                    font: doneName.font
+                                    text: doneName.text
+                                }
                                 Text {
+                                    id: doneName
                                     objectName: "column-done-folded-name"
                                     anchors.verticalCenter: parent.verticalCenter
-                                    width: Math.min(implicitWidth, col.width - 2 * Theme.spMd
-                                                    - (Style.chipFill ? doneCount.implicitWidth + Theme.iconSize + 2 * Theme.spXs : 0))
+                                    width: Math.min(Math.ceil(doneNameText.advanceWidth), col.width - 2 * Theme.spMd
+                                                    - (Style.chipFill ? doneCount.implicitWidth + Theme.statusRingSize + 2 * Theme.spXs : 0))
                                     elide: Text.ElideRight
                                     // Quiet: "Done · 2"; bold: ring, name, count.
                                     text: col.statusName + (Style.chipFill ? "" : " · " + col.shownCount)
@@ -1083,7 +1136,16 @@ Item {
                                 color: col.dragOver ? Theme.text : Theme.textMuted
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsSm
-                                font.underline: !col.dragOver
+                                // A dim rule a little under the baseline, as the
+                                // sheet draws a link (b-25).
+                                Rectangle {
+                                    objectName: "column-done-show-underline"
+                                    visible: !col.dragOver
+                                    y: parent.baselineOffset + Theme.px(3)
+                                    width: parent.contentWidth
+                                    height: 1
+                                    color: Theme.borderStrong
+                                }
                                 ClickArea {
                                     objectName: "column-done-show-area"
                                     enabled: col.folded && col.isDone
@@ -1149,6 +1211,7 @@ Item {
                         enabled: col.folded
                         onEntered: (drag) => {
                             if (drag.hasUrls && !col.board.dragTaskId(drag.source)) { drag.accepted = false; return; }
+                            col.dropLocalOnly = col.board.dropStaysLocal(drag.source, col.statusId);
                             col.dragOver = true;
                         }
                         onExited: col.dragOver = false
@@ -1297,6 +1360,10 @@ Item {
                                 Rectangle {
                                     id: cntPill
                                     objectName: "column-count"
+                                    // A narrow column has room for the name and
+                                    // one fact: while a card that stays here is
+                                    // over it, that fact is "только здесь" (a-30).
+                                    visible: !localOnlyText.visible
                                     radius: Theme.radiusPill
                                     color: "transparent"
                                     implicitWidth: cntT.implicitWidth
@@ -1346,7 +1413,10 @@ Item {
                                         ? "~" + I18n.fmtMinutes(Math.round(col.estimate.minutes / 60) * 60) : colEst.fullText
                                     readonly property real room: headRow.width - colorSwatch.width - nameBox.width
                                                                  - cntPill.implicitWidth - 4 * headRow.spacing
+                                    // Gives way to "· только здесь" while a
+                                    // card that stays here is over it (a-30).
                                     visible: col.estimate.minutes > 0 && (!Style.quiet || col.headerRevealed) && colEst.text.length > 0
+                                             && !localOnlyText.visible
                                     Layout.preferredWidth: Math.max(0, Math.min(colEst.implicitWidth, colEst.room))
                                     elide: Text.ElideRight
                                     text: colEst.room >= estFull.advanceWidth + 1 ? colEst.fullText
@@ -1363,7 +1433,29 @@ Item {
                                         + (col.estimate.without > 0 ? " · " + I18n.count(col.estimate.without, "estimate.without") : "")
                                     HoverHandler { id: estHover }
                                 }
-                                Item { Layout.fillWidth: true }
+                                // A tracker card with writes off over the
+                                // column: the move stays here, said in the
+                                // header beside the name, over no card (a-30,
+                                // X-Oth-Select-Drag). It takes the count's and
+                                // the estimate's place for the drag: a 163 px
+                                // column at 100 % has no room for all three.
+                                TextMetrics { id: localOnlyFm; font: localOnlyText.font; text: I18n.t("kanban.drop.localOnly") }
+                                Text {
+                                    id: localOnlyText
+                                    objectName: "column-drop-local-only"
+                                    visible: col.dragOver && col.dropLocalOnly && !col.folded
+                                    readonly property real room: headRow.width - colorSwatch.width - nameBox.width
+                                        - 2 * headRow.spacing
+                                    Layout.preferredWidth: Math.max(0, Math.min(Math.ceil(localOnlyFm.advanceWidth), room))
+                                    elide: Text.ElideRight
+                                    text: I18n.t("kanban.drop.localOnly")
+                                    color: Theme.textDim
+                                    font.family: Theme.fontUi
+                                    font.pixelSize: Theme.fsXs
+                                }
+                                // Off during the caption: its spacing is the
+                                // caption's last few pixels.
+                                Item { Layout.fillWidth: true; visible: !localOnlyText.visible }
                             }
                             // "+" at the header's end, laid over it like the
                             // other tools: shown on hover or the keyboard, and
@@ -1800,6 +1892,7 @@ Item {
                                 // not a move: let them through.
                                 onEntered: (drag) => {
                                     if (drag.hasUrls && !(drag.source && drag.source["taskId"])) { drag.accepted = false; return; }
+                                    col.dropLocalOnly = col.board.dropStaysLocal(drag.source, col.statusId);
                                     col.dragOver = true; _update(drag);
                                 }
                                 onPositionChanged: (drag) => _update(drag)
@@ -2412,6 +2505,10 @@ Item {
         parent: Overlay.overlay
         padding: Theme.inset
         title: I18n.t("kanban.newColumn")
+        // The other dialogs' title (DES-24), on one line: a title that
+        // elides or wraps changes its implicitWidth with the width the dialog
+        // gives it, a binding loop on the dialog's implicitWidth (b-23).
+        header: DialogHeader { text: addColumnPopup.title; wrapMode: Text.NoWrap }
 
         background: ModalSurface {}
 
@@ -2502,6 +2599,10 @@ Item {
         parent: Overlay.overlay
         padding: Theme.inset
         title: I18n.t("kanban.wip.title").arg(wipPopup.statusName)
+        // The other dialogs' title (DES-24), on one line: a title that
+        // elides or wraps changes its implicitWidth with the width the dialog
+        // gives it, a binding loop on the dialog's implicitWidth (b-23).
+        header: DialogHeader { text: wipPopup.title; wrapMode: Text.NoWrap }
 
         background: ModalSurface {}
 
@@ -2571,6 +2672,10 @@ Item {
         parent: Overlay.overlay
         padding: Theme.inset
         title: I18n.t("kanban.archive.title").arg(archivePopup.statusName)
+        // The other dialogs' title (DES-24), on one line: a title that
+        // elides or wraps changes its implicitWidth with the width the dialog
+        // gives it, a binding loop on the dialog's implicitWidth (b-23).
+        header: DialogHeader { text: archivePopup.title; wrapMode: Text.NoWrap }
 
         background: ModalSurface {}
 
