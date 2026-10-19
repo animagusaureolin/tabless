@@ -134,6 +134,7 @@ Popup {
             start: when, hasTime: when !== null && p.whenHasTime,
             end: p.whenEnd,
             due: due, dueHasTime: due !== null && p.dueHasTime,
+            remind: p.remind && p.remind.getTime && !isNaN(p.remind.getTime()) ? p.remind : null,
             whenPast: !!p.whenPast, duePast: !!p.duePast,
             estimate: p.estimateMinutes
         };
@@ -324,9 +325,12 @@ Popup {
         // allowed: different requests for the same contact are different
         // pings). Resolved handles inherit the existing person's name /
         // role / color; unresolved handles get a "@handle" placeholder.
+        // A ping with a date ("написать @viktor завтра") is a task on that
+        // day: as a person's ask it lost the date and showed only on Today
+        // (dogfood 2026-10-16).
         const kindEarly = _classifyKind(inputField.text);
         if (kindEarly === "contact" && _meta && _meta.handles
-            && _meta.handles.length > 0)
+            && _meta.handles.length > 0 && !(_preview && _preview.ok))
         {
             // Question text = title with @handles stripped (verb stays so
             // the action reads naturally in the contact card).
@@ -750,6 +754,16 @@ Popup {
                             e.accepted = true;
                             return;
                         }
+                        // A person is picked as in every messenger: Enter on
+                        // "@vik" takes the highlighted Viktor and the field
+                        // stays open for the rest of the line; it created the
+                        // task with a half-typed name (dogfood 2026-10-16).
+                        // No match (only "add a person") still goes on to create.
+                        if (enter && !(e.modifiers & (Qt.ControlModifier | Qt.ShiftModifier))
+                                && at._trigger === "@" && at.accept()) {
+                            e.accepted = true;
+                            return;
+                        }
                         // A partial "+Ли" is never a profile: plain Enter takes
                         // the highlighted one and creates the task there, in
                         // one key (F1-new-8). Labels and people keep the rule
@@ -898,6 +912,18 @@ Popup {
                                  + (root._preview.duePast ? " · " + I18n.t("capture.past") : "") : ""
                 valueColor: visible && root._preview.duePast ? Theme.textDim : Theme.text
                 onRemoved: root.rejectSpan("due")
+            }
+            // "напомни в 15:00" (APP-319): when the reminder comes.
+            PropertyChip {
+                outlined: true
+                objectName: "qc-remind"
+                removeOnHover: true
+                visible: !!(root._preview && root._preview.remind)
+                small: false
+                removable: true
+                key: I18n.t("capture.remind")
+                value: visible ? root._chipWhen(root._preview.remind, true) : ""
+                onRemoved: root.rejectSpan("remind")
             }
             // A repeat said in the line, before Enter (A2-21): "каждый
             // понедельник" read the same as a one-off "в понедельник".

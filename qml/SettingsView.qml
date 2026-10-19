@@ -762,6 +762,15 @@ Item {
         }
     }
 
+    // Opening Settings puts the caret in the search box, so typing finds a
+    // setting right away; ↓ still walks the section list, Esc on an empty
+    // box goes on to whatever Esc does around it.
+    function takeFocus() { settingsSearch.forceActiveFocus(); }
+    function focusSearch() {
+        settingsSearch.forceActiveFocus();
+        settingsSearch.selectAll();
+    }
+
     // Deep link from the command palette ("Settings: Appearance").
     function openSection(id) {
         // The profile section is gone (DG-101); its old deep link opens the top.
@@ -1972,6 +1981,37 @@ Item {
                         }
                     }
                 }
+                // Lunch (APP-319): off by default. On a working day it is
+                // neither free time nor a place for a new block.
+                SwitchRow {
+                    objectName: "settings-lunch"
+                    label: I18n.t("settings.cal.lunch")
+                    hint: I18n.t("settings.cal.lunch.hint")
+                    checked: !!(root.settings.calendar && root.settings.calendar.lunchOn)
+                    onToggled: (checked) => root.set("calendar", "lunchOn", checked)
+                }
+                SettingsTextRow {
+                    objectName: "settings-lunch-start"
+                    visible: !!(root.settings.calendar && root.settings.calendar.lunchOn)
+                    label: I18n.t("settings.cal.lunchStart")
+                    mono: true; placeholder: "13:00"
+                    fieldWidth: Theme.px(80)
+                    clockTime: true
+                    hint: invalid ? I18n.t("settings.cal.lunch.invalid") : ""
+                    value: (root.settings.calendar && root.settings.calendar.lunchStart) || "13:00"
+                    onCommitted: (text) => root.set("calendar", "lunchStart", text)
+                }
+                SettingsTextRow {
+                    objectName: "settings-lunch-end"
+                    visible: !!(root.settings.calendar && root.settings.calendar.lunchOn)
+                    label: I18n.t("settings.cal.lunchEnd")
+                    mono: true; placeholder: "14:00"
+                    fieldWidth: Theme.px(80)
+                    clockTime: true
+                    hint: invalid ? I18n.t("settings.cal.lunch.invalid") : ""
+                    value: (root.settings.calendar && root.settings.calendar.lunchEnd) || "14:00"
+                    onCommitted: (text) => root.set("calendar", "lunchEnd", text)
+                }
                 SegRow {
                     objectName: "settings-week-start"
                     label: I18n.t("settings.cal.weekStart")
@@ -2079,6 +2119,16 @@ Item {
                     value: notifRoot.n.taskBlockReminders === true ? "on" : "off"
                     options: [ ({ value: "on", label: I18n.t("settings.on") }), ({ value: "off", label: I18n.t("settings.off") }) ]
                     onSelected: (value) => root.set("notifications", "taskBlockReminders", value === "on")
+                }
+                // My merge / pull request's CI went red (APP-318): on by
+                // default (owner, 2026-10-16).
+                SegRow {
+                    objectName: "settings-ci-failed"
+                    label: I18n.t("settings.notif.ciFailed")
+                    hint: I18n.t("settings.notif.ciFailed.hint")
+                    value: notifRoot.n.ciFailed === false ? "off" : "on"
+                    options: [ ({ value: "on", label: I18n.t("settings.on") }), ({ value: "off", label: I18n.t("settings.off") }) ]
+                    onSelected: (value) => root.set("notifications", "ciFailed", value === "on")
                 }
                 // The sound palette (APP-177): off by default.
                 SegRow {

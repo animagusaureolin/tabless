@@ -29,6 +29,7 @@
 #include "hints/ShortcutHints.h"
 #include "history/TaskHistory.h"
 #include "integrations/AutoSync.h"
+#include "integrations/CiStatus.h"
 #include "integrations/IntegrationI18n.h"
 #include "integrations/JiraProvider.h"
 #include "integrations/MattermostClient.h"
@@ -51,6 +52,7 @@
 #include "markdown/MdOutline.h"
 #include "notes/ChecklistItems.h"
 #include "notes/MdVault.h"
+#include "notes/NoteChain.h"
 #include "notes/NoteGraph.h"
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
@@ -558,6 +560,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"event.scheduled", {"%1 scheduled for %2", "%1 запланировано на %2"}},
       {"person.added", {"Added: %1", "Добавлен: %1"}},
       {"person.deleted", {"Removed: %1", "Удалён: %1"}},
+      {"person.pinged", {"Wrote to %1", "Написал: %1"}},
+      {"person.replied", {"%1 replied", "Ответил: %1"}},
+      {"person.stateUndone", {"Back on the list: %1", "Снова в списке: %1"}},
+      {"person.backToTodo", {"Message again: %1", "Снова написать: %1"}},
       {"person.restored", {"Restored: %1", "Восстановлён: %1"}},
       {"person.idTaken", {"%1 is already taken by %2 — pick another id", "%1 уже занят: %2 — выберите другой id"}},
       {"person.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
@@ -583,6 +589,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"move.profile.redone", {"Moved to %1 again: %2", "Снова в «%1»: %2"}},
       {"move.profile.gone", {"Can't take the move back: a profile is gone", "Перенос не отменить: профиля больше нет"}},
       {"profile.exported", {"Profile exported: %1", "Профиль экспортирован: %1"}},
+      {"task.keyCopied", {"Copied: %1", "Скопировано: %1"}},
+      {"ci.failedTitle", {"CI failed", "CI упал"}},
+      {"ci.failedTitleN", {"CI failed on %1", "CI упал: %1"}},
       {"profile.mdCopied", {"Profile Markdown copied to clipboard", "Markdown профиля скопирован в буфер"}},
       {"profile.weeklyCopied", {"Weekly report copied to clipboard", "Недельный отчёт скопирован в буфер"}},
       {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
@@ -986,6 +995,17 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.blockNow", {"Time for “%1”", "Время для «%1»"}},
       {"notify.blockSoon", {"“%1” in %2 min", "«%1» через %2 мин"}},
       {"notify.blockBody", {"planned for %1–%2", "запланировано на %1–%2"}},
+      {"notify.remindTitle", {"Reminder: %1", "Напоминание: %1"}},
+      {"notify.remindBody", {"at %1", "на %1"}},
+      {"notify.remindLate", {"at %1, while Tabless was closed", "на %1, пока Tabless был закрыт"}},
+      {"notify.action.snooze", {"Snooze", "Отложить"}},
+      {"remind.set", {"Reminder at %1", "Напомню в %1"}},
+      {"remind.setLead", {"Reminder %1 min before", "Напомню за %1 мин"}},
+      {"remind.cleared", {"Reminder removed", "Напоминание снято"}},
+      {"remind.noTime",
+       {"“%1” has no time yet: give it one, or say when to remind", "У «%1» нет времени: задайте его или скажите, когда напомнить"}},
+      {"remind.unknown", {"Can’t read “%1” as a time", "Не понял «%1» как время"}},
+      {"undo.remind", {"Reminder for %1", "Напоминание для %1"}},
       {"notify.action.snooze15", {"In 15 min", "Через 15 мин"}},
       {"notify.action.window", {"Next free window", "В ближайшее окно"}},
       {"notify.overdueTitle", {"Overdue %1", "Просрочено %1"}},
@@ -2046,6 +2066,10 @@ QString AppController::newNote(const QString& title, const QString& folder) {
   n.body = QStringLiteral("# %1\n\n").arg(n.title);
   m_notes.upsert(n);
   setActiveNoteId(n.id);
+  // A quick note in the next hour goes on in this one (APP-320).
+  if(folder.isEmpty()) {
+    noteChainTo(n.id, QString(), n.created);
+  }
   if(title.trimmed().isEmpty() && folder.isEmpty()) {
     m_freshNoteId = n.id;
   }
@@ -2370,10 +2394,70 @@ QString AppController::inboxNoteId() const {
   return {};
 }
 
-QString AppController::quickNoteTarget() const {
-  // Where appendNoteEntry() will write: always the Inbox.
-  const int row = m_notes.indexOfId(inboxNoteId());
-  return row >= 0 ? m_notes.items().at(row).title : tr_("notes.inbox");
+QString AppController::quickNoteTarget(const QString& label) const {
+  return quickNoteTargetAt(label, QDateTime::currentDateTime());
+}
+
+QString AppController::quickNoteTargetAt(const QString& label, const QDateTime& now) const {
+  // The note the chain is on (APP-320), while it still takes this note.
+  const QJsonObject chain = m_settingsExtra.value(QStringLiteral("noteChain")).toObject();
+  const int row = m_notes.indexOfId(chain.value(QStringLiteral("id")).toString());
+  if(row < 0 || !heap::notes::chainAppends(QDateTime::fromString(chain.value(QStringLiteral("at")).toString(), Qt::ISODate),
+                                           chain.value(QStringLiteral("label")).toString(),
+                                           label,
+                                           now)) {
+    return {};
+  }
+  return m_notes.items().at(row).title;
+}
+
+void AppController::noteChainTo(const QString& noteId, const QString& label, const QDateTime& at) {
+  m_settingsExtra.insert(QStringLiteral("noteChain"),
+                         QJsonObject{{QStringLiteral("id"), noteId},
+                                     {QStringLiteral("at"), at.toString(Qt::ISODate)},
+                                     {QStringLiteral("label"), heap::notes::normLabel(label)}});
+}
+
+QStringList AppController::noteLabels() const {
+  QStringList out{QStringLiteral("личное"), QStringLiteral("hr"), QStringLiteral("работа")};
+  if(m_language != QLatin1String("ru")) {
+    out = {QStringLiteral("personal"), QStringLiteral("hr"), QStringLiteral("work")};
+  }
+  const auto add = [&](const QString& t) {
+    const QString l = heap::notes::normLabel(t);
+    if(!l.isEmpty() && !out.contains(l)) {
+      out << l;
+    }
+  };
+  for(const QVariant& v : localTagCatalog()) {
+    add(v.toMap().value(QStringLiteral("id")).toString());
+  }
+  for(const QVariant& v : noteTagCounts()) {
+    add(v.toMap().value(QStringLiteral("id")).toString());
+  }
+  return out;
+}
+
+QVariantList AppController::noteTagCounts() const {
+  QHash<QString, int> count;
+  QStringList order;
+  for(const Note& n : m_notes.items()) {
+    const bool open = n.id == m_activeNoteId;
+    for(const QString& t : heap::notes::noteTags(open ? m_notesState : n.body)) {
+      if(!count.contains(t)) {
+        order << t;
+      }
+      ++count[t];
+    }
+  }
+  std::stable_sort(order.begin(), order.end(), [&](const QString& a, const QString& b) {
+    return count.value(a) > count.value(b);
+  });
+  QVariantList out;
+  for(const QString& t : order) {
+    out.append(QVariantMap{{QStringLiteral("id"), t}, {QStringLiteral("count"), count.value(t)}});
+  }
+  return out;
 }
 
 QVariantMap AppController::quickNoteDraft() const {
@@ -2402,58 +2486,83 @@ void AppController::setQuickNoteDraft(const QString& text, const QString& attach
   scheduleSave();
 }
 
-void AppController::appendNoteEntry(const QString& text) {
+QString AppController::appendNoteEntry(const QString& text, const QString& label) {
+  return appendNoteEntryAt(text, label, QDateTime::currentDateTime());
+}
+
+QString AppController::appendNoteEntryAt(const QString& text, const QString& label, const QDateTime& now) {
   const QString body = text.trimmed();
   if(body.isEmpty()) {
-    return;
+    return {};
   }
   // The editor's debounced keystrokes go into notesState first: the entry is
   // appended to notesState, and the view diffs the editor against it, so text
   // typed in the last 250 ms was erased (KNOW-17, audit 2026-09-30).
   emit aboutToChangeActiveNote();
   // Text in the editor with no note behind it becomes a note before the
-  // Inbox is looked at, so it is neither lost nor taken for the Inbox.
+  // chain is looked at, so it is neither lost nor written over.
   adoptOrphanNotesState();
   syncActiveNoteBody();
-  QString inboxId = inboxNoteId();
-  if(inboxId.isEmpty()) {
-    // Made on first use, beside the open note — the open note stays open.
+  const QString tag = heap::notes::normLabel(label);
+  const QString stamp = now.toString("yyyy-MM-dd HH:mm");
+  // Within an hour of the last note and under the same label: on in that
+  // note; else a note of its own, named by its first words (APP-320, the
+  // owner's rule: one note per sitting, not one Inbox for ever).
+  const QJsonObject chain = m_settingsExtra.value(QStringLiteral("noteChain")).toObject();
+  QString targetId = quickNoteTargetAt(tag, now).isEmpty() ? QString() : chain.value(QStringLiteral("id")).toString();
+  if(targetId.isEmpty()) {
     Note n;
     n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-    n.title = tr_("notes.inbox");
-    n.created = QDateTime::currentDateTime();
-    n.updated = n.created;
-    m_notes.upsert(n);
-    inboxId = n.id;
-  }
-  // With no note open the Inbox opens, so the editor shows where it went.
-  if(m_notes.indexOfId(m_activeNoteId) < 0) {
-    m_activeNoteId = inboxId;
-    m_notesState = noteBody(inboxId);
-    emit activeNoteChanged();
-  }
-  const bool open = inboxId == m_activeNoteId;
-  const QString was = open ? m_notesState : noteBody(inboxId);
-  const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");
-  QString next;
-  if(was.trimmed().isEmpty()) {
-    next = QStringLiteral("### %1\n\n%2").arg(stamp, body);
-  } else {
-    next = was;
-    while(next.endsWith(QLatin1Char('\n'))) {
-      next.chop(1);
+    QString title = heap::notes::titleFromEntry(body);
+    if(title.isEmpty()) {
+      title = tr_("notes.untitled");
     }
+    if(noteTitleTaken(title, QString(), QString())) {
+      title += QStringLiteral(" · ") + heap::text::formatTime(now.time(), twelveHourClock());
+    }
+    n.title = title;
+    n.created = now;
+    n.updated = now;
+    n.body =
+        QStringLiteral("# %1\n\n%2### %3\n\n%4").arg(title, tag.isEmpty() ? QString() : QStringLiteral("#%1\n\n").arg(tag), stamp, body);
+    m_notes.upsert(n);
+    targetId = n.id;
+    // With no note open the new one opens, so the editor shows where it went.
+    if(m_notes.indexOfId(m_activeNoteId) < 0) {
+      m_activeNoteId = targetId;
+      m_notesState = n.body;
+      emit activeNoteChanged();
+    }
+    noteChainTo(targetId, tag, now);
+    scheduleSave();
+    return targetId;
+  }
+  const bool open = targetId == m_activeNoteId;
+  QString next = open ? m_notesState : noteBody(targetId);
+  while(next.endsWith(QLatin1Char('\n')) || next.endsWith(QLatin1Char(' ')) || next.endsWith(QLatin1Char('\t'))) {
+    next.chop(1);
+  }
+  // A rule between entries, not under the note's own heading: a note made by
+  // hand a minute ago holds only "# Title".
+  const QString heading = QStringLiteral("# ") + m_notes.items().at(m_notes.indexOfId(targetId)).title;
+  if(next.trimmed().isEmpty()) {
+    next = QStringLiteral("### %1\n\n%2").arg(stamp, body);
+  } else if(next.trimmed() == heading) {
+    next = QStringLiteral("%1\n\n### %2\n\n%3").arg(heading, stamp, body);
+  } else {
     next += QStringLiteral("\n\n----\n### %1\n\n%2").arg(stamp, body);
   }
+  noteChainTo(targetId, tag, now);
   if(open) {
     setNotesState(next);
-    return;
+    return targetId;
   }
-  Note n = m_notes.items().at(m_notes.indexOfId(inboxId));
+  Note n = m_notes.items().at(m_notes.indexOfId(targetId));
   n.body = next;
-  n.updated = QDateTime::currentDateTime();
+  n.updated = now;
   m_notes.upsert(n);
   scheduleSave();
+  return targetId;
 }
 
 QStringList AppController::noteHeadings(const QString& markdown) const {
@@ -3935,6 +4044,7 @@ QVariantMap AppController::captureParse(const QString& raw, const QDateTime& ref
   out["due"] = p.due;
   out["dueHasTime"] = p.dueHasTime;
   out["duePast"] = p.duePast;
+  out["remind"] = p.remind;
   out["priority"] = meta.priority;
   out["labels"] = meta.labels;
   out["ticketKey"] = meta.ticketKey;
@@ -4023,6 +4133,9 @@ QVariantMap AppController::quickTaskDraft(const QString& raw, const QDateTime& r
   if(parsed.due.isValid()) {
     draft["dueAt"] = parsed.due;
     draft["dueHasTime"] = parsed.dueHasTime;
+  }
+  if(parsed.remind.isValid()) {
+    draft["remindAt"] = parsed.remind;
   }
   if(parsed.estimateMinutes > 0) {
     draft["estimateMinutes"] = parsed.estimateMinutes;
@@ -4326,6 +4439,12 @@ bool AppController::saveTask(const QVariantMap& draft) {
     // sort lists it last, a task created in Done never auto-archives and one
     // created in Blocked never reads as stuck.
     t.statusChangedAt = QDateTime::currentDateTime();
+  }
+
+  // A reminder said in the input ("напомни в 15:00 …", APP-319).
+  if(draft.contains("remindAt")) {
+    t.local.remindAt = draft.value("remindAt").toDateTime();
+    t.local.remindLead = -1;
   }
 
   // ── Rename path ──
@@ -5063,11 +5182,13 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
     timed.append(in);
   }
 
-  const heap::plan::Day day = heap::plan::buildDay(date, now, events, timed, m_workdayStart, m_workdayEnd, isWorkDay(date));
+  const heap::plan::Day day = heap::plan::buildDay(date, now, events, timed, m_workdayStart, m_workdayEnd, isWorkDay(date), lunchSpan());
   out["date"] = day.date;
   out["workday"] = day.workday;
   out["workStart"] = day.workStart;
   out["workEnd"] = day.workEnd;
+  out["lunchStart"] = day.lunchStart;
+  out["lunchEnd"] = day.lunchEnd;
   out["fromHour"] = day.fromHour;
   out["toHour"] = day.toHour;
   QVariantList allDay;
@@ -5212,14 +5333,18 @@ QVariantMap AppController::todayData(const QDate& date, bool allProfiles) const 
   out["facts"] = QVariantMap{{"meetings", meetings}, {"planned", planned}, {"dueToday", dueToday}};
 
   // Whom to write: the people list's open asks.
+  out["people"] = openPings();
+  return out;
+}
+
+QVariantList AppController::openPings() const {
   QVariantList people;
   for(const Person& p : m_people.items()) {
     if(p.state == QLatin1String("todo")) {
       people.append(QVariantMap{{"id", p.id}, {"name", p.name}, {"question", p.question}, {"color", p.color}});
     }
   }
-  out["people"] = people;
-  return out;
+  return people;
 }
 
 QVariantMap AppController::dayLoad(const QDate& date) const {
@@ -7354,6 +7479,7 @@ QVariantMap AppController::freeWindowAt(const QString& taskId, const QDate& date
   ask.hours = taskBlockMinutes(taskId) / 60.0;
   ask.workStart = m_workdayStart;
   ask.workEnd = m_workdayEnd;
+  ask.lunch = lunchSpan();
   ask.step = snapStepHours();
   const heap::plan::Window w = heap::plan::findWindow(
       ask,
@@ -7443,6 +7569,7 @@ int AppController::carryTasksAt(const QStringList& ids, const QString& mode, con
       ask.hours = taskBlockMinutes(id) / 60.0;
       ask.workStart = m_workdayStart;
       ask.workEnd = m_workdayEnd;
+      ask.lunch = lunchSpan();
       ask.step = snapStepHours();
       // The tasks carried before this one are in the model already, so they
       // count as busy and the selection lines up instead of stacking.
@@ -7674,6 +7801,7 @@ double AppController::nextFreeSlot(const QDate& date, double durationHours) cons
   ask.hours = dur;
   ask.workStart = m_workdayStart;
   ask.workEnd = m_workdayEnd;
+  ask.lunch = lunchSpan();
   ask.step = step;
   ask.maxDays = 0;
   const heap::plan::Window w = heap::plan::findWindow(
@@ -7737,9 +7865,25 @@ void AppController::cyclePerson(const QString& id) {
 
 void AppController::setPersonState(const QString& id, const QString& state) {
   const int row = m_people.indexOfId(id);
-  const QString before = row >= 0 ? m_people.items().at(row).state : QString();
+  if(row < 0) {
+    return;
+  }
+  const Person person = m_people.items().at(row);
+  const QString before = person.state;
+  if(before == state) {
+    return;
+  }
+  // "Wrote" took the person off Today with no way back (dogfood 2026-10-16):
+  // the move is undoable, and the toast says so.
+  const UndoScope scope(this, tr_("person.stateUndone").arg(person.name));
   m_people.setState(id, state);
   personStateMoved(id, before);
+  if(state == QLatin1String("pinged") || state == QLatin1String("replied")) {
+    emit undoableToast(tr_(state == QLatin1String("pinged") ? "person.pinged" : "person.replied").arg(person.name), 6);
+  } else if(state == QLatin1String("todo")) {
+    // Back on "Кому написать" from "Люди" (APP-321).
+    emit undoableToast(tr_("person.backToTodo").arg(person.name), 6);
+  }
   scheduleSave();
 }
 
@@ -8603,6 +8747,15 @@ QVariantMap AppController::taskById(const QString& id) const {
     tags.append(QVariantMap{{"id", tag.id}, {"color", tag.color}});
   }
   m["localTags"] = tags;
+  // "Remind me" (APP-319): as set, and the moment it comes to.
+  m["remindAt"] = t.local.remindAt;
+  m["remindLead"] = t.local.remindLead;
+  m["remindFireAt"] = heap::cal::taskReminderFireAt(t.local.remindAt,
+                                                    t.local.remindLead,
+                                                    t.scheduledAt,
+                                                    t.scheduledHasTime,
+                                                    heap::local::effectiveDueAt(t),
+                                                    heap::local::effectiveDueHasTime(t));
   // The document's meta column (DG-061): history and the PR, if one is known.
   m["statusChangedAt"] = t.statusChangedAt;
   m.insert(m_tasks.gitFactsFor(t.id));
@@ -8965,6 +9118,15 @@ void AppController::copyToClipboard(const QString& text) {
   }
 }
 
+void AppController::copyTaskKey(const QString& key) {
+  const QString k = key.trimmed();
+  if(k.isEmpty()) {
+    return;
+  }
+  copyToClipboard(k);
+  emit toast(tr_("task.keyCopied").arg(k));
+}
+
 void AppController::copyActiveProfileMarkdownToClipboard() {
   emit flushEditorsRequested();
   snapshotActiveProfile();  // flush live models into the active Profile first
@@ -9218,7 +9380,46 @@ QVariantMap AppController::weekFacts(const QDate& day) const {
     const auto i = static_cast<qsizetype>(start.daysTo(t->statusChangedAt.date()));
     perDay[i] = perDay.at(i).toInt() + 1;
   }
-  return QVariantMap{{"weekStart", start}, {"weekEnd", end.addDays(-1)}, {"closed", rows}, {"perDay", perDay}};
+  // What came in and what was put off in the week, from the task history
+  // (APP-165): the summary counted only what closed, and a week of new work
+  // and carried-over tasks read as an empty one (dogfood 2026-10-16). Moved =
+  // its date or deadline pushed later; once per task, at its last move.
+  QVariantList created;
+  QVariantList moved;
+  const QString pid = activeProfileId();
+  const auto inWeek = [&](const QDateTime& at) {
+    return at.isValid() && at.toLocalTime().date() >= start && at.toLocalTime().date() < end;
+  };
+  for(const Task& t : m_tasks.items()) {
+    QDateTime createdAt;
+    QDateTime movedAt;
+    QString movedTo;
+    for(const heap::history::HistoryEvent& e : m_history.events(pid, t.id)) {
+      if(!inWeek(e.at)) {
+        continue;
+      }
+      if(e.kind == QLatin1String("created")) {
+        createdAt = e.at;
+      } else if((e.kind == QLatin1String("scheduled") || e.kind == QLatin1String("due")) && !e.from.isEmpty() && !e.to.isEmpty() &&
+                e.to.left(10) > e.from.left(10)) {
+        movedAt = e.at;
+        movedTo = e.to.left(10);
+      }
+    }
+    if(createdAt.isValid()) {
+      created.append(QVariantMap{{"id", t.id}, {"title", t.title}, {"at", createdAt}});
+    }
+    if(movedAt.isValid()) {
+      moved.append(QVariantMap{{"id", t.id}, {"title", t.title}, {"at", movedAt}, {"to", QDate::fromString(movedTo, Qt::ISODate)}});
+    }
+  }
+  const auto byAt = [](const QVariant& a, const QVariant& b) {
+    return a.toMap().value("at").toDateTime() < b.toMap().value("at").toDateTime();
+  };
+  std::stable_sort(created.begin(), created.end(), byAt);
+  std::stable_sort(moved.begin(), moved.end(), byAt);
+  return QVariantMap{
+      {"weekStart", start}, {"weekEnd", end.addDays(-1)}, {"closed", rows}, {"perDay", perDay}, {"created", created}, {"moved", moved}};
 }
 
 void AppController::copyWeeklyReportToClipboard() {
@@ -10713,6 +10914,8 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   using heap::integrations::StatusMap;
   const heap::frame::Span span("mergeExternalTasks");
   MergeStats stats;
+  // Merge / pull requests whose CI went red in this pull (APP-318).
+  QStringList ciTurnedRed;
   // Whatever this pull changes on a card is the tracker's doing (APP-165).
   const QScopedValueRollback<bool> fromTracker(m_historySync, true);
 
@@ -11017,6 +11220,16 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     t.externalMeta.updatedAt = ext.updatedAt;
     t.externalMeta.dueAt = ext.dueAt;
     t.externalMeta.crossProject = ext.crossProject;
+    // My merge / pull request's CI went red since the last sync (APP-318): a
+    // notification, on by default (owner, 2026-10-16), off in Settings.
+    {
+      const QString wasCi = t.externalMeta.details.value(QStringLiteral("pipeline")).toString();
+      const QString nowCi = ext.details.value(QStringLiteral("pipeline")).toString();
+      if(row >= 0 && heap::ci::turnedRed(wasCi, nowCi) &&
+         settingsMap().value(QStringLiteral("notifications")).toMap().value(QStringLiteral("ciFailed"), true).toBool()) {
+        ciTurnedRed.append(QStringLiteral("%1 %2").arg(ext.externalId, ext.title));
+      }
+    }
     t.externalMeta.details = ext.details;
 
     // An unchanged issue must not mark the state dirty: auto-sync runs on a
@@ -11092,6 +11305,11 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   // The first pull of a tracker brings in everything it has: that is the
   // board being filled, not news, so its cards carry no dot.
   noteSyncAdded(stats.addedIds, /*markUnseen=*/hadCardsBefore);
+  if(!ciTurnedRed.isEmpty()) {
+    emit notification(ciTurnedRed.size() == 1 ? tr_("ci.failedTitle") : tr_("ci.failedTitleN").arg(ciTurnedRed.size()),
+                      ciTurnedRed.join(QStringLiteral(" · ")),
+                      QStringLiteral("ci"));
+  }
   return stats;
 }
 
@@ -12292,6 +12510,121 @@ void AppController::fetchTicketComments(const QString& taskId) {
       return;
     }
     emit ticketCommentsLoaded(taskId, {}, tr_("ticket.notConnected"));
+  });
+}
+
+namespace {
+
+// The card whose CI a task shows (APP-318): a merge / pull request itself, or
+// for a Jira card the open MR folded into it (else the last one).
+const Task* ciSource(const QVector<Task>& tasks, const Task& t) {
+  const auto kind = [](const Task& x) {
+    return x.externalMeta.details.value(QStringLiteral("kind")).toString();
+  };
+  if(kind(t) == QLatin1String("mr") || kind(t) == QLatin1String("pr")) {
+    return &t;
+  }
+  const Task* found = nullptr;
+  for(const Task& x : tasks) {
+    if(x.externalMeta.details.value(QStringLiteral("foldedInto")).toString() != t.id) {
+      continue;
+    }
+    const QString state = x.externalMeta.details.value(QStringLiteral("state")).toString();
+    if(state == QLatin1String("open") || state == QLatin1String("opened")) {
+      return &x;
+    }
+    found = &x;
+  }
+  return found;
+}
+
+}  // namespace
+
+QVariantMap AppController::ciOf(const QString& taskId) const {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return {};
+  }
+  const Task* src = ciSource(m_tasks.items(), m_tasks.items().at(row));
+  if(src == nullptr) {
+    return {};
+  }
+  const QJsonObject d = src->externalMeta.details;
+  return {{QStringLiteral("state"), d.value(QStringLiteral("pipeline")).toString()},
+          {QStringLiteral("url"), d.value(QStringLiteral("pipelineUrl")).toString()},
+          {QStringLiteral("at"), d.value(QStringLiteral("pipelineAt")).toString()},
+          {QStringLiteral("hasRef"), !d.value(QStringLiteral("ciRef")).toString().isEmpty()},
+          {QStringLiteral("source"), src->id}};
+}
+
+bool AppController::isCiErrorLine(const QString& line) const {
+  return heap::ci::isErrorLine(line);
+}
+
+void AppController::fetchCiJobs(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  const Task* src = row >= 0 ? ciSource(m_tasks.items(), m_tasks.items().at(row)) : nullptr;
+  if(src == nullptr) {
+    emit ciJobsLoaded(taskId, {}, QStringLiteral("no pipeline"));
+    return;
+  }
+  const QString providerId = src->externalProvider;
+  const QString externalId = src->externalId;
+  const QString project = src->externalMeta.project;
+  const QString ref = src->externalMeta.details.value(QStringLiteral("ciRef")).toString();
+  ensureFreshToken(providerId, [this, taskId, providerId, externalId, project, ref]() {
+    for(const auto& provider : m_syncProviders) {
+      if(provider->id() != providerId) {
+        continue;
+      }
+      auto* guard = new QObject(this);
+      connect(provider.get(),
+              &heap::integrations::IntegrationProvider::ciJobsFetched,
+              guard,
+              [this, guard, taskId, externalId](const QString& id, const QVariantList& jobs, const QString& error) {
+                if(id != externalId) {
+                  return;
+                }
+                guard->deleteLater();
+                emit ciJobsLoaded(taskId, jobs, providerReason(error));
+              });
+      provider->fetchCiJobs(externalId, project, ref);
+      return;
+    }
+    emit ciJobsLoaded(taskId, {}, tr_("ticket.notConnected"));
+  });
+}
+
+void AppController::fetchCiLog(const QString& taskId, const QString& jobId) {
+  const int row = m_tasks.indexOfId(taskId);
+  const Task* src = row >= 0 ? ciSource(m_tasks.items(), m_tasks.items().at(row)) : nullptr;
+  if(src == nullptr) {
+    emit ciLogLoaded(taskId, jobId, QString(), QStringLiteral("no pipeline"));
+    return;
+  }
+  const QString providerId = src->externalProvider;
+  const QString externalId = src->externalId;
+  const QString project = src->externalMeta.project;
+  ensureFreshToken(providerId, [this, taskId, jobId, providerId, externalId, project]() {
+    for(const auto& provider : m_syncProviders) {
+      if(provider->id() != providerId) {
+        continue;
+      }
+      auto* guard = new QObject(this);
+      connect(provider.get(),
+              &heap::integrations::IntegrationProvider::ciLogFetched,
+              guard,
+              [this, guard, taskId, externalId, jobId](const QString& id, const QString& job, const QString& text, const QString& error) {
+                if(id != externalId || job != jobId) {
+                  return;
+                }
+                guard->deleteLater();
+                emit ciLogLoaded(taskId, jobId, text, providerReason(error));
+              });
+      provider->fetchCiLog(externalId, project, jobId);
+      return;
+    }
+    emit ciLogLoaded(taskId, jobId, QString(), tr_("ticket.notConnected"));
   });
 }
 
@@ -15116,7 +15449,21 @@ QStringList AppController::notesMatchingExactly_(const QString& query) const {
   QStringList out;
   for(const Note& n : m_notes.items()) {
     bool all = true;
+    QStringList tags;
+    bool tagsRead = false;
     for(const QString& t : terms) {
+      // "#hr" (a label chip, a tag clicked in a note): that tag exactly.
+      if(t.size() > 1 && t.startsWith(QLatin1Char('#'))) {
+        if(!tagsRead) {
+          tags = heap::notes::noteTags(n.id == m_activeNoteId ? m_notesState : n.body);
+          tagsRead = true;
+        }
+        if(!tags.contains(t.mid(1))) {
+          all = false;
+          break;
+        }
+        continue;
+      }
       if(!n.title.contains(t, Qt::CaseInsensitive) && !n.folder.contains(t, Qt::CaseInsensitive) &&
          !n.body.contains(t, Qt::CaseInsensitive)) {
         all = false;
@@ -15928,7 +16275,9 @@ void AppController::seedShortcutCatalog() {
   // palette shows the key once there is one.
   add("timeMachine.open", "");
   add("standup.draft", "");
-  add("recap.open", "");
+  // The week's summary had no key and was found only on the last working day
+  // (dogfood 2026-10-16): "g w", beside "g t" / "g n".
+  add("recap.open", "G, W");
   add("endOfDay.open", "");
   add("welcome.replay", "");
   // The example profile from anywhere (PERSONA-1): the first-run link was the
@@ -17005,6 +17354,7 @@ void AppController::scheduleFocusBlockFor(const QString& taskId) {
   ask.hours = dur;
   ask.workStart = m_workdayStart;
   ask.workEnd = m_workdayEnd;
+  ask.lunch = lunchSpan();
   ask.step = snapStepHours();
   ask.maxDays = 6;
   const auto [day, start] = heap::plan::nextWindow(
@@ -17310,6 +17660,48 @@ void AppController::runAutomationAt(const QDateTime& now) {
       if(p.id != m_activeProfileId) {
         for(const Task& t : p.tasks) {
           consider(p.id, t, false);
+        }
+      }
+    }
+  }
+
+  // 3c. "Remind me" on a task (APP-319): only where one was set. Held by
+  // quiet hours like the rest; one whose minute passed while the app was
+  // closed still comes, once, and says so.
+  if(!quiet) {
+    const auto remind = [&](const QString& profileId, const Task& t, bool own) {
+      if(t.archived || (!t.local.remindAt.isValid() && t.local.remindLead < 0)) {
+        return;
+      }
+      const QString cat = own ? statusCategory(t.status) : heap::board::defaultCategoryFor(t.status);
+      if(cat == QLatin1String("done")) {
+        return;
+      }
+      const QDateTime fireAt = heap::cal::taskReminderFireAt(t.local.remindAt,
+                                                             t.local.remindLead,
+                                                             t.scheduledAt,
+                                                             t.scheduledHasTime,
+                                                             heap::local::effectiveDueAt(t),
+                                                             heap::local::effectiveDueHasTime(t));
+      const heap::cal::TaskRemindCall call = heap::cal::taskReminder(t.id, fireAt, now);
+      if(!call.due || reminderSent(call.key)) {
+        return;
+      }
+      markReminderSent(call.key, now);
+      const QString at = heap::text::formatTime(fireAt.time(), twelveHourClock());
+      notifyTaskAt(heap::notify::taskRef(profileId, t.id),
+                   tr_("notify.remindTitle").arg(t.title),
+                   call.late ? tr_("notify.remindLate").arg(at) : tr_("notify.remindBody").arg(at),
+                   QStringLiteral("remind"),
+                   now);
+    };
+    for(const Task& t : m_tasks.items()) {
+      remind(m_activeProfileId, t, true);
+    }
+    for(const Profile& p : m_profiles) {
+      if(p.id != m_activeProfileId) {
+        for(const Task& t : p.tasks) {
+          remind(p.id, t, false);
         }
       }
     }
@@ -17823,13 +18215,13 @@ void AppController::notifyTaskAt(
   // The start of a task block (APP-256) carries its buttons in the window too:
   // open, in 15 minutes, the next free window.
   const auto inAppToast = [&]() {
-    if(kind == QLatin1String("taskBlock")) {
+    if(kind == QLatin1String("taskBlock") || kind == QLatin1String("remind")) {
       const QString id = heap::notify::routingId(kind, taskId);
       ShownReminder& shown = m_shownReminders[id];
       shown.title = title;
       shown.body = body;
       shown.kind = kind;
-      emit reminderToast(id, inApp);
+      emit reminderToast(id, inApp, kind);
     } else {
       emit toast(inApp);
     }

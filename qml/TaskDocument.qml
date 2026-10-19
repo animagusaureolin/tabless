@@ -127,6 +127,8 @@ FocusScope {
         // it was scrolled to, and the height it had shrunk to (0.9.4).
         trackerBody.scrollToTop();
         root._trackerFullH = trackerBody.contentHeight;
+        // My notes wait with the caret at their end (dogfood 2026-10-16).
+        body.caretToEnd();
         if (intoTitle === true) root.focusTitle();
         else root.takeFocus();
         // The first tracker text opened says whose it is, once (coach mark).
@@ -314,6 +316,12 @@ FocusScope {
         return I18n.fmtDate(d, "dayMonth");
     }
     // "сегодня 17:00–18:30" (the estimate gives the end), "завтра".
+    // "Remind me" (APP-319): "за 15 мин", or the moment, as the chips say it.
+    function _remindLabel() {
+        const t = root.task;
+        if (t.remindLead !== undefined && t.remindLead >= 0) return I18n.t("taskdoc.remind.lead").arg(t.remindLead);
+        return root._when(t.remindAt, true, 0);
+    }
     function _when(d, hasTime, minutes) {
         if (!root._valid(d)) return "";
         if (!hasTime) return root._relDay(d);
@@ -334,6 +342,7 @@ FocusScope {
         case "recurrence": return String(t.recurrence || "").length > 0;
         case "estimate": return t.estimateMinutes > 0;
         case "tags": return root._localTags.length > 0;
+        case "remind": return root._valid(t.remindAt) || (t.remindLead !== undefined && t.remindLead >= 0);
         }
         return true;
     }
@@ -605,9 +614,13 @@ FocusScope {
         if (all.length > 0) all[forward ? 0 : all.length - 1].forceActiveFocus(reason);
         else root.focusTitle();
     }
+    // Return on the document goes into the text, at its end: the drawn
+    // text gave no sign it could be typed into, and in rich the old
+    // full-width toggle here never ran (body.editing is always true).
     Keys.onReturnPressed: (e) => {
-        if (titleField.activeFocus || body.editing) { e.accepted = false; return; }
-        root.full = !root.full;
+        if (titleField.activeFocus || body.editor.activeFocus) { e.accepted = false; return; }
+        body.caretToEnd();
+        body.focusEnd();
     }
 
     Rectangle {
@@ -688,8 +701,16 @@ FocusScope {
                     // The name the card shows: the tracker key (A3-10, A1-29).
                     objectName: "task-doc-crumb-id"
                     text: root.task.externalKey || root.taskId
-                    color: Theme.textMuted
+                    color: crumbIdCA.hovered ? Theme.text : Theme.textMuted
                     font.family: Theme.fontMono
+                    ClickArea {
+                        id: crumbIdCA
+                        objectName: "task-doc-crumb-id-copy"
+                        label: I18n.t("taskcard.copyId")
+                        tip: I18n.t("taskcard.copyId.tip")
+                        activeFocusOnTab: false
+                        onActivated: AppController.copyTaskKey(parent.text)
+                    }
                     font.pixelSize: Theme.fsSm
                 }
                 Item { Layout.fillWidth: true }
@@ -970,6 +991,18 @@ FocusScope {
                                 : AppController.captureParse("x ~" + t.replace(/^~/, "")).estimateMinutes;
                         root._setField("estimateMinutes", m);
                     }
+                }
+                TextChip {
+                    id: remindChip
+                    objectName: "task-doc-remind"
+                    visible: root._visible("remind")
+                    key: root._key(I18n.t("taskdoc.prop.remind"))
+                    value: root._remindLabel()
+                    QQC.ToolTip.visible: remindChip._editing
+                    QQC.ToolTip.text: I18n.t("taskdoc.remind.ph")
+                    // Left as it was shown: nothing to read again (a shown
+                    // "15:00" read again after 15:00 would be tomorrow's).
+                    onCommitted: (text) => { if (String(text) !== remindChip.value) AppController.setTaskReminder(root.taskId, text); }
                 }
                 PropertyChip {
                     id: addChip
@@ -1273,6 +1306,7 @@ FocusScope {
                 // nothing between them (F3-EYES-10).
                 clip: true
                 placeholder: I18n.t("taskdoc.bodyPh")
+                ghostCaret: true
                 menuTitle: I18n.t("textmenu.title.taskBody")
                 // The note look (APP-292): the same md4c drawing as Knowledge.
                 noteType: true
@@ -1394,6 +1428,13 @@ FocusScope {
                         value: root._trackerLabel
                         link: String(root.task.externalUrl || "")
                         arrow: !root._quiet
+                    }
+                    // CI of the merge / pull request (APP-318): the failed
+                    // jobs and their logs, on demand.
+                    TaskCiPanel {
+                        Layout.fillWidth: true
+                        taskId: root.taskId
+                        rev: root._rev
                     }
                 }
 
@@ -1630,7 +1671,7 @@ FocusScope {
         id: addMenu
         objectName: "task-doc-add-menu"
         Instantiator {
-            model: ["scheduled", "due", "labels", "tags", "recurrence", "estimate", "plan", "link"]
+            model: ["scheduled", "due", "labels", "tags", "recurrence", "estimate", "remind", "plan", "link"]
             delegate: AppMenuItem {
                 required property string modelData
                 visible: modelData === "plan" ? !(root._plan && root._plan.visible)
@@ -1642,6 +1683,7 @@ FocusScope {
                     if (modelData === "link") { root.startLink("related"); return; }
                     root._shown = root._shown.concat([modelData]);
                     if (modelData === "tags") { root._tagsEditing = true; Qt.callLater(tagsEditor.open); }
+                    if (modelData === "remind") Qt.callLater(remindChip.clicked);
                 }
             }
             onObjectAdded: (i, o) => addMenu.insertItem(i, o)

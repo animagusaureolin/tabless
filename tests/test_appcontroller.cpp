@@ -3495,6 +3495,67 @@ TEST_F(PeoplePickerTest, TheRailFollowsAStateChangeInBothDirections) {
   EXPECT_EQ(app_->people()->rowCount(), 1);
 }
 
+// "Wrote" takes the person off Today; it is undoable and says so with a
+// toast (dogfood 2026-10-16: the person was gone with no way back).
+TEST_F(PeoplePickerTest, WroteIsUndoable) {
+  Person p;
+  p.id = QStringLiteral("ada");
+  p.name = QStringLiteral("Ada");
+  p.state = QStringLiteral("todo");
+  app_->people()->reset({p});
+  QStringList toasts;
+  QObject::connect(app_.get(), &AppController::undoableToast, app_.get(), [&](const QString& msg, int) {
+    toasts << msg;
+  });
+  app_->setPersonState(QStringLiteral("ada"), QStringLiteral("pinged"));
+  ASSERT_EQ(toasts.size(), 1);
+  EXPECT_TRUE(toasts.first().contains(QStringLiteral("Ada")));
+  EXPECT_EQ(app_->people()->items().at(0).state, QStringLiteral("pinged"));
+  app_->undo();
+  EXPECT_EQ(app_->people()->items().at(0).state, QStringLiteral("todo"));
+  // The same state again is no change and no toast.
+  app_->setPersonState(QStringLiteral("ada"), QStringLiteral("todo"));
+  EXPECT_EQ(toasts.size(), 1);
+}
+
+// The open asks for Today and the sidebar (APP-321): only "todo", and a way
+// back to it from "Люди" says so with an Undo.
+TEST_F(PeoplePickerTest, OpenPingsAreTheTodoOnesAndComeBack) {
+  Person a;
+  a.id = QStringLiteral("ada");
+  a.name = QStringLiteral("Ada");
+  a.state = QStringLiteral("todo");
+  Person b = a;
+  b.id = QStringLiteral("bob");
+  b.name = QStringLiteral("Bob");
+  b.state = QStringLiteral("pinged");
+  app_->people()->reset({a, b});
+  QVariantList open = app_->openPings();
+  ASSERT_EQ(open.size(), 1);
+  EXPECT_EQ(open.first().toMap().value(QStringLiteral("id")).toString(), QStringLiteral("ada"));
+  QStringList toasts;
+  QObject::connect(app_.get(), &AppController::undoableToast, app_.get(), [&](const QString& msg, int) {
+    toasts << msg;
+  });
+  app_->setPersonState(QStringLiteral("bob"), QStringLiteral("todo"));
+  EXPECT_EQ(app_->openPings().size(), 2);
+  ASSERT_EQ(toasts.size(), 1);
+  EXPECT_TRUE(toasts.first().contains(QStringLiteral("Bob")));
+}
+
+// A click on a task's key copies it and says so.
+TEST_F(AppControllerTest, CopyTaskKeyToasts) {
+  QStringList toasts;
+  QObject::connect(app_.get(), &AppController::toast, app_.get(), [&](const QString& msg, const QString&) {
+    toasts << msg;
+  });
+  app_->copyTaskKey(QStringLiteral("  APP-123 "));
+  ASSERT_EQ(toasts.size(), 1);
+  EXPECT_TRUE(toasts.first().contains(QStringLiteral("APP-123")));
+  app_->copyTaskKey(QString());
+  EXPECT_EQ(toasts.size(), 1);
+}
+
 TEST_F(PeoplePickerTest, AContactAndThePersonItImportedAreOneCandidate) {
   Person p;
   p.id = QStringLiteral("olga.t");

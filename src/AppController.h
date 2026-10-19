@@ -577,10 +577,25 @@ class AppController : public QObject {
   // use) under a timestamped horizontal-rule header, whichever note is open
   // (sheet N/X-Oth-Capture: "быстрая заметка → «Входящие»", R4-073). First
   // entry gets the heading only (no leading HR — nothing to separate from).
-  Q_INVOKABLE void appendNoteEntry(const QString& text);
+  // A quick note (APP-320): goes on in the last note when that one was made
+  // or written to less than an hour ago under the same label, else starts a
+  // new note named by its first words. `label` ("hr", "#личное", "") is
+  // written as a #tag. Returns the note's id.
+  Q_INVOKABLE QString appendNoteEntry(const QString& text, const QString& label = QString());
+  QString appendNoteEntryAt(const QString& text, const QString& label, const QDateTime& now);
+  // The labels to offer for a quick note: the default three, the card labels
+  // and the #tags already in notes, each once, lower case.
+  Q_INVOKABLE QStringList noteLabels() const;
+  // The #tags used in notes with how many notes carry each: [{id, count}],
+  // most used first, for the notes list's filter chips.
+  Q_INVOKABLE QVariantList noteTagCounts() const;
   // The title of the note appendNoteEntry() writes into, so the quick-note
   // popup can say where the text will land before it does.
-  Q_INVOKABLE QString quickNoteTarget() const;
+  // "" when the next quick note under `label` starts a new note.
+  Q_INVOKABLE QString quickNoteTarget(const QString& label = QString()) const;
+  QString quickNoteTargetAt(const QString& label, const QDateTime& now) const;
+  // Where the next quick note goes on (settingsExtra.noteChain).
+  void noteChainTo(const QString& noteId, const QString& label, const QDateTime& at);
   // The Inbox note's id, "" until the first quick note made it.
   Q_INVOKABLE QString inboxNoteId() const;
   // The quick note's unsaved draft and the task it is attached to, kept in
@@ -1261,6 +1276,15 @@ class AppController : public QObject {
   // stored: the answer arrives on ticketCommentsLoaded and lives only as long
   // as whatever is showing it. A GET, so it cannot change the issue.
   Q_INVOKABLE void fetchTicketComments(const QString& taskId);
+  // CI of a merge / pull request (APP-318), read-only and on demand: the
+  // failed jobs (ciJobsLoaded) and the tail of one job's log (ciLogLoaded).
+  // A Jira card folded with its MR asks for that MR's. Nothing is stored.
+  Q_INVOKABLE void fetchCiJobs(const QString& taskId);
+  Q_INVOKABLE void fetchCiLog(const QString& taskId, const QString& jobId);
+  // The CI the card shows: {state, url, at, source} ("" state = none).
+  Q_INVOKABLE QVariantMap ciOf(const QString& taskId) const;
+  // A log line that says something failed (heap::ci::isErrorLine), for QML.
+  Q_INVOKABLE bool isCiErrorLine(const QString& line) const;
 
   // Pull issues from every connected tracker and mirror them as tasks in the
   // active profile. No-op (with a toast) when no provider is configured.
@@ -1376,6 +1400,12 @@ class AppController : public QObject {
   void snoozeReminderAt(const QString& notificationId, int minutes, const QDateTime& now);
   // A button of an in-app reminder toast: the same as the OS one (APP-256).
   Q_INVOKABLE void reminderAction(const QString& notificationId, const QString& actionId);
+  // "Remind me" on a task (APP-319): a moment ("15:00", "завтра 9:00",
+  // "через 20 мин"), a lead before the task's own time ("за 15 мин", "15m"),
+  // or "" to take it off. One undo step; false (and a toast saying why) when
+  // the text is not a time or a lead has no time to count from.
+  Q_INVOKABLE bool setTaskReminder(const QString& taskId, const QString& text);
+  bool setTaskReminderAt(const QString& taskId, const QString& text, const QDateTime& now);
 
   // Snoozed reminders waiting (tests).
   QVector<heap::notify::SnoozedReminder> pendingSnoozes() const {
@@ -1593,6 +1623,9 @@ class AppController : public QObject {
   // ---- People ops ----
   Q_INVOKABLE void cyclePerson(const QString& id);
   Q_INVOKABLE void setPersonState(const QString& id, const QString& state);
+  // "Кому написать" (APP-321): the open asks, people with state "todo", as
+  // Today and the sidebar list them: [{id, name, question, color}].
+  Q_INVOKABLE QVariantList openPings() const;
   Q_INVOKABLE QVariantMap newPersonDraft() const;
   Q_INVOKABLE QVariantMap personById(const QString& id) const;
   // What lowkey knows links to the person (DG-002): tasks waiting on them
@@ -1783,6 +1816,8 @@ class AppController : public QObject {
   Q_INVOKABLE void perfMarkShown(const QString& name, QObject* item) const;
 
   Q_INVOKABLE void copyToClipboard(const QString& text);
+  // A task's key ("APP-123") onto the clipboard, and a toast that says so.
+  Q_INVOKABLE void copyTaskKey(const QString& key);
 
   // ---- Free-form text classification (used by QuickCapture / TaskEditor) ----
   // Returns one of "focus" | "sync" | "ticket" | "contact" | "none".
@@ -2223,6 +2258,8 @@ class AppController : public QObject {
   // reply for a ticket the user has since navigated away from can be dropped.
   // `error` is empty on success; an empty list with no error means no comments.
   void ticketCommentsLoaded(const QString& taskId, const QVariantList& comments, const QString& error);
+  void ciJobsLoaded(const QString& taskId, const QVariantList& jobs, const QString& error);
+  void ciLogLoaded(const QString& taskId, const QString& jobId, const QString& text, const QString& error);
   void updateStatusChanged();
   void integrationStatesChanged();
   void integrationHealthChanged();
@@ -2237,7 +2274,8 @@ class AppController : public QObject {
   void undoableToast(const QString& message, int seconds);
   // A reminder with buttons shown in the window (the start of a task block,
   // APP-256); the buttons call reminderAction(notificationId, …).
-  void reminderToast(const QString& notificationId, const QString& message);
+  // `kind` is "taskBlock" or "remind" (APP-319): which buttons it has.
+  void reminderToast(const QString& notificationId, const QString& message, const QString& kind);
   // "Next free window" found no room on `date` (APP-253): the toast says so
   // and offers the next working day's window and, when one is left, a time
   // this evening. Nothing is planned until the person picks.
@@ -2648,6 +2686,8 @@ class AppController : public QObject {
   // active profile, each as hours on the day; `exceptTaskId`'s own block and
   // its focus blocks left out, so moving a task does not collide with itself.
   QVector<QPair<double, double>> busySpans(const QDate& date, const QString& exceptTaskId, const QDateTime& now) const;
+  // The lunch break in hours (APP-319), {-1, -1} while it is off.
+  std::pair<double, double> lunchSpan() const;
   void scheduleFocusBlockFor(const QString& taskId);
   void focusBlockOnStatusChange(const QString& taskId, const QString& from, const QString& to);
   // The local layer's own bookkeeping (AppControllerLocal.cpp).
@@ -3161,6 +3201,10 @@ class AppController : public QObject {
 
   // settings.safety, for QML: which heads-ups are on.
   Q_PROPERTY(QVariantMap safety READ safetySettings NOTIFY appSettingsJsonChanged)
+  // The lunch break (APP-319) for the calendar's band: {start, end} in hours,
+  // empty while it is off. Set under settings.calendar.lunchOn/Start/End.
+  Q_PROPERTY(QVariantMap lunch READ lunch NOTIFY appSettingsJsonChanged)
+  QVariantMap lunch() const;
   // Writes settings.safety.<key>; Settings → Safety net's rows use it.
   Q_INVOKABLE void setSafetySetting(const QString& key, const QVariant& value);
   // Waiting on a reply (APP-158), active profile: task id →
