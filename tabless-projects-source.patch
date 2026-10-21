@@ -1,0 +1,1550 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 74f9d3c..7fc5c80 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -493,6 +493,7 @@ qt_add_qml_module(heap_core
+         qml/ThemeSettings.qml
+         qml/ColorPickerPopup.qml
+         qml/PillButton.qml
++        qml/ProjectsDialog.qml
+         qml/ProfileEditor.qml
+         qml/CommandPalette.qml
+         qml/HotkeysPanel.qml
+diff --git a/README.md b/README.md
+index af0c2c6..d69ef2f 100644
+--- a/README.md
++++ b/README.md
+@@ -170,6 +170,7 @@ the rest: [docs/CLI.md](docs/CLI.md).
+ - [Trackers](docs/INTEGRATIONS.md) — connecting each one; what is read, what may be written ·
+   [Add your tracker](docs/ADD_A_TRACKER.md)
+ - [Data and backups](docs/DATA.md) — where files live, restores, moving between machines
++- [Projects](docs/PROJECTS.md) — organize tasks and notes within each profile
+ - [Command line](docs/CLI.md) · [Tutorial](docs/TUTORIAL.md)
+ - [Building from source](docs/BUILDING.md) — Qt 6.9+, C++20 · [Contributing](CONTRIBUTING.md)
+ 
+diff --git a/qml/I18n.qml b/qml/I18n.qml
+index f75da6b..3a21750 100644
+--- a/qml/I18n.qml
++++ b/qml/I18n.qml
+@@ -20,6 +20,31 @@ QtObject {
+     // ── Catalogue ─────────────────────────────────────────────────────
+     readonly property var dict: ({
+         en: {
++            "projects.title": "Projects",
++            "projects.all": "All projects",
++            "projects.none": "Without project",
++            "projects.hint": "Organize the tasks and notes of this profile. Use the menu beside an item to assign it to a project.",
++            "projects.close": "Close",
++            "projects.create": "New project",
++            "projects.edit": "Edit project",
++            "projects.delete": "Delete project",
++            "projects.tasks": "Tasks",
++            "projects.notes": "Notes",
++            "projects.addTask": "New task",
++            "projects.addNote": "New note",
++            "projects.search": "Search tasks or notes…",
++            "projects.assign": "Project",
++            "projects.empty": "No items here. Create one, or choose All projects to organize existing items.",
++            "projects.name": "Name",
++            "projects.description": "Description",
++            "projects.color": "Color",
++            "projects.invalidName": "Enter a unique project name in this profile.",
++            "projects.cancel": "Cancel",
++            "projects.save": "Save",
++            "projects.deleteHint": "Tasks and notes will be kept under Without project. This removes the project permanently.",
++            "projects.profileHint": "Projects belong to the current profile.",
++            "projects.undo.assign": "Project assignment changed",
++
+             // ── Common ──
+             "common.cancel": "Cancel",
+             "common.save": "Save",
+@@ -2874,6 +2899,31 @@ QtObject {
+             "today.otherProfileKeys": "%1 is in %2: Enter opens it there"
+         },
+         ru: {
++            "projects.title": "Проекты",
++            "projects.all": "Все проекты",
++            "projects.none": "Без проекта",
++            "projects.hint": "Задачи и заметки текущего профиля. Назначьте проект через меню рядом с элементом.",
++            "projects.close": "Закрыть",
++            "projects.create": "Новый проект",
++            "projects.edit": "Изменить проект",
++            "projects.delete": "Удалить проект",
++            "projects.tasks": "Задачи",
++            "projects.notes": "Заметки",
++            "projects.addTask": "Новая задача",
++            "projects.addNote": "Новая заметка",
++            "projects.search": "Поиск задач или заметок…",
++            "projects.assign": "Проект",
++            "projects.empty": "Здесь пока пусто. Создайте элемент или выберите все проекты для распределения существующих.",
++            "projects.name": "Название",
++            "projects.description": "Описание",
++            "projects.color": "Цвет",
++            "projects.invalidName": "Введите уникальное название проекта в этом профиле.",
++            "projects.cancel": "Отмена",
++            "projects.save": "Сохранить",
++            "projects.deleteHint": "Задачи и заметки сохранятся в разделе «Без проекта». Проект будет удалён навсегда.",
++            "projects.profileHint": "Проекты текущего профиля.",
++            "projects.undo.assign": "Изменено назначение проекта",
++
+             // ── Common ──
+             "common.cancel": "Отмена",
+             "common.save": "Сохранить",
+diff --git a/qml/Main.qml b/qml/Main.qml
+index 3a81f7f..215a466 100644
+--- a/qml/Main.qml
++++ b/qml/Main.qml
+@@ -78,6 +78,20 @@ ApplicationWindow {
+ 
+     // A #TICKET clicked in a note or doc page: the heap id, or a tracker key
+     // ("PROJ-123") that a mirrored task carries.
++    ProjectsDialog {
++        id: projectsDialog
++        onTaskRequested: (id) => win.openTaskById(id)
++        onNewTaskRequested: (projectId) => {
++            const draft = AppController.newTaskDraft("");
++            draft.projectId = projectId;
++            win.showTask(draft);
++        }
++        onNoteRequested: (id) => {
++            AppController.activeNoteId = id;
++            AppController.currentView = "notes";
++        }
++    }
++
+     function openTaskById(key) {
+         const t = AppController.taskById(AppController.taskIdForBranchMatch(key));
+         if (t && t.id) win.showTask(t);
+@@ -574,7 +588,7 @@ ApplicationWindow {
+     // type-ahead or a read-only Text would otherwise swallow the keystroke or
+     // let the shortcut fire over the dialog (HEAP-117).
+     readonly property bool _overlayOpen: taskEditor.opened || AppController.immersion
+-        || personEditor.opened || profileEditor.opened
++        || personEditor.opened || profileEditor.opened || projectsDialog.opened
+         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || eventCapture.opened
+         || hotkeys.opened || cheatSheet.opened || closeAsk.opened || goToDatePopup.opened
+         || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened || endOfDay.opened
+@@ -788,7 +802,7 @@ ApplicationWindow {
+     // editor, Ctrl+K opened the palette over a dialog. The side-rail
+     // popovers are not modal and keep them.
+     readonly property bool _modalOpen: taskEditor.opened || AppController.immersion
+-        || personEditor.opened || profileEditor.opened
++        || personEditor.opened || profileEditor.opened || projectsDialog.opened
+         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened || eventCapture.opened || cheatSheet.opened
+         || closeAsk.opened || goToDatePopup.opened || eventLog.opened || profileMoveDialog.opened
+         || (_focusInPopup && !_focusInPopover) || _dimmerShown
+@@ -1213,6 +1227,24 @@ ApplicationWindow {
+ 
+                 // state.json unreadable / from a newer heap / not saving.
+                 StorageBanner { Layout.fillWidth: true }
++                RowLayout {
++                    Layout.fillWidth: true
++                    Layout.leftMargin: Theme.inset
++                    Layout.rightMargin: Theme.inset
++                    visible: AppController.currentView !== "settings"
++                    Text {
++                        Layout.fillWidth: true
++                        text: I18n.t("projects.profileHint")
++                        color: Theme.textDim
++                        font.pixelSize: Theme.fsXs
++                    }
++                    PillButton {
++                        objectName: "open-projects"
++                        text: I18n.t("projects.title")
++                        onClicked: projectsDialog.open()
++                    }
++                }
++
+ 
+             TopBar {
+                 id: topBar
+diff --git a/qml/NotesView.qml b/qml/NotesView.qml
+index f5651cd..bc0872a 100644
+--- a/qml/NotesView.qml
++++ b/qml/NotesView.qml
+@@ -302,11 +302,13 @@ Item {
+     // What the header calls the open note. m.data() is a call, not something
+     // a binding can watch, so it is refreshed when the note or the list moves.
+     property string _activeTitle: ""
++    property string _activeProject: ""
+     property var _activeUpdated: null
+     function _refreshTitle() {
+         const m = AppController.notes;
+         const row = m.indexOfId(AppController.activeNoteId);
+         root._activeTitle = row >= 0 ? String(m.data(m.index(row, 0), m.roleOf("title")) || "") : "";
++        root._activeProject = row >= 0 ? String(m.data(m.index(row, 0), m.roleOf("projectId")) || "") : "";
+         root._activeUpdated = row >= 0 ? m.data(m.index(row, 0), m.roleOf("updated")) : null;
+     }
+     Connections {
+@@ -1095,6 +1097,26 @@ Item {
+                 font.pixelSize: Theme.fsSm
+                 elide: Text.ElideRight
+             }
++            RowLayout {
++                Layout.fillWidth: true
++                Layout.leftMargin: root._docInset + root._mdSide
++                Layout.rightMargin: root._docInset
++                Layout.bottomMargin: Theme.spMd
++                visible: root._noteShown && AppController.activeNoteId.length > 0
++                Text { text: I18n.t("projects.assign"); color: Theme.textDim; font.pixelSize: Theme.fsSm }
++                AppComboBox {
++                    id: noteProject
++                    objectName: "note-project"
++                    Layout.fillWidth: true
++                    readonly property var choices: [{ id: "", name: I18n.t("projects.none") }].concat(AppController.projects)
++                    model: choices
++                    textRole: "name"
++                    Accessible.name: I18n.t("projects.assign")
++                    currentIndex: Math.max(0, choices.findIndex(p => p.id === root._activeProject))
++                    onActivated: AppController.assignNoteProject(AppController.activeNoteId, choices[currentIndex].id)
++                }
++            }
++
+             // ── The note's files ──────────────────────────────────────
+             Rectangle {
+                 objectName: "notes-attachments"
+diff --git a/qml/TaskDocument.qml b/qml/TaskDocument.qml
+index c422edb..a65f91b 100644
+--- a/qml/TaskDocument.qml
++++ b/qml/TaskDocument.qml
+@@ -875,6 +875,23 @@ FocusScope {
+                 }
+             }
+ 
++            RowLayout {
++                Layout.fillWidth: true
++                Layout.bottomMargin: Theme.spMd
++                Text { text: I18n.t("projects.assign"); color: Theme.textDim; font.pixelSize: Theme.fsSm }
++                AppComboBox {
++                    id: documentProject
++                    objectName: "task-doc-project"
++                    Layout.fillWidth: true
++                    readonly property var choices: [{ id: "", name: I18n.t("projects.none") }].concat(AppController.projects)
++                    model: choices
++                    textRole: "name"
++                    Accessible.name: I18n.t("projects.assign")
++                    currentIndex: Math.max(0, choices.findIndex(p => p.id === (root.task.projectId || "")))
++                    onActivated: AppController.assignTaskProject(root.taskId, choices[currentIndex].id)
++                }
++            }
++
+             // Статус · Приоритет · Когда · Срок · Метки · … · + свойство
+             Flow {
+                 id: chips
+diff --git a/qml/TaskEditor.qml b/qml/TaskEditor.qml
+index dd9499e..af209df 100644
+--- a/qml/TaskEditor.qml
++++ b/qml/TaskEditor.qml
+@@ -239,7 +239,8 @@ Popup {
+         if (fields.indexOf("title") >= 0 && String(t.remoteTitle || "").length > 0) titleField.text = t.remoteTitle;
+         if (fields.indexOf("body") >= 0) descField.text = String(t.remoteBody || "");
+         if (fields.indexOf("priority") >= 0 && String(t.remotePriority || "").length > 0)
+-            priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(t.remotePriority));
++            taskProjectBox.currentIndex = Math.max(0, taskProjectBox.projectChoices.findIndex(p => p.id === (draft.projectId || "")));
++        priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(t.remotePriority));
+         if (fields.indexOf("status") >= 0) {
+             const at = root.statusList().indexOf(String(t.remoteColumn || ""));
+             if (at >= 0) statusBox.currentIndex = at;
+@@ -357,7 +358,7 @@ Popup {
+     // Everything the user can change, as one comparable string.
+     function _snapshot() {
+         return JSON.stringify([idField.text, titleField.text, descField.text, statusBox.currentIndex,
+-                               priBox.currentIndex, branchField.text, deadlineField.text, scheduledField.text,
++                               taskProjectBox.currentIndex, priBox.currentIndex, branchField.text, deadlineField.text, scheduledField.text,
+                                labelsField.text, estimateField.text, somedayBox.checked, recurBox.currentIndex,
+                                // An existing task's files are saved as they are attached.
+                                root.isNew ? root._attachments.map(a => a.id) : []]);
+@@ -740,6 +741,7 @@ Popup {
+             // Plain names; saveTask keeps each existing label's colour.
+             labels: root._mergeLabels(root.labelsFromText(labelsField.text), parsed.labels),
+             estimateMinutes: parseInt(estimateField.text || "0") || parsed.estimate || 0,
++            projectId: taskProjectBox.projectChoices[taskProjectBox.currentIndex].id,
+             someday: somedayBox.checked
+         };
+         // A new task's files ride along with the draft; an existing task's
+@@ -1160,6 +1162,21 @@ Popup {
+                     }
+                 }
+ 
++                ColumnLayout {
++                    Layout.fillWidth: true
++                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
++                    FieldLabel { text: I18n.t("projects.assign") }
++                    AppComboBox {
++                        id: taskProjectBox
++                        objectName: "te-project"
++                        Layout.fillWidth: true
++                        readonly property var projectChoices: [{ id: "", name: I18n.t("projects.none") }].concat(AppController.projects)
++                        model: projectChoices
++                        textRole: "name"
++                        Accessible.name: I18n.t("projects.assign")
++                    }
++                }
++
+                 // ── Status · priority · deadline: what a developer reads first ──
+                 GridLayout {
+                     Layout.fillWidth: true
+diff --git a/src/AppController.cpp b/src/AppController.cpp
+index 5bf9c4c..4c2d3f9 100644
+--- a/src/AppController.cpp
++++ b/src/AppController.cpp
+@@ -331,6 +331,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
+       {"task.idRequired", {"A task needs an id", "У задачи должен быть id"}},
+       {"task.titleRequired", {"A task needs a title", "У задачи должен быть заголовок"}},
+       {"task.idInvalid", {"“%1” can't be an id — no spaces or slashes", "«%1» не подходит для id — без пробелов и слэшей"}},
++      {"projects.undo.assign", {"Project assignment undone", "Назначение проекта отменено"}},
+       {"task.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
+       {"task.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
+       // The local layer (APP-236…241, 251).
+@@ -2047,10 +2048,11 @@ bool AppController::freshNoteUntouched() const {
+   }
+   const Note& n = m_notes.items().at(row);
+   const QString body = n.id == m_activeNoteId ? m_notesState : n.body;
+-  return !n.pinned && n.folder.isEmpty() && isPlaceholderNoteTitle(n.title) && body == QStringLiteral("# %1\n\n").arg(n.title);
++  return !n.pinned && n.folder.isEmpty() && n.projectId.isEmpty() && isPlaceholderNoteTitle(n.title) && body == QStringLiteral("# %1\n\n").arg(n.title);
+ }
+ 
+-QString AppController::newNote(const QString& title, const QString& folder) {
++QString AppController::newNote(const QString& title, const QString& folder, const QString& projectId) {
++  const QString project = projectExists(projectId) ? projectId : QString();
+   // Ctrl+Alt+N pressed again over the empty note it just made: that note,
+   // not another "Untitled note" (IDIOT-KNOW-14).
+   if(title.trimmed().isEmpty() && folder.isEmpty() && m_activeNoteId == m_freshNoteId && freshNoteUntouched()) {
+@@ -2060,6 +2062,7 @@ QString AppController::newNote(const QString& title, const QString& folder) {
+   n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+   n.title = title.trimmed().isEmpty() ? tr_("notes.untitled") : title.trimmed();
+   n.folder = folder;
++  n.projectId = project;
+   n.created = QDateTime::currentDateTime();
+   n.updated = n.created;
+   // The heading, so the document opens saying what it is rather than empty.
+@@ -4447,6 +4450,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
+     t.local.remindLead = -1;
+   }
+ 
++  const QString previousProject = prior != nullptr ? prior->projectId : QString();
+   // ── Rename path ──
+   // If the editor captured an _originalId that differs from the new id,
+   // this is an id-change on an existing row. Drop the old row, fix up
+@@ -4490,6 +4494,12 @@ bool AppController::saveTask(const QVariantMap& draft) {
+   // rule applies and a finished recurring task spawns its next one. The row is
+   // saved in its old column first; the nested undo scope records nothing of
+   // its own.
++  if(draft.contains("projectId")) {
++    const QString project = draft.value("projectId").toString();
++    t.projectId = projectExists(project) ? project : QString();
++  } else if(prior != nullptr) {
++    t.projectId = previousProject;
++  }
+   const QString statusAfter = t.status;
+   const bool statusMoved = !isNew && !statusBefore.isEmpty() && statusBefore != statusAfter;
+ 
+@@ -8719,6 +8729,7 @@ QVariantMap AppController::taskById(const QString& id) const {
+   const Task& t = m_tasks.items().at(row);
+   QVariantMap m;
+   m["id"] = t.id;
++  m["projectId"] = t.projectId;
+   m["title"] = t.title;
+   m["desc"] = t.desc;
+   m["priority"] = heap::local::effectivePriority(t);
+@@ -13642,6 +13653,7 @@ void AppController::snapshotActiveProfile() {
+ }
+ 
+ void AppController::applyProfileToModels(const Profile& p) {
++  emit projectsChanged();
+   m_statusLog = p.statusLog;
+   m_waitingOn = p.waitingOn;
+   emit waitingOnChanged();
+diff --git a/src/AppController.h b/src/AppController.h
+index df400da..d81e2a9 100644
+--- a/src/AppController.h
++++ b/src/AppController.h
+@@ -163,6 +163,7 @@ class AppController : public QObject {
+   // "What's new" card is due once. ackWhatsNew() puts it away.
+   Q_PROPERTY(bool whatsNewDue READ whatsNewDue NOTIFY onboardingChanged)
+ 
++  Q_PROPERTY(QVariantList projects READ projects NOTIFY projectsChanged)
+   Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
+   // Calendars read from a link (APP-118), with how their last fetch went.
+   Q_PROPERTY(QVariantList calendarSubscriptions READ calendarSubscriptions NOTIFY calendarSubscriptionsChanged)
+@@ -476,7 +477,7 @@ class AppController : public QObject {
+   Q_INVOKABLE QString noteBody(const QString& id) const;
+ 
+   // Creating one returns its id so a caller can open it straight away.
+-  Q_INVOKABLE QString newNote(const QString& title = QString(), const QString& folder = QString());
++  Q_INVOKABLE QString newNote(const QString& title = QString(), const QString& folder = QString(), const QString& projectId = QString());
+   // False when nothing changed: an empty title, or one another note in the
+   // same folder already has — [[links]] to that one would have changed
+   // meaning (IDIOT-KNOW-3).
+@@ -1840,6 +1841,14 @@ class AppController : public QObject {
+ 
+   // ---- Profiles ----
+   QVariantList profiles() const;
++  QVariantList projects() const;
++  Q_INVOKABLE QString saveProject(const QString& id, const QString& name, const QString& color, const QString& description);
++  Q_INVOKABLE bool deleteProject(const QString& id);
++  Q_INVOKABLE bool assignTaskProject(const QString& taskId, const QString& projectId);
++  Q_INVOKABLE bool assignNoteProject(const QString& noteId, const QString& projectId);
++  // kind: task/note. Empty project means unassigned; * means all.
++  Q_INVOKABLE QVariantList projectItems(const QString& kind, const QString& projectId) const;
++  bool projectExists(const QString& id) const;
+ 
+   QString activeProfileId() const {
+     return m_activeProfileId;
+@@ -2212,6 +2221,7 @@ class AppController : public QObject {
+   // noteMouseAction() decided it is time to mention `sequence` for `label`.
+   void shortcutHintRequested(const QString& shortcutId, const QString& sequence, const QString& label);
+   void profilesChanged();
++  void projectsChanged();
+   void activeProfileChanged();
+   void shortcutsChanged();
+   void blockedStuckChanged();
+diff --git a/src/AppControllerProfiles.cpp b/src/AppControllerProfiles.cpp
+index 6d172db..7c024d0 100644
+--- a/src/AppControllerProfiles.cpp
++++ b/src/AppControllerProfiles.cpp
+@@ -5,7 +5,9 @@
+ 
+ #include "AppController.h"
+ 
++#include <QColor>
+ #include <QSet>
++#include <QUuid>
+ 
+ #include <climits>
+ 
+@@ -257,3 +259,146 @@ bool AppController::applyProfileMove_(heap::undo::Entry& entry, bool backward) {
+   entry.moveRenamed = renamed;
+   return true;
+ }
++
++// Projects belong to a profile. Assignments stay on tasks/notes so normal
++// edits, undo, snapshots and exports retain them without a second index.
++bool AppController::projectExists(const QString& id) const {
++  const int row = profileIndexOf(m_activeProfileId);
++  if(row < 0 || id.isEmpty()) {
++    return false;
++  }
++  for(const Project& project : m_profiles.at(row).projects) {
++    if(project.id == id) {
++      return true;
++    }
++  }
++  return false;
++}
++
++QVariantList AppController::projects() const {
++  QVariantList out;
++  const int row = profileIndexOf(m_activeProfileId);
++  if(row < 0) {
++    return out;
++  }
++  for(const Project& project : m_profiles.at(row).projects) {
++    out.append(QVariantMap{{"id", project.id}, {"name", project.name}, {"color", project.color}, {"description", project.description}});
++  }
++  return out;
++}
++
++QString AppController::saveProject(const QString& id, const QString& rawName, const QString& color, const QString& description) {
++  const int row = profileIndexOf(m_activeProfileId);
++  const QString name = rawName.trimmed().left(64);
++  if(row < 0 || name.isEmpty() || (!id.isEmpty() && !projectExists(id))) {
++    return {};
++  }
++  auto& projects = m_profiles[row].projects;
++  for(const Project& project : std::as_const(projects)) {
++    if(project.id != id && project.name.compare(name, Qt::CaseInsensitive) == 0) {
++      return {};
++    }
++  }
++  const QString safeColor = QColor(color).isValid() ? color : QStringLiteral("#5cc2dd");
++  const QString key = id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : id;
++  const Project next{key, name, safeColor, description.left(4000)};
++  if(id.isEmpty()) {
++    projects.append(next);
++  } else {
++    for(Project& project : projects) {
++      if(project.id == id) {
++        project = next;
++        break;
++      }
++    }
++  }
++  emit projectsChanged();
++  scheduleSave();
++  return key;
++}
++
++bool AppController::deleteProject(const QString& id) {
++  const int row = profileIndexOf(m_activeProfileId);
++  if(row < 0 || !projectExists(id)) {
++    return false;
++  }
++  auto& projects = m_profiles[row].projects;
++  projects.removeIf([&id](const Project& p) {
++    return p.id == id;
++  });
++  // Do not delete content. Iterate copies because upsert can move storage.
++  QVector<Task> tasks = m_tasks.items();
++  for(Task& task : tasks) {
++    if(task.projectId == id) {
++      task.projectId.clear();
++      m_tasks.upsert(task);
++    }
++  }
++  QVector<Note> notes = m_notes.items();
++  for(Note& note : notes) {
++    if(note.projectId == id) {
++      note.projectId.clear();
++      m_notes.upsert(note);
++    }
++  }
++  emit projectsChanged();
++  scheduleSave();
++  return true;
++}
++
++bool AppController::assignTaskProject(const QString& taskId, const QString& projectId) {
++  const int row = m_tasks.indexOfId(taskId);
++  if(row < 0 || (!projectId.isEmpty() && !projectExists(projectId))) {
++    return false;
++  }
++  Task task = m_tasks.items().at(row);
++  if(task.projectId == projectId) {
++    return true;
++  }
++  const UndoScope scope(this, tr_("projects.undo.assign"));
++  task.projectId = projectId;
++  m_tasks.upsert(task);
++  emit projectsChanged();
++  scheduleSave();
++  return true;
++}
++
++bool AppController::assignNoteProject(const QString& noteId, const QString& projectId) {
++  const int row = m_notes.indexOfId(noteId);
++  if(row < 0 || (!projectId.isEmpty() && !projectExists(projectId))) {
++    return false;
++  }
++  Note note = m_notes.items().at(row);
++  if(note.projectId == projectId) {
++    return true;
++  }
++  const UndoScope scope(this, tr_("projects.undo.assign"));
++  note.projectId = projectId;
++  note.updated = QDateTime::currentDateTime();
++  m_notes.upsert(note);
++  emit projectsChanged();
++  scheduleSave();
++  return true;
++}
++
++QVariantList AppController::projectItems(const QString& kind, const QString& projectId) const {
++  QVariantList out;
++  const auto append = [this, &out, &projectId](const QString& id, const QString& title, const QString& assigned) {
++    // An undo/import may refer to a removed project. Such content remains
++    // reachable under "Without project", rather than disappearing.
++    const QString effective = projectExists(assigned) ? assigned : QString();
++    if(projectId == QStringLiteral("*") || projectId == effective) {
++      out.append(QVariantMap{{"id", id}, {"title", title}, {"projectId", effective}});
++    }
++  };
++  if(kind == QStringLiteral("task")) {
++    for(const Task& task : m_tasks.items()) {
++      append(task.id, task.title, task.projectId);
++    }
++  } else if(kind == QStringLiteral("note")) {
++    for(const Note& note : m_notes.items()) {
++      append(note.id, note.title, note.projectId);
++    }
++  }
++  return out;
++}
+diff --git a/src/Models.cpp b/src/Models.cpp
+index 322fdc7..8e96cfc 100644
+--- a/src/Models.cpp
++++ b/src/Models.cpp
+@@ -939,6 +939,7 @@ QHash<int, QByteArray> NoteModel::roleNames() const {
+       {CreatedRole, "created"},
+       {UpdatedRole, "updated"},
+       {ExcerptRole, "excerpt"},
++      {ProjectRole, "projectId"},
+   };
+ }
+ 
+@@ -984,6 +985,8 @@ QVariant NoteModel::data(const QModelIndex& idx, int role) const {
+       return n.updated;
+     case ExcerptRole:
+       return noteExcerpt(n);
++    case ProjectRole:
++      return n.projectId;
+   }
+   return {};
+ }
+diff --git a/src/Models.h b/src/Models.h
+index 57df21a..e50a7c1 100644
+--- a/src/Models.h
++++ b/src/Models.h
+@@ -173,6 +173,7 @@ struct Task {
+   // Keys of the task object this build does not read, carried through a save
+   // untouched (PLAT-15), the way Profile::extra is. Only filled for a document
+   // at the current schema.
++  QString projectId;  // Local organization within the owning profile.
+   QJsonObject extra;
+ 
+   bool operator==(const Task&) const = default;
+@@ -296,6 +297,7 @@ struct Note {
+   // The frontmatter lines heap has no field for (Obsidian's tags, aliases, …),
+   // kept verbatim so an export writes them back instead of stripping them.
+   QString frontmatter;
++  QString projectId;
+ 
+   bool operator==(const Note&) const = default;
+ };
+@@ -335,6 +337,15 @@ struct StatusChange {
+   bool operator==(const StatusChange&) const = default;
+ };
+ 
++struct Project {
++  QString id;
++  QString name;
++  QString color;
++  QString description;
++
++  bool operator==(const Project&) const = default;
++};
++
+ struct Profile {
+   QString id;     // slug, unique
+   QString name;   // human-readable
+@@ -359,6 +370,7 @@ struct Profile {
+   // Tasks waiting on someone's reply (APP-158; profile key `waitingOn`,
+   // absent = none). See safety/WaitingOn.h.
+   QVector<WaitingOn> waitingOn;
++  QVector<Project> projects;
+   // Keys of the profile object this build does not read, carried through a
+   // save untouched (PLAT-26). Only filled for a document at the current schema.
+   QJsonObject extra;
+@@ -384,6 +396,7 @@ class NoteModel : public QAbstractListModel {
+     // A one-line preview, so a list can show what a note is about without
+     // holding the whole thing.
+     ExcerptRole,
++    ProjectRole,
+   };
+ 
+   explicit NoteModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
+diff --git a/src/StateSerializer.cpp b/src/StateSerializer.cpp
+index dfb3a48..13c9a0b 100644
+--- a/src/StateSerializer.cpp
++++ b/src/StateSerializer.cpp
+@@ -7,6 +7,7 @@
+ #include <QHash>
+ #include <QJsonDocument>
+ #include <QJsonValue>
++#include <QSet>
+ #include <QTime>
+ 
+ #include <algorithm>
+@@ -28,7 +29,7 @@ static_assert(heap::meta::fieldCount<Attachment>() == 4,
+               "Attachment gained or lost a field. Update attachmentsToJson/attachmentsFromJson here AND in "
+               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+               "then bump this count.");
+-static_assert(heap::meta::fieldCount<Task>() == 28,
++static_assert(heap::meta::fieldCount<Task>() == 29,
+               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
+               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+               "then bump this count.");
+@@ -258,6 +259,7 @@ QJsonObject taskToJson(const Task& t) {
+   // Unknown keys first, so every key this build owns overwrites a stale copy.
+   QJsonObject o = t.extra;
+   o["id"] = t.id;
++  o["projectId"] = t.projectId;
+   o["title"] = t.title;
+   o["desc"] = t.desc;
+   o["priority"] = t.priority;
+@@ -340,6 +342,7 @@ QJsonObject taskToJson(const Task& t) {
+ Task taskFromJson(const QJsonObject& o) {
+   Task t;
+   t.id = o["id"].toString();
++  t.projectId = o["projectId"].toString();
+   t.title = o["title"].toString();
+   t.desc = o["desc"].toString();
+   t.priority = o["priority"].toString();
+@@ -386,7 +389,8 @@ Task taskFromJson(const QJsonObject& o) {
+   t.links = linksFromJson(o["links"].toArray());
+   t.attachments = attachmentsFromJson(o["attachments"].toArray());
+   t.local = heap::local::fromJson(o["local"].toObject());
+-  static const QStringList kKnown = {QStringLiteral("id"),
++  static const QStringList kKnown = {QStringLiteral("projectId"),
++                                     QStringLiteral("id"),
+                                      QStringLiteral("title"),
+                                      QStringLiteral("desc"),
+                                      QStringLiteral("priority"),
+@@ -552,6 +556,7 @@ QJsonObject noteToJson(const Note& n) {
+   o["id"] = n.id;
+   o["title"] = n.title;
+   o["folder"] = n.folder;
++  o["projectId"] = n.projectId;
+   o["body"] = n.body;
+   o["pinned"] = n.pinned;
+   o["created"] = dtToStr(n.created);
+@@ -575,6 +580,7 @@ Note noteFromJson(const QJsonObject& o) {
+   n.id = o["id"].toString();
+   n.title = o["title"].toString();
+   n.folder = o["folder"].toString();
++  n.projectId = o["projectId"].toString();
+   n.body = o["body"].toString();
+   n.pinned = o["pinned"].toBool();
+   n.created = dtFromStr(o["created"].toString());
+@@ -767,6 +773,30 @@ QVariantList statusesFromJson(const QJsonArray& a) {
+ 
+ // ───────────────── Profile ─────────────────
+ 
++QJsonArray projectsToJson(const QVector<Project>& projects) {
++  QJsonArray out;
++  for(const Project& p : projects) {
++    out.append(QJsonObject{{"id", p.id}, {"name", p.name}, {"color", p.color}, {"description", p.description}});
++  }
++  return out;
++}
++
++QVector<Project> projectsFromJson(const QJsonArray& projects) {
++  QVector<Project> out;
++  QSet<QString> ids;
++  for(const QJsonValue& v : projects) {
++    const QJsonObject o = v.toObject();
++    const QString id = o.value("id").toString();
++    const QString name = o.value("name").toString().trimmed();
++    if(id.isEmpty() || name.isEmpty() || ids.contains(id)) {
++      continue;
++    }
++    ids.insert(id);
++    out.append(Project{id, name, o.value("color").toString(), o.value("description").toString()});
++  }
++  return out;
++}
++
+ QJsonObject profileToJson(const Profile& p) {
+   // Unknown keys first, so every key this build owns overwrites a stale copy.
+   QJsonObject o = p.extra;
+@@ -776,6 +806,7 @@ QJsonObject profileToJson(const Profile& p) {
+   o["createdAt"] = dtToStr(p.createdAt);
+   o["tasks"] = tasksToJson(p.tasks);
+   o["people"] = peopleToJson(p.people);
++  o["projects"] = projectsToJson(p.projects);
+   o["statuses"] = statusesToJson(p.statuses);
+   if(!p.docsState.isEmpty()) {
+     const QJsonDocument d = QJsonDocument::fromJson(p.docsState.toUtf8());
+@@ -832,6 +863,7 @@ QJsonObject profileToJson(const Profile& p) {
+ 
+ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents) {
+   Profile p;
++  p.projects = projectsFromJson(o.value("projects").toArray());
+   p.id = o["id"].toString();
+   p.name = o["name"].toString();
+   p.color = o["color"].toString();
+@@ -894,6 +926,7 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
+                                      QStringLiteral("docPages"),
+                                      QStringLiteral("activeDocPageId"),
+                                      QStringLiteral("savedViews"),
++                                     QStringLiteral("projects"),
+                                      QStringLiteral("statusLog"),
+                                      QStringLiteral("waitingOn"),
+                                      QStringLiteral("events")};
+diff --git a/src/StateSerializer.h b/src/StateSerializer.h
+index 0a0f53b..d61cdc3 100644
+--- a/src/StateSerializer.h
++++ b/src/StateSerializer.h
+@@ -66,6 +66,9 @@ CalEvent eventFromJson(const QJsonObject& o, const QString& fallbackProfileId =
+ QJsonArray eventsToJson(const QVector<CalEvent>& xs);
+ QVector<CalEvent> eventsFromJson(const QJsonArray& a, const QString& fallbackProfileId = QString());
+ 
++QJsonArray projectsToJson(const QVector<Project>& projects);
++QVector<Project> projectsFromJson(const QJsonArray& projects);
++
+ QJsonObject noteToJson(const Note& n);
+ Note noteFromJson(const QJsonObject& o);
+ QJsonArray notesToJson(const QVector<Note>& xs);
+diff --git a/src/sync/SyncSerializer.cpp b/src/sync/SyncSerializer.cpp
+index 1e45c16..22af596 100644
+--- a/src/sync/SyncSerializer.cpp
++++ b/src/sync/SyncSerializer.cpp
+@@ -23,7 +23,7 @@ static_assert(heap::meta::fieldCount<Attachment>() == 4,
+               "Attachment gained or lost a field. Update attachmentsToJson/attachmentsFromJson here AND in "
+               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+               "then bump this count.");
+-static_assert(heap::meta::fieldCount<Task>() == 28,
++static_assert(heap::meta::fieldCount<Task>() == 29,
+               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
+               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+               "then bump this count.");
+@@ -160,6 +160,7 @@ QJsonArray SyncSerializer::sortedById(const QJsonArray& arr) {
+ QJsonObject SyncSerializer::taskToJson(const Task& t) {
+   QJsonObject o = t.extra;  // unknown keys first, so every known one overwrites
+   o[QStringLiteral("id")] = t.id;
++  o[QStringLiteral("projectId")] = t.projectId;
+   o[QStringLiteral("title")] = t.title;
+   o[QStringLiteral("desc")] = t.desc;
+   o[QStringLiteral("priority")] = t.priority;
+@@ -221,6 +222,7 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
+ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
+   Task t;
+   t.id = o.value(QStringLiteral("id")).toString();
++  t.projectId = o.value(QStringLiteral("projectId")).toString();
+   t.title = o.value(QStringLiteral("title")).toString();
+   t.desc = o.value(QStringLiteral("desc")).toString();
+   t.priority = o.value(QStringLiteral("priority")).toString();
+@@ -286,7 +288,8 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
+   t.links = linksFromJson(o.value(QStringLiteral("links")).toArray());
+   t.attachments = attachmentsFromJson(o.value(QStringLiteral("attachments")).toArray());
+   t.local = heap::local::fromJson(o.value(QStringLiteral("local")).toObject());
+-  static const QStringList kKnown = {QStringLiteral("id"),
++  static const QStringList kKnown = {QStringLiteral("projectId"),
++                                     QStringLiteral("id"),
+                                      QStringLiteral("title"),
+                                      QStringLiteral("desc"),
+                                      QStringLiteral("priority"),
+@@ -455,6 +458,9 @@ QByteArray SyncSerializer::serializeProfile(const Profile& p) {
+   root[QStringLiteral("statuses")] = sortedById(statuses);
+ 
+   // Free-form blobs kept verbatim: lossless and idempotent across round-trips.
++  root[QStringLiteral("projects")] = sortedById(heap::state::projectsToJson(p.projects));
++  root[QStringLiteral("notes")] = sortedById(heap::state::notesToJson(p.notes));
++  root[QStringLiteral("activeNoteId")] = p.activeNoteId;
+   root[QStringLiteral("docsState")] = p.docsState;
+   root[QStringLiteral("notesState")] = p.notesState;
+   // Order is the sidebar's, so not sorted by id; absent when there are none.
+@@ -486,6 +492,9 @@ std::optional<Profile> SyncSerializer::deserializeProfile(const QByteArray& json
+   for(const QJsonValue& v : root.value(QStringLiteral("statuses")).toArray()) {
+     p.statuses.append(v.toObject().toVariantMap());
+   }
++  p.projects = heap::state::projectsFromJson(root.value(QStringLiteral("projects")).toArray());
++  p.notes = heap::state::notesFromJson(root.value(QStringLiteral("notes")).toArray());
++  p.activeNoteId = root.value(QStringLiteral("activeNoteId")).toString();
+   p.docsState = root.value(QStringLiteral("docsState")).toString();
+   p.notesState = root.value(QStringLiteral("notesState")).toString();
+   p.savedViews = heap::savedviews::listFromJson(root.value(QStringLiteral("savedViews")).toArray());
+diff --git a/src/undo/UndoStack.h b/src/undo/UndoStack.h
+index bed731c..1406f85 100644
+--- a/src/undo/UndoStack.h
++++ b/src/undo/UndoStack.h
+@@ -230,7 +230,7 @@ inline QString rebaseTextEdit(const QString& current, const QString& from, const
+ // `to`, on top of the note as it is now. `ok` is false when one of them has
+ // been changed again since.
+ inline ::Note mergeNoteEdit(const ::Note& current, const ::Note& from, const ::Note& to, bool* ok) {
+-  static_assert(heap::meta::fieldCount<::Note>() == 10, "Note gained or lost a field: teach mergeNoteEdit about it.");
++  static_assert(heap::meta::fieldCount<::Note>() == 11, "Note gained or lost a field: teach mergeNoteEdit about it.");
+   ::Note out = current;
+   bool clean = true;
+   const auto field = [&](auto member) {
+@@ -241,6 +241,7 @@ inline ::Note mergeNoteEdit(const ::Note& current, const ::Note& from, const ::N
+   };
+   field(&::Note::title);
+   field(&::Note::folder);
++  field(&::Note::projectId);
+   field(&::Note::pinned);
+   field(&::Note::created);
+   field(&::Note::vaultPath);
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index cff78f4..42d6891 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -885,6 +885,7 @@ add_test(NAME heap_rest_providers_tests COMMAND heap_rest_providers_tests)
+ # in transitively by Models.h.
+ add_executable(heap_sync_tests
+         test_sync_serializer.cpp
++        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
+         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.cpp
+         ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.h
+         ${CMAKE_CURRENT_SOURCE_DIR}/../src/local/TaskLocal.cpp
+diff --git a/tests/test_appcontroller.cpp b/tests/test_appcontroller.cpp
+index 3b2311d..e1fd8b9 100644
+--- a/tests/test_appcontroller.cpp
++++ b/tests/test_appcontroller.cpp
+@@ -14,6 +14,7 @@
+ #include "integrations/AutoSync.h"
+ #include "integrations/IntegrationTypes.h"
+ #include "local/Effective.h"
++#include "platform/Paths.h"
+ #include "recur/RecurrenceEngine.h"
+ #include "text/LocaleFormat.h"
+ #include "views/UiScale.h"
+@@ -31,6 +32,7 @@
+ #include <QStandardPaths>
+ #include <QStringList>
+ #include <QTemporaryDir>
++#include <QUuid>
+ #include <QVariantMap>
+ #include <QVector>
+ 
+@@ -3885,11 +3887,119 @@ TEST_F(AppControllerTest, CarryWithAnUnknownModeDoesNothing) {
+   EXPECT_TRUE(app_->tasks()->items().at(0).scheduledAt.isValid());
+ }
+ 
++namespace {
++void freshProjectProfile(AppController* app) {
++  app->createProfile(QStringLiteral("Projects ") + QUuid::createUuid().toString(), QStringLiteral("#5cc2dd"));
++  app->tasks()->reset({});
++  app->notes()->reset({});
++}
++}  // namespace
++
++TEST_F(AppControllerTest, ProjectsAreScopedToEachProfileAndKeepAssignmentsAcrossSwitches) {
++  freshProjectProfile(app_.get());
++  const QString profile = app_->activeProfileId();
++  const QString project = app_->saveProject({}, "Release", "#5cc2dd", "Ship it");
++  ASSERT_FALSE(project.isEmpty());
++  app_->tasks()->reset({mkTask("P-1", "Package")});
++  const QString note = app_->newNote("Release plan");
++  EXPECT_TRUE(app_->assignTaskProject("P-1", project));
++  EXPECT_TRUE(app_->assignNoteProject(note, project));
++  EXPECT_EQ(app_->projectItems("task", project).size(), 1);
++  EXPECT_EQ(app_->projectItems("note", project).size(), 1);
++  freshProjectProfile(app_.get());
++  EXPECT_TRUE(app_->projects().isEmpty());
++  EXPECT_FALSE(app_->assignTaskProject("P-1", project));
++  EXPECT_FALSE(app_->saveProject({}, "Release", "#5cc2dd", {}).isEmpty());
++  app_->setActiveProfileId(profile);
++  ASSERT_EQ(app_->projects().size(), 1);
++  EXPECT_EQ(app_->projectItems("task", project).size(), 1);
++  EXPECT_EQ(app_->projectItems("note", project).size(), 1);
++}
++
++TEST_F(AppControllerTest, ProjectsAndAssignmentsSurviveDiskReload) {
++  freshProjectProfile(app_.get());
++  const QString project = app_->saveProject({}, "Release", "#5cc2dd", "Ship it");
++  auto draft = app_->newTaskDraft({});
++  draft["title"] = QStringLiteral("Package");
++  draft["projectId"] = project;
++  ASSERT_TRUE(app_->saveTask(draft));
++  const QString note = app_->newNote("Plan", {}, project);
++  app_->setNoteBody(note, "Release checklist");
++  app_->flushSave();
++  AppController restored;
++  ASSERT_EQ(restored.projects().size(), 1);
++  EXPECT_EQ(restored.projects().first().toMap().value("id").toString(), project);
++  EXPECT_EQ(restored.projectItems("task", project).size(), 1);
++  EXPECT_EQ(restored.projectItems("note", project).size(), 1);
++  EXPECT_EQ(restored.noteBody(note), QStringLiteral("Release checklist"));
++}
++
++TEST_F(AppControllerTest, ProjectValidationAndDeletionPreserveContent) {
++  freshProjectProfile(app_.get());
++  EXPECT_TRUE(app_->saveProject({}, "  ", {}, {}).isEmpty());
++  const QString id = app_->saveProject({}, "  Release  ", "invalid", "Description");
++  ASSERT_FALSE(id.isEmpty());
++  EXPECT_TRUE(app_->saveProject({}, "release", {}, {}).isEmpty());
++  EXPECT_TRUE(app_->saveProject("missing", "Other", {}, {}).isEmpty());
++  EXPECT_EQ(app_->saveProject(id, "Launch", "#5cc2dd", "Updated"), id);
++  app_->tasks()->reset({mkTask("P-1", "Package")});
++  const QString note = app_->newNote("Plan");
++  app_->setNoteBody(note, "Never delete my text");
++  EXPECT_FALSE(app_->assignTaskProject("P-1", "unknown"));
++  EXPECT_FALSE(app_->assignNoteProject(note, "unknown"));
++  EXPECT_TRUE(app_->assignTaskProject("P-1", id));
++  EXPECT_TRUE(app_->assignNoteProject(note, id));
++  EXPECT_TRUE(app_->deleteProject(id));
++  EXPECT_FALSE(app_->deleteProject(id));
++  EXPECT_TRUE(app_->projects().isEmpty());
++  ASSERT_EQ(app_->tasks()->items().size(), 1);
++  EXPECT_TRUE(app_->tasks()->items().first().projectId.isEmpty());
++  EXPECT_EQ(app_->noteBody(note), QStringLiteral("Never delete my text"));
++  EXPECT_EQ(app_->projectItems("task", "").size(), 1);
++  EXPECT_EQ(app_->projectItems("note", "").size(), 1);
++  EXPECT_TRUE(app_->projectItems("task", id).isEmpty());
++}
++
++TEST_F(AppControllerTest, NoteProjectAssignmentUndoKeepsLaterTyping) {
++  freshProjectProfile(app_.get());
++  const QString project = app_->saveProject({}, "Release", "#5cc2dd", {});
++  const QString note = app_->newNote("Plan");
++  ASSERT_TRUE(app_->assignNoteProject(note, project));
++  app_->setNoteBody(note, "Typed after assignment");
++  app_->undo();
++  EXPECT_EQ(app_->noteBody(note), QStringLiteral("Typed after assignment"));
++  EXPECT_EQ(app_->projectItems("note", "").size(), 1);
++  app_->redo();
++  EXPECT_EQ(app_->noteBody(note), QStringLiteral("Typed after assignment"));
++  EXPECT_EQ(app_->projectItems("note", project).size(), 1);
++}
++
++TEST_F(AppControllerTest, TaskEditsAndRenamesRetainProjectAndAssignmentCanBeUndone) {
++  freshProjectProfile(app_.get());
++  const QString project = app_->saveProject({}, "Release", "#5cc2dd", {});
++  app_->tasks()->reset({mkTask("P-1", "Package")});
++  ASSERT_TRUE(app_->assignTaskProject("P-1", project));
++  app_->undo();
++  EXPECT_EQ(app_->projectItems("task", "").size(), 1);
++  app_->redo();
++  auto draft = app_->taskById("P-1");
++  draft["_originalId"] = QStringLiteral("P-1");
++  draft["id"] = QStringLiteral("P-2");
++  draft["title"] = QStringLiteral("Package updated");
++  draft.remove("projectId");  // Older callers do not send this optional field.
++  ASSERT_TRUE(app_->saveTask(draft));
++  ASSERT_EQ(app_->projectItems("task", project).size(), 1);
++  EXPECT_EQ(app_->projectItems("task", project).first().toMap().value("id").toString(), QStringLiteral("P-2"));
++}
++
+ int main(int argc, char** argv) {
+   qputenv("QT_QPA_PLATFORM", "offscreen");
+   QStandardPaths::setTestModeEnabled(true);
+   QTemporaryDir scratch;
+   scratch.setAutoRemove(true);
++  // Qt test-mode paths ignore XDG_DATA_HOME on Linux. Use a writable,
++  // isolated data directory even when the account home is read-only.
++  heap::paths::setDataDir(scratch.path() + QStringLiteral("/data"));
+   qputenv("XDG_CONFIG_HOME", scratch.path().toUtf8());
+   qputenv("XDG_DATA_HOME", scratch.path().toUtf8());
+ 
+diff --git a/tests/test_roundtrip.cpp b/tests/test_roundtrip.cpp
+index e3cb0a7..b493b3d 100644
+--- a/tests/test_roundtrip.cpp
++++ b/tests/test_roundtrip.cpp
+@@ -71,6 +71,7 @@ ExternalMeta makeFullMeta() {
+ Task makeFullTask() {
+   Task t;
+   t.id = QStringLiteral("HEAP-104");
++  t.projectId = QStringLiteral("project-release");
+   t.title = QStringLiteral("Harden the task data model");
+   t.desc = QStringLiteral("lossless, time-aware persistence");
+   t.priority = QStringLiteral("P0");
+@@ -352,7 +353,7 @@ constexpr int kCases = 1000;
+ // Mirrors the static_asserts inside both serializers. If the struct grows and
+ // only one serializer is updated, that serializer's own static_assert fires.
+ TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
+-  EXPECT_EQ(heap::meta::fieldCount<Task>(), 28u);
++  EXPECT_EQ(heap::meta::fieldCount<Task>(), 29u);
+   EXPECT_EQ(heap::meta::fieldCount<TaskLocal>(), 15u);
+   EXPECT_EQ(heap::meta::fieldCount<TimerSession>(), 4u);
+   EXPECT_EQ(heap::meta::fieldCount<Attachment>(), 4u);
+@@ -611,3 +612,58 @@ TEST(RoundTrip, DatetimesWrittenWithoutMillisecondsStillParse) {
+   EXPECT_EQ(t.statusChangedAt, QDateTime(QDate(2026, 7, 1), QTime(10, 0)));
+   EXPECT_EQ(t.timerStartedAt, QDateTime(QDate(2026, 7, 1), QTime(11, 30)));
+ }
++
++TEST(Projects, LiveProfileRoundTripRetainsProjectsAndAssignments) {
++  Profile profile;
++  profile.id = QStringLiteral("work");
++  profile.projects = {{QStringLiteral("p-1"), QStringLiteral("Release"), QStringLiteral("#5cc2dd"), QStringLiteral("Ship version one")}};
++  Task task = makeFullTask();
++  task.projectId = QStringLiteral("p-1");
++  profile.tasks = {task};
++  Note note;
++  note.id = QStringLiteral("n-1");
++  note.title = QStringLiteral("Plan");
++  note.body = QStringLiteral("Do not lose this text");
++  note.projectId = QStringLiteral("p-1");
++  profile.notes = {note};
++  const Profile restored = heap::state::profileFromJson(heap::state::profileToJson(profile));
++  EXPECT_EQ(restored.projects, profile.projects);
++  ASSERT_EQ(restored.tasks.size(), 1);
++  EXPECT_EQ(restored.tasks.first().projectId, QStringLiteral("p-1"));
++  EXPECT_EQ(restored.notes, profile.notes);
++  EXPECT_FALSE(restored.extra.contains(QStringLiteral("projects")));
++}
++
++TEST(Projects, LegacyProfilesAndInvalidProjectRecordsAreSafe) {
++  const Profile old = heap::state::profileFromJson(QJsonObject{{"id", "legacy"}});
++  EXPECT_TRUE(old.projects.isEmpty());
++  EXPECT_TRUE(heap::state::taskFromJson(QJsonObject{}).projectId.isEmpty());
++  EXPECT_TRUE(heap::state::noteFromJson(QJsonObject{}).projectId.isEmpty());
++  const auto projects = heap::state::projectsFromJson(QJsonArray{QJsonObject{{"id", "a"}, {"name", "A"}},
++                                                                 QJsonObject{{"id", "a"}, {"name", "Duplicate"}},
++                                                                 QJsonObject{{"id", ""}, {"name", "No ID"}},
++                                                                 QJsonObject{{"id", "b"}, {"name", " "}}});
++  ASSERT_EQ(projects.size(), 1);
++  EXPECT_EQ(projects.first().name, QStringLiteral("A"));
++}
++
++TEST(Projects, SyncProfileRetainsProjectsAndNotesWithStableOrdering) {
++  Profile profile;
++  profile.projects = {{"b", "Beta", "#5cc2dd", "B"}, {"a", "Alpha", "#5cc2dd", "A"}};
++  Note first;
++  first.id = QStringLiteral("note-b");
++  first.title = QStringLiteral("Plan");
++  first.body = QStringLiteral("Keep me");
++  first.projectId = QStringLiteral("b");
++  profile.notes = {first};
++  profile.activeNoteId = first.id;
++  const QByteArray json = heap::sync::SyncSerializer::serializeProfile(profile);
++  const auto restored = heap::sync::SyncSerializer::deserializeProfile(json);
++  ASSERT_TRUE(restored.has_value());
++  EXPECT_EQ(restored->notes, profile.notes);
++  EXPECT_EQ(restored->activeNoteId, profile.activeNoteId);
++  EXPECT_EQ(restored->projects.size(), 2);
++  std::reverse(profile.projects.begin(), profile.projects.end());
++  EXPECT_EQ(heap::sync::SyncSerializer::serializeProfile(profile), json);
++  EXPECT_EQ(heap::sync::SyncSerializer::serializeProfile(*restored), json);
++}
+diff --git a/docs/PROJECTS.md b/docs/PROJECTS.md
+new file mode 100644
+index 0000000..049f1fd
+--- /dev/null
++++ b/docs/PROJECTS.md
+@@ -0,0 +1,13 @@
++# Projects
++
++Projects organize tasks and notes **inside a profile**. Open **Projects** above the current view to manage the projects of the active profile. Switching profiles switches the project list too.
++
++- Choose **New project** and enter a name, description and color. Names must be unique within the profile.
++- Choose **All projects** to see existing content. The menu beside each task or note assigns it to a project, or removes that assignment with **Without project**.
++- Select a project and switch between **Tasks** and **Notes**. Search narrows the displayed list. Click an item to open its existing editor.
++- **New task** and **New note** in a project create content assigned to that project. A task's editor also has a **Project** field.
++- **Edit project** changes its name, description or color. **Delete project** asks for confirmation and keeps its tasks and notes under **Without project**.
++
++Assignments can be undone with the existing undo command. Project deletion is permanent; it never deletes tasks or notes. Existing profiles and content start without projects. Project definitions and assignments are included in normal saves, profile export/import and sync serialization.
++
++This feature uses the shared Qt application code on Windows, macOS and Linux. It does not require a tracker connection or account.
+diff --git a/qml/ProjectsDialog.qml b/qml/ProjectsDialog.qml
+new file mode 100644
+index 0000000..23022e1
+--- /dev/null
++++ b/qml/ProjectsDialog.qml
+@@ -0,0 +1,293 @@
++pragma ComponentBehavior: Bound
++import QtQuick
++import QtQuick.Layouts
++import QtQuick.Controls.Basic
++import TodoCpp
++
++Popup {
++    id: root
++    objectName: "projects-dialog"
++    anchors.centerIn: Overlay.overlay
++    width: Math.min(980, Overlay.overlay.width - 32)
++    height: Math.min(720, Overlay.overlay.height - 32)
++    padding: Theme.inset
++    modal: true
++    focus: true
++    closePolicy: Popup.CloseOnEscape
++    background: ModalSurface {}
++    Overlay.modal: ModalScrim {}
++
++    property string selectedProject: "*"
++    property string kind: "task"
++    property var items: []
++    readonly property var projects: AppController.projects
++    readonly property var choices: [{ id: "*", name: I18n.t("projects.all") },
++                                   { id: "", name: I18n.t("projects.none") }].concat(projects)
++    readonly property var assignmentChoices: choices.slice(1)
++    readonly property var selected: projects.find(p => p.id === selectedProject) || null
++    signal taskRequested(string id)
++    signal newTaskRequested(string projectId)
++    signal noteRequested(string id)
++
++    function refresh() {
++        const needle = search.text.trim().toLocaleLowerCase();
++        items = AppController.projectItems(kind, selectedProject).filter(
++            item => !needle.length || (item.id + " " + item.title).toLocaleLowerCase().indexOf(needle) >= 0);
++    }
++    function choose(id) {
++        selectedProject = id;
++        projectBox.currentIndex = Math.max(0, choices.findIndex(p => p.id === id));
++        refresh();
++    }
++    function edit(project) {
++        projectEditor.projectId = project ? project.id : "";
++        nameField.text = project ? project.name : "";
++        descriptionField.text = project ? project.description : "";
++        projectEditor.projectColor = project ? project.color : Theme.profileSwatches[0];
++        projectEditor.error = "";
++        projectEditor.open();
++        nameField.focusField();
++    }
++    onOpened: { choose("*"); search.text = ""; search.forceActiveFocus(); }
++    onKindChanged: refresh()
++    onProjectsChanged: if (visible) refresh()
++    Connections {
++        target: AppController
++        function onActiveProfileChanged() { root.choose("*"); }
++        function onProjectsChanged() {
++            if (root.selectedProject !== "*" && root.selectedProject.length && !root.selected) root.choose("");
++            if (root.visible) root.refresh();
++        }
++    }
++    Connections {
++        target: AppController.tasks
++        function onRowsInserted() { if (root.visible) root.refresh(); }
++        function onRowsRemoved() { if (root.visible) root.refresh(); }
++        function onDataChanged() { if (root.visible) root.refresh(); }
++        function onModelReset() { if (root.visible) root.refresh(); }
++    }
++    Connections {
++        target: AppController.notes
++        function onRowsInserted() { if (root.visible) root.refresh(); }
++        function onRowsRemoved() { if (root.visible) root.refresh(); }
++        function onDataChanged() { if (root.visible) root.refresh(); }
++        function onModelReset() { if (root.visible) root.refresh(); }
++    }
++
++    contentItem: ColumnLayout {
++        spacing: Theme.spMd
++        RowLayout {
++            Layout.fillWidth: true
++            Text {
++                text: I18n.t("projects.title")
++                font.family: Theme.fontDisplay
++                font.pixelSize: Theme.fsLg
++                color: Theme.text
++                Layout.fillWidth: true
++            }
++            PillButton { text: I18n.t("projects.close"); onClicked: root.close() }
++        }
++        Text {
++            Layout.fillWidth: true
++            text: I18n.t("projects.hint")
++            color: Theme.textDim
++            font.pixelSize: Theme.fsSm
++            wrapMode: Text.Wrap
++        }
++        RowLayout {
++            Layout.fillWidth: true
++            Rectangle {
++                implicitWidth: Theme.spMd; implicitHeight: Theme.spMd; radius: Theme.spSm
++                color: root.selected ? root.selected.color : Theme.textDim
++            }
++            AppComboBox {
++                id: projectBox
++                objectName: "projects-filter"
++                Layout.fillWidth: true
++                model: root.choices
++                textRole: "name"
++                Accessible.name: I18n.t("projects.title")
++                onActivated: root.choose(root.choices[currentIndex].id)
++            }
++            PillButton { text: I18n.t("projects.create"); onClicked: root.edit(null) }
++            PillButton {
++                text: I18n.t("projects.edit"); enabled: !!root.selected
++                onClicked: root.edit(root.selected)
++            }
++            PillButton {
++                text: I18n.t("projects.delete"); danger: true; enabled: !!root.selected
++                onClicked: {
++                    deleteConfirm.projectId = root.selectedProject;
++                    deleteConfirm.open();
++                }
++            }
++        }
++        Text {
++            Layout.fillWidth: true
++            visible: !!root.selected && text.length > 0
++            text: root.selected ? root.selected.description : ""
++            color: Theme.textMuted
++            font.pixelSize: Theme.fsSm
++            wrapMode: Text.Wrap
++            maximumLineCount: 3
++            elide: Text.ElideRight
++        }
++        RowLayout {
++            Layout.fillWidth: true
++            PillButton {
++                objectName: "projects-tasks"
++                text: I18n.t("projects.tasks")
++                selected: root.kind === "task"
++                onClicked: root.kind = "task"
++            }
++            PillButton {
++                objectName: "projects-notes"
++                text: I18n.t("projects.notes")
++                selected: root.kind === "note"
++                onClicked: root.kind = "note"
++            }
++            Item { Layout.fillWidth: true }
++            PillButton {
++                objectName: "projects-add-item"
++                text: I18n.t(root.kind === "task" ? "projects.addTask" : "projects.addNote")
++                primary: true
++                onClicked: {
++                    const project = root.selectedProject === "*" ? "" : root.selectedProject;
++                    if (root.kind === "task") {
++                        root.close();
++                        root.newTaskRequested(project);
++                    } else {
++                        const id = AppController.newNote("", "", project);
++                        root.close();
++                        root.noteRequested(id);
++                    }
++                }
++            }
++        }
++        TextField {
++            id: search
++            objectName: "projects-search"
++            Layout.fillWidth: true
++            placeholderText: I18n.t("projects.search")
++            Accessible.name: placeholderText
++            selectByMouse: true
++            color: Theme.text
++            placeholderTextColor: Theme.textDim
++            background: FieldFrame {}
++            onTextChanged: root.refresh()
++        }
++        ListView {
++            id: list
++            objectName: "projects-items"
++            Layout.fillWidth: true
++            Layout.fillHeight: true
++            clip: true
++            spacing: Theme.spXs
++            model: root.items
++            ScrollBar.vertical: ScrollBar {}
++            delegate: RowLayout {
++                id: row
++                required property var modelData
++                width: list.width
++                spacing: Theme.spMd
++                PillButton {
++                    Layout.fillWidth: true
++                    text: (root.kind === "task" ? row.modelData.id + " · " : "") + row.modelData.title
++                    onClicked: {
++                        root.close();
++                        if (root.kind === "task") root.taskRequested(row.modelData.id);
++                        else root.noteRequested(row.modelData.id);
++                    }
++                }
++                AppComboBox {
++                    objectName: "project-item-assignment"
++                    Layout.preferredWidth: Math.min(220, list.width * 0.4)
++                    model: root.assignmentChoices
++                    textRole: "name"
++                    Accessible.name: I18n.t("projects.assign") + " · " + row.modelData.title
++                    currentIndex: Math.max(0, root.assignmentChoices.findIndex(p => p.id === row.modelData.projectId))
++                    onActivated: {
++                        const project = root.assignmentChoices[currentIndex].id;
++                        if (root.kind === "task") AppController.assignTaskProject(row.modelData.id, project);
++                        else AppController.assignNoteProject(row.modelData.id, project);
++                    }
++                }
++            }
++            Text {
++                anchors.centerIn: parent
++                width: parent.width
++                horizontalAlignment: Text.AlignHCenter
++                text: I18n.t("projects.empty")
++                visible: list.count === 0
++                color: Theme.textDim
++                font.pixelSize: Theme.fsMd
++                wrapMode: Text.Wrap
++            }
++        }
++    }
++
++    SmallDialog {
++        id: projectEditor
++        objectName: "project-editor"
++        property string projectId: ""
++        property string projectColor: Theme.profileSwatches[0]
++        property string error: ""
++        title: I18n.t(projectId.length ? "projects.edit" : "projects.create")
++        function save() {
++            const id = AppController.saveProject(projectId, nameField.text, projectColor, descriptionField.text);
++            if (!id.length) { error = I18n.t("projects.invalidName"); return; }
++            root.choose(id);
++            close();
++        }
++        onAccepted: save()
++        DialogField {
++            id: nameField
++            fieldName: "project-name"
++            label: I18n.t("projects.name")
++            maximumLength: 64
++            onAccepted: projectEditor.save()
++            onTextChanged: projectEditor.error = ""
++        }
++        DialogField {
++            id: descriptionField
++            fieldName: "project-description"
++            label: I18n.t("projects.description")
++            maximumLength: 4000
++            onAccepted: projectEditor.save()
++        }
++        RowLayout {
++            Repeater {
++                model: Theme.profileSwatches
++                PillButton {
++                    id: swatch
++                    required property string modelData
++                    small: true
++                    text: "●"
++                    selected: projectEditor.projectColor === modelData
++                    Accessible.name: I18n.t("projects.color") + " " + modelData
++                    contentItem: Text { text: "●"; color: swatch.modelData; horizontalAlignment: Text.AlignHCenter }
++                    onClicked: projectEditor.projectColor = modelData
++                }
++            }
++        }
++        Text { text: projectEditor.error; visible: text.length > 0; color: Theme.danger; wrapMode: Text.Wrap; Layout.fillWidth: true }
++        buttons: [
++            PillButton { text: I18n.t("projects.cancel"); onClicked: projectEditor.close() },
++            PillButton { text: I18n.t("projects.save"); primary: true; onClicked: projectEditor.save() }
++        ]
++    }
++    SmallDialog {
++        id: deleteConfirm
++        objectName: "project-delete-confirm"
++        property string projectId: ""
++        title: I18n.t("projects.delete")
++        fact: I18n.t("projects.deleteHint")
++        buttons: [
++            PillButton { text: I18n.t("projects.cancel"); onClicked: deleteConfirm.close() },
++            PillButton {
++                text: I18n.t("projects.delete"); danger: true
++                onClicked: { AppController.deleteProject(deleteConfirm.projectId); root.choose(""); deleteConfirm.close(); }
++            }
++        ]
++    }
++}
+diff --git a/tests/qml/tst_Projects.qml b/tests/qml/tst_Projects.qml
+new file mode 100644
+index 0000000..ad521c7
+--- /dev/null
++++ b/tests/qml/tst_Projects.qml
+@@ -0,0 +1,147 @@
++import QtQuick
++import QtQuick.Controls
++import QtTest
++import TodoCpp
++
++TestCase {
++    id: tc
++    name: "Projects"
++    when: windowShown
++    visible: true
++    width: 1000
++    height: 800
++    property string originalProfile: ""
++    property string probeProfile: ""
++    property var dialog: null
++    Item { id: host; anchors.fill: parent }
++    SignalSpy { id: newTaskSpy; signalName: "newTaskRequested" }
++
++    function init() {
++        originalProfile = AppController.activeProfileId;
++        probeProfile = AppController.createProfile("projects-ui-" + Date.now(), "#5cc2dd");
++        verify(probeProfile.length > 0);
++        dialog = createTemporaryQmlObject('import TodoCpp; ProjectsDialog {}', host);
++        verify(dialog !== null);
++        dialog.open();
++        tryCompare(dialog, "opened", true);
++        newTaskSpy.target = dialog;
++        newTaskSpy.clear();
++    }
++    function cleanup() {
++        if (dialog) dialog.close();
++        AppController.activeProfileId = originalProfile;
++        if (probeProfile.length) AppController.deleteProfile(probeProfile);
++    }
++    function test_create_edit_and_duplicate_name_error() {
++        dialog.edit(null);
++        const editor = findChild(dialog, "project-editor");
++        verify(editor !== null);
++        tryCompare(editor, "opened", true);
++        const name = findChild(editor.contentItem, "project-name");
++        const description = findChild(editor.contentItem, "project-description");
++        name.text = "Release";
++        description.text = "Ship version one";
++        editor.save();
++        tryCompare(editor, "opened", false);
++        compare(dialog.selected.name, "Release");
++        compare(dialog.selected.description, "Ship version one");
++        const projectId = dialog.selectedProject;
++        dialog.edit(dialog.selected);
++        tryCompare(editor, "opened", true);
++        name.text = "Launch";
++        editor.save();
++        compare(dialog.selectedProject, projectId);
++        compare(dialog.selected.name, "Launch");
++        dialog.edit(null);
++        tryCompare(editor, "opened", true);
++        name.text = "launch";
++        editor.save();
++        verify(editor.opened);
++        verify(editor.error.length > 0);
++        editor.close();
++    }
++    function test_filter_and_reassignment_refresh_notes() {
++        const project = AppController.saveProject("", "Release", "#5cc2dd", "");
++        const note = AppController.newNote("Release plan");
++        AppController.assignNoteProject(note, project);
++        dialog.kind = "note";
++        dialog.choose(project);
++        compare(dialog.items.length, 1);
++        compare(dialog.items[0].id, note);
++        const list = findChild(dialog.contentItem, "projects-items");
++        verify(list !== null);
++        tryCompare(list, "count", 1);
++        list.forceLayout();
++        const assignment = findChild(list.contentItem, "project-item-assignment");
++        verify(assignment !== null);
++        assignment.currentIndex = 0;
++        assignment.activated(0);
++        tryCompare(list, "count", 0);
++        dialog.choose("");
++        verify(dialog.items.some(n => n.id === note));
++    }
++    function test_new_task_carries_selected_project() {
++        const project = AppController.saveProject("", "Release", "#5cc2dd", "");
++        dialog.kind = "task";
++        dialog.choose(project);
++        const button = findChild(dialog.contentItem, "projects-add-item");
++        verify(button !== null);
++        button.clicked();
++        compare(newTaskSpy.count, 1);
++        compare(newTaskSpy.signalArguments[0][0], project);
++    }
++    function test_new_note_carries_project_and_is_kept_when_leaving() {
++        const project = AppController.saveProject("", "Release", "#5cc2dd", "");
++        dialog.kind = "note";
++        dialog.choose(project);
++        const button = findChild(dialog.contentItem, "projects-add-item");
++        button.clicked();
++        const note = AppController.activeNoteId;
++        compare(AppController.projectItems("note", project).length, 1);
++        compare(AppController.projectItems("note", project)[0].id, note);
++        const next = AppController.newNote();
++        verify(next !== note);
++        compare(AppController.projectItems("note", project)[0].id, note);
++    }
++
++    function test_task_editor_project_is_saved_and_marks_dirty() {
++        const project = AppController.saveProject("", "Release", "#5cc2dd", "");
++        const draft = AppController.newTaskDraft("");
++        draft.title = "Package release";
++        verify(AppController.saveTask(draft));
++        const editor = createTemporaryQmlObject('import TodoCpp; TaskEditor {}', host);
++        editor.showFor(AppController.taskById(draft.id));
++        tryCompare(editor, "opened", true);
++        const picker = findChild(editor.contentItem, "te-project");
++        verify(picker !== null);
++        picker.currentIndex = picker.projectChoices.findIndex(p => p.id === project);
++        verify(editor.isDirty());
++        verify(editor._commit());
++        compare(AppController.taskById(draft.id).projectId, project);
++        editor.close();
++    }
++    function test_task_document_project_tracks_assignment_and_undo() {
++        const project = AppController.saveProject("", "Release", "#5cc2dd", "");
++        const draft = AppController.newTaskDraft("");
++        draft.title = "Package release";
++        verify(AppController.saveTask(draft));
++        const document = createTemporaryQmlObject('import TodoCpp; TaskDocument { width: 700; height: 600 }', host);
++        document.open(draft.id);
++        const picker = findChild(document, "task-doc-project");
++        verify(picker !== null);
++        picker.currentIndex = picker.choices.findIndex(p => p.id === project);
++        picker.activated(picker.currentIndex);
++        compare(AppController.taskById(draft.id).projectId, project);
++        AppController.undo();
++        compare(AppController.taskById(draft.id).projectId, "");
++        document.close();
++    }
++
++    function test_profile_switch_resets_filter() {
++        const project = AppController.saveProject("", "Release", "#5cc2dd", "");
++        dialog.choose(project);
++        AppController.activeProfileId = originalProfile;
++        compare(dialog.selectedProject, "*");
++        verify(!dialog.projects.some(p => p.id === project));
++    }
++}
